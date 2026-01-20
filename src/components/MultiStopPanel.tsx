@@ -131,38 +131,79 @@ export const MultiStopPanel = ({
           </div>
         </div>
 
-        {/* Compact waypoints list */}
-        <div className="flex items-center gap-1 flex-wrap mb-2">
-          {routeInfo?.waypoints.map((wp, i) => (
-            <div key={i} className="flex items-center gap-1">
-              <span className={cn(
-                "w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white",
-                i === 0 ? "bg-green-500" : i === routeInfo.waypoints.length - 1 ? "bg-red-500" : "bg-primary"
-              )}>
-                {i === 0 ? '●' : i === routeInfo.waypoints.length - 1 ? '◆' : i}
-              </span>
-              <span className="text-[10px] text-foreground max-w-16 truncate">{wp.name.split(' ')[0]}</span>
-              {i < routeInfo.waypoints.length - 1 && <span className="text-muted-foreground text-[10px]">→</span>}
-            </div>
-          ))}
-        </div>
+        {/* Scrollable waypoints with drag & delete */}
+        <ScrollArea className="max-h-28 mb-2">
+          <div className="space-y-1">
+            {/* Origin */}
+            {routeInfo?.waypoints[0] && (
+              <div className="flex items-center gap-1.5 p-1 bg-muted/30 rounded-lg">
+                <div className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center text-white text-[10px]">●</div>
+                <span className="text-[10px] text-foreground truncate flex-1">{routeInfo.waypoints[0].name}</span>
+              </div>
+            )}
+            
+            {/* Draggable waypoints */}
+            {draggableWaypoints.length > 0 && (
+              <Reorder.Group
+                axis="y"
+                values={draggableWaypoints}
+                onReorder={onReorderWaypoints}
+                className="space-y-1"
+              >
+                {draggableWaypoints.map((waypoint, index) => {
+                  const isLast = index === draggableWaypoints.length - 1;
+                  return (
+                    <Reorder.Item
+                      key={waypoint.name + index}
+                      value={waypoint}
+                      onDragStart={() => setIsDragging(true)}
+                      onDragEnd={() => setIsDragging(false)}
+                      className="cursor-grab active:cursor-grabbing"
+                      whileDrag={{ scale: 1.02, zIndex: 50 }}
+                    >
+                      <div className={cn(
+                        "flex items-center gap-1.5 p-1 rounded-lg",
+                        isDragging ? "bg-muted" : "bg-muted/30"
+                      )}>
+                        <GripVertical className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                        <div className={cn(
+                          "w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white",
+                          isLast ? "bg-destructive" : "bg-primary"
+                        )}>
+                          {isLast ? '◆' : index + 1}
+                        </div>
+                        <span className="text-[10px] text-foreground truncate flex-1">{waypoint.name}</span>
+                        {routeInfo?.legs[index] && (
+                          <span className="text-[10px] text-muted-foreground">{formatDistance(routeInfo.legs[index].distance)}</span>
+                        )}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onRemoveWaypoint(index); }}
+                          className="w-4 h-4 hover:bg-destructive/20 rounded flex items-center justify-center"
+                        >
+                          <Trash2 className="w-2.5 h-2.5 text-destructive" />
+                        </button>
+                      </div>
+                    </Reorder.Item>
+                  );
+                })}
+              </Reorder.Group>
+            )}
+          </div>
+        </ScrollArea>
 
-        {/* Actions row */}
+        {/* Add button + loading */}
         <div className="flex items-center gap-2">
           <Button
             onClick={onAddStop}
             variant="outline"
             size="sm"
-            className="h-7 text-[10px] border-dashed flex-1"
+            className="h-6 text-[10px] border-dashed flex-1"
             disabled={isAddingStop}
           >
             <Plus className="w-3 h-3 mr-1" />
-            {isAddingStop ? (language === 'vi' ? 'Chọn...' : 'Select...') : (language === 'vi' ? 'Thêm' : 'Add')}
+            {isAddingStop ? (language === 'vi' ? 'Chọn...' : 'Select...') : (language === 'vi' ? 'Thêm điểm' : 'Add stop')}
           </Button>
-          
-          {isLoading && (
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
-          )}
+          {isLoading && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>}
         </div>
       </div>
     </motion.div>
