@@ -29,9 +29,23 @@ export const MapView = ({
   const map = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
   const [mapLoaded, setMapLoaded] = useState(false);
-  const [mapboxToken, setMapboxToken] = useState<string | null>(() => getMapboxToken());
+  const [mapboxToken, setMapboxTokenState] = useState<string | null>(null);
+  const [isTokenChecked, setIsTokenChecked] = useState(false);
   const routeLayerId = 'route-line';
   const routeSourceId = 'route-source';
+
+  // Load token from localStorage after mount (ensures window is available)
+  useEffect(() => {
+    const token = getMapboxToken();
+    if (token) {
+      setMapboxTokenState(token);
+    }
+    setIsTokenChecked(true);
+  }, []);
+
+  const handleSaveToken = (token: string) => {
+    setMapboxTokenState(token);
+  };
 
   const getTypeEmoji = (type: LocationType) => {
     switch (type) {
@@ -228,10 +242,19 @@ export const MapView = ({
     return () => { document.head.removeChild(style); };
   }, []);
 
+  // Show loading state while checking token
+  if (!isTokenChecked) {
+    return (
+      <div className="w-full h-full bg-gradient-to-br from-secondary to-muted flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
   if (!mapboxToken) {
     return (
       <div className="w-full h-full bg-gradient-to-br from-secondary to-muted flex items-center justify-center p-4">
-        <MapboxTokenPrompt onSaved={(token) => setMapboxToken(token)} />
+        <MapboxTokenPrompt onSaved={handleSaveToken} />
       </div>
     );
   }
