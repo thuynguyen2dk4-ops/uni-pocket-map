@@ -38,6 +38,7 @@ export const MapView = ({
   const [mapboxToken, setMapboxTokenState] = useState<string | null>(null);
   const [isTokenChecked, setIsTokenChecked] = useState(false);
   const routeLayerId = 'route-line';
+  const routeArrowLayerId = 'route-arrows';
   const routeSourceId = 'route-source';
 
   // Load token from localStorage after mount (ensures window is available)
@@ -186,7 +187,10 @@ export const MapView = ({
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
 
-    // Remove existing route
+    // Remove existing route layers
+    if (map.current.getLayer(routeArrowLayerId)) {
+      map.current.removeLayer(routeArrowLayerId);
+    }
     if (map.current.getLayer(routeLayerId)) {
       map.current.removeLayer(routeLayerId);
     }
@@ -231,6 +235,37 @@ export const MapView = ({
         'line-opacity': 0.8,
       },
     });
+
+    // Add arrow symbols along the route
+    map.current.addLayer({
+      id: routeArrowLayerId,
+      type: 'symbol',
+      source: routeSourceId,
+      layout: {
+        'symbol-placement': 'line',
+        'symbol-spacing': 80,
+        'icon-image': 'arrow-right',
+        'icon-size': 0.6,
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
+      },
+    });
+
+    // Load arrow icon if not already loaded
+    if (!map.current.hasImage('arrow-right')) {
+      const arrowSvg = `
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M5 12H19M19 12L12 5M19 12L12 19" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      `;
+      const img = new Image(24, 24);
+      img.onload = () => {
+        if (map.current && !map.current.hasImage('arrow-right')) {
+          map.current.addImage('arrow-right', img);
+        }
+      };
+      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(arrowSvg);
+    }
 
     // Add origin marker (green - your location)
     if (routeOrigin) {
