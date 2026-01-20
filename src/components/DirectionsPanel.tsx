@@ -152,6 +152,14 @@ export const DirectionsPanel = ({
           <span className="text-xs font-bold text-primary">{formatDistance(routeInfo.distance)}</span>
           <span className="text-xs text-muted-foreground">{formatDuration(routeInfo.duration, language)}</span>
           
+          
+          {/* Expand steps button */}
+          {routeInfo.steps?.length > 0 && (
+            <button onClick={() => setIsExpanded(!isExpanded)} className="p-1 hover:bg-muted rounded">
+              {isExpanded ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />}
+            </button>
+          )}
+          
           <button onClick={() => setIsMinimized(true)} className="p-1 hover:bg-muted rounded">
             <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" />
           </button>
@@ -169,7 +177,7 @@ export const DirectionsPanel = ({
         {/* Realtime tracking info - only show when active */}
         {isTracking && currentStep && (
           <div className="mt-2 p-2 bg-primary/10 rounded-lg flex items-center gap-2">
-            <div className="w-6 h-6 bg-primary rounded-full flex items-center justify-center flex-shrink-0">
+            <div className="w-5 h-5 bg-primary rounded-full flex items-center justify-center flex-shrink-0 text-primary-foreground">
               {getManeuverIcon(currentStep.maneuver.type, currentStep.maneuver.modifier)}
             </div>
             <p className="text-xs text-foreground flex-1 truncate">
@@ -180,6 +188,48 @@ export const DirectionsPanel = ({
             )}
           </div>
         )}
+
+        {/* Expandable steps list */}
+        <AnimatePresence>
+          {isExpanded && routeInfo.steps && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              <ScrollArea className="max-h-40 mt-2 border-t border-border pt-2">
+                <div className="space-y-1">
+                  {routeInfo.steps.map((step, index) => {
+                    const isCurrentStep = isTracking && index === currentStepIndex;
+                    const isCompleted = isTracking && index < currentStepIndex;
+                    
+                    return (
+                      <div
+                        key={index}
+                        className={cn(
+                          "flex items-center gap-2 p-1.5 rounded-lg text-xs",
+                          isCurrentStep ? "bg-primary/20" : isCompleted ? "opacity-50" : "bg-muted/30"
+                        )}
+                      >
+                        <div className={cn(
+                          "w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 text-[10px]",
+                          isCurrentStep ? "bg-primary text-primary-foreground" :
+                          index === 0 ? "bg-primary text-primary-foreground" :
+                          index === routeInfo.steps.length - 1 ? "bg-destructive text-destructive-foreground" : "bg-muted text-muted-foreground"
+                        )}>
+                          {isCompleted ? '✓' : getManeuverIcon(step.maneuver.type, step.maneuver.modifier)}
+                        </div>
+                        <span className="flex-1 truncate text-foreground">{getTranslatedInstruction(step.instruction)}</span>
+                        <span className="text-muted-foreground">{formatDistance(step.distance)}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </ScrollArea>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </motion.div>
   );
