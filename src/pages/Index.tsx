@@ -270,6 +270,8 @@ const Index = () => {
           routeOrigin={routeOrigin}
           routeDestination={routeDestination}
           onClearRoute={handleClearRoute}
+          multiStopRoute={multiStopRoute}
+          isMultiStopMode={isMultiStopMode}
         />
       </div>
 
