@@ -39,6 +39,14 @@ export const translations = {
     accuracy: 'Độ chính xác',
     remaining: 'Còn',
     
+    // Multi-stop
+    multiStopRoute: 'Lộ trình nhiều điểm',
+    stops: 'điểm dừng',
+    addStop: 'Thêm điểm dừng',
+    selectPointOnMap: 'Chọn điểm trên bản đồ...',
+    total: 'Tổng cộng',
+    startMultiStop: 'Đi nhiều điểm',
+    
     // Transport modes
     walking: 'Đi bộ',
     cycling: 'Xe máy',
@@ -183,6 +191,14 @@ export const translations = {
     continue: 'Continue',
     accuracy: 'Accuracy',
     remaining: 'Remaining',
+    
+    // Multi-stop
+    multiStopRoute: 'Multi-stop Route',
+    stops: 'stops',
+    addStop: 'Add stop',
+    selectPointOnMap: 'Select point on map...',
+    total: 'Total',
+    startMultiStop: 'Multi-stop',
     
     // Transport modes
     walking: 'Walk',

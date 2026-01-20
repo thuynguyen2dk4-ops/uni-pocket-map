@@ -1,5 +1,5 @@
 import { motion, AnimatePresence, PanInfo } from 'framer-motion';
-import { X, Navigation, Star, Clock, Phone, MapPin, Sparkles, ChevronUp, Globe } from 'lucide-react';
+import { X, Navigation, Star, Clock, Phone, MapPin, Sparkles, ChevronUp, Globe, Route } from 'lucide-react';
 import { Location, Department } from '@/data/locations';
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
@@ -12,9 +12,10 @@ interface BottomSheetProps {
   department?: Department | null;
   onClose: () => void;
   onNavigate: (location: Location) => void;
+  onStartMultiStop?: (location: Location) => void;
 }
 
-export const BottomSheet = ({ location, department, onClose, onNavigate }: BottomSheetProps) => {
+export const BottomSheet = ({ location, department, onClose, onNavigate, onStartMultiStop }: BottomSheetProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const { t, language } = useLanguage();
 
@@ -224,14 +225,25 @@ export const BottomSheet = ({ location, department, onClose, onNavigate }: Botto
             </div>
           )}
 
-          {/* Action button */}
-          <Button
-            onClick={() => onNavigate(location)}
-            className="w-full h-14 text-base font-semibold rounded-2xl bg-primary hover:bg-primary/90"
-          >
-            <Navigation className="w-5 h-5 mr-2" />
-            {t('directions')}
-          </Button>
+          {/* Action buttons */}
+          <div className="flex gap-2">
+            <Button
+              onClick={() => onNavigate(location)}
+              className="flex-1 h-14 text-base font-semibold rounded-2xl bg-primary hover:bg-primary/90"
+            >
+              <Navigation className="w-5 h-5 mr-2" />
+              {t('directions')}
+            </Button>
+            {onStartMultiStop && (
+              <Button
+                onClick={() => onStartMultiStop(location)}
+                variant="outline"
+                className="h-14 px-4 rounded-2xl border-2"
+              >
+                <Route className="w-5 h-5" />
+              </Button>
+            )}
+          </div>
 
           {/* Expand hint */}
           {!isExpanded && (
