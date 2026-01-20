@@ -19,6 +19,8 @@ const Index = () => {
   ]);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
+  const [routeOrigin, setRouteOrigin] = useState<[number, number] | null>(null);
+  const [routeDestination, setRouteDestination] = useState<[number, number] | null>(null);
   
   const { route, isLoading, getDirections, clearDirections, error } = useDirections();
 
@@ -40,6 +42,8 @@ const Index = () => {
         (position) => {
           const origin: [number, number] = [position.coords.longitude, position.coords.latitude];
           const destination: [number, number] = [location.lng, location.lat];
+          setRouteOrigin(origin);
+          setRouteDestination(destination);
           getDirections(origin, destination);
           setIsNavigating(true);
           setSelectedLocation(null);
@@ -58,6 +62,8 @@ const Index = () => {
 
   const handleClearRoute = useCallback(() => {
     clearDirections();
+    setRouteOrigin(null);
+    setRouteDestination(null);
     setIsNavigating(false);
   }, [clearDirections]);
 
@@ -90,6 +96,8 @@ const Index = () => {
           activeCategories={activeCategories}
           flyToLocation={flyToLocation}
           routeInfo={route}
+          routeOrigin={routeOrigin}
+          routeDestination={routeDestination}
           onClearRoute={handleClearRoute}
         />
       </div>

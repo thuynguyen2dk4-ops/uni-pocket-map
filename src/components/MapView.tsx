@@ -12,6 +12,8 @@ interface MapViewProps {
   activeCategories: LocationType[];
   flyToLocation?: Location | null;
   routeInfo?: RouteInfo | null;
+  routeOrigin?: [number, number] | null;
+  routeDestination?: [number, number] | null;
   onClearRoute?: () => void;
 }
 
@@ -23,11 +25,15 @@ export const MapView = ({
   activeCategories,
   flyToLocation,
   routeInfo,
+  routeOrigin,
+  routeDestination,
   onClearRoute,
 }: MapViewProps) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
+  const originMarkerRef = useRef<mapboxgl.Marker | null>(null);
+  const destinationMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [mapboxToken, setMapboxTokenState] = useState<string | null>(null);
   const [isTokenChecked, setIsTokenChecked] = useState(false);
@@ -176,7 +182,7 @@ export const MapView = ({
     });
   }, [flyToLocation]);
 
-  // Draw route on map
+  // Draw route on map with origin/destination markers
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
 
@@ -186,6 +192,16 @@ export const MapView = ({
     }
     if (map.current.getSource(routeSourceId)) {
       map.current.removeSource(routeSourceId);
+    }
+
+    // Remove existing markers
+    if (originMarkerRef.current) {
+      originMarkerRef.current.remove();
+      originMarkerRef.current = null;
+    }
+    if (destinationMarkerRef.current) {
+      destinationMarkerRef.current.remove();
+      destinationMarkerRef.current = null;
     }
 
     if (!routeInfo?.geometry) return;
@@ -216,6 +232,53 @@ export const MapView = ({
       },
     });
 
+    // Add origin marker (green - your location)
+    if (routeOrigin) {
+      const originEl = document.createElement('div');
+      originEl.innerHTML = `
+        <div style="
+          width: 24px;
+          height: 24px;
+          background: #22c55e;
+          border-radius: 50%;
+          border: 3px solid white;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        ">
+          <div style="width: 8px; height: 8px; background: white; border-radius: 50%;"></div>
+        </div>
+      `;
+      originMarkerRef.current = new mapboxgl.Marker({ element: originEl })
+        .setLngLat(routeOrigin)
+        .addTo(map.current);
+    }
+
+    // Add destination marker (red - target)
+    if (routeDestination) {
+      const destEl = document.createElement('div');
+      destEl.innerHTML = `
+        <div style="
+          width: 32px;
+          height: 32px;
+          background: #ef4444;
+          border-radius: 50% 50% 50% 0;
+          transform: rotate(-45deg);
+          border: 3px solid white;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        ">
+          <div style="width: 10px; height: 10px; background: white; border-radius: 50%; transform: rotate(45deg);"></div>
+        </div>
+      `;
+      destinationMarkerRef.current = new mapboxgl.Marker({ element: destEl })
+        .setLngLat(routeDestination)
+        .addTo(map.current);
+    }
+
     // Fit map to route bounds
     const coordinates = routeInfo.geometry.coordinates as [number, number][];
     const bounds = coordinates.reduce(
@@ -227,7 +290,7 @@ export const MapView = ({
       padding: { top: 150, bottom: 300, left: 50, right: 50 },
       duration: 1000,
     });
-  }, [routeInfo, mapLoaded]);
+  }, [routeInfo, routeOrigin, routeDestination, mapLoaded]);
 
   // Add pulse animation style
   useEffect(() => {
