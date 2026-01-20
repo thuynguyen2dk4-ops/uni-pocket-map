@@ -2,6 +2,9 @@ import { useState, useCallback } from 'react';
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
 
+// Debug log
+console.log('Directions API - Token available:', !!MAPBOX_TOKEN);
+
 export interface RouteInfo {
   distance: number; // in meters
   duration: number; // in seconds
