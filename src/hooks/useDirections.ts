@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { getMapboxToken } from '@/lib/mapboxToken';
 
-export type TransportMode = 'walking' | 'driving' | 'cycling' | 'bus';
+export type TransportMode = 'walking' | 'driving' | 'cycling';
 export type RoutePreference = 'shortest' | 'fastest';
 
 export interface RouteStep {

@@ -6,10 +6,8 @@ import { CategoryFilter } from '@/components/CategoryFilter';
 import { BottomSheet } from '@/components/BottomSheet';
 import { DirectionsPanel } from '@/components/DirectionsPanel';
 import { MultiStopPanel } from '@/components/MultiStopPanel';
-import { BusRoutesPanel } from '@/components/BusRoutesPanel';
 import { Location, LocationType, Department } from '@/data/locations';
-import { busRoutes, BusRoute } from '@/data/busRoutes';
-import { Compass, Menu, Bus } from 'lucide-react';
+import { Compass, Menu } from 'lucide-react';
 import { LanguageSwitcher, LanguageIndicator } from '@/components/LanguageSwitcher';
 import { AnimatedText } from '@/components/AnimatedText';
 import { useLanguage } from '@/i18n/LanguageContext';
@@ -32,11 +30,6 @@ const Index = () => {
   const [isAddingStop, setIsAddingStop] = useState(false);
   const [routeOrigin, setRouteOrigin] = useState<[number, number] | null>(null);
   const [routeDestination, setRouteDestination] = useState<[number, number] | null>(null);
-  
-  // Bus routes state
-  const [showBusRoutes, setShowBusRoutes] = useState(false);
-  const [selectedBusRoute, setSelectedBusRoute] = useState<BusRoute | null>(null);
-  const [isBusPanelMinimized, setIsBusPanelMinimized] = useState(false);
   
   const { route, isLoading, getDirections, clearDirections, transportMode, setTransportMode, routePreference, setRoutePreference, origin, destination } = useDirections();
   
@@ -279,7 +272,6 @@ const Index = () => {
           onClearRoute={handleClearRoute}
           multiStopRoute={multiStopRoute}
           isMultiStopMode={isMultiStopMode}
-          selectedBusRoute={selectedBusRoute}
         />
       </div>
 
@@ -309,16 +301,6 @@ const Index = () => {
                 onBlur={() => setIsSearchFocused(false)}
               />
             </div>
-            
-            {/* Bus routes button */}
-            <button
-              onClick={() => setShowBusRoutes(!showBusRoutes)}
-              className={`w-9 h-9 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0 transition-colors ${
-                showBusRoutes ? 'bg-amber-500 text-white' : 'bg-card border border-border text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <Bus className="w-5 h-5" />
-            </button>
             
             {/* Language switcher - compact */}
             <LanguageSwitcher compact />
@@ -381,22 +363,6 @@ const Index = () => {
         )}
       </AnimatePresence>
 
-      {/* Bus routes panel */}
-      <AnimatePresence>
-        {showBusRoutes && !isNavigating && !isMultiStopMode && (
-          <BusRoutesPanel
-            routes={busRoutes}
-            selectedRoute={selectedBusRoute}
-            onSelectRoute={setSelectedBusRoute}
-            onClose={() => {
-              setShowBusRoutes(false);
-              setSelectedBusRoute(null);
-            }}
-            isMinimized={isBusPanelMinimized}
-            onToggleMinimize={() => setIsBusPanelMinimized(!isBusPanelMinimized)}
-          />
-        )}
-      </AnimatePresence>
 
       {/* Sponsored banner - floating */}
       <AnimatePresence>
