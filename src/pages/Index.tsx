@@ -4,8 +4,11 @@ import { MapView } from '@/components/MapView';
 import { SearchBar } from '@/components/SearchBar';
 import { CategoryFilter } from '@/components/CategoryFilter';
 import { BottomSheet } from '@/components/BottomSheet';
+import { DirectionsPanel } from '@/components/DirectionsPanel';
 import { Location, LocationType, Department } from '@/data/locations';
 import { Compass, Menu } from 'lucide-react';
+import { useDirections } from '@/hooks/useDirections';
+import { toast } from 'sonner';
 
 const Index = () => {
   const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
@@ -15,6 +18,9 @@ const Index = () => {
     'building', 'food', 'housing', 'job'
   ]);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [isNavigating, setIsNavigating] = useState(false);
+  
+  const { route, isLoading, getDirections, clearDirections, error } = useDirections();
 
   const handleSelectLocation = useCallback((location: Location, department?: Department) => {
     setSelectedLocation(location);
@@ -28,10 +34,32 @@ const Index = () => {
   }, []);
 
   const handleNavigate = useCallback((location: Location) => {
-    // In a real app, this would open navigation
-    const url = `https://www.google.com/maps/dir/?api=1&destination=${location.lat},${location.lng}`;
-    window.open(url, '_blank');
-  }, []);
+    // Get user's current location and calculate route
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const origin: [number, number] = [position.coords.longitude, position.coords.latitude];
+          const destination: [number, number] = [location.lng, location.lat];
+          getDirections(origin, destination);
+          setIsNavigating(true);
+          setSelectedLocation(null);
+          setSelectedDepartment(null);
+        },
+        (err) => {
+          toast.error('Không thể lấy vị trí của bạn. Vui lòng cho phép truy cập vị trí.');
+          console.error('Geolocation error:', err);
+        },
+        { enableHighAccuracy: true }
+      );
+    } else {
+      toast.error('Trình duyệt không hỗ trợ định vị');
+    }
+  }, [getDirections]);
+
+  const handleClearRoute = useCallback(() => {
+    clearDirections();
+    setIsNavigating(false);
+  }, [clearDirections]);
 
   const handleToggleCategory = useCallback((category: LocationType) => {
     setActiveCategories(prev => {
@@ -44,6 +72,14 @@ const Index = () => {
     });
   }, []);
 
+  // Track destination name for directions panel
+  const [navigationDestination, setNavigationDestination] = useState<string>('');
+
+  const handleNavigateWithName = useCallback((location: Location) => {
+    setNavigationDestination(location.nameVi);
+    handleNavigate(location);
+  }, [handleNavigate]);
+
   return (
     <div className="relative h-screen w-full overflow-hidden bg-background">
       {/* Full-screen map */}
@@ -53,6 +89,8 @@ const Index = () => {
           onSelectLocation={handleSelectLocation}
           activeCategories={activeCategories}
           flyToLocation={flyToLocation}
+          routeInfo={route}
+          onClearRoute={handleClearRoute}
         />
       </div>
 
@@ -98,7 +136,7 @@ const Index = () => {
 
           {/* Category filter */}
           <AnimatePresence>
-            {!isSearchFocused && (
+            {!isSearchFocused && !isNavigating && (
               <motion.div
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -116,25 +154,37 @@ const Index = () => {
         </div>
       </div>
 
+      {/* Directions panel */}
+      <AnimatePresence>
+        {isNavigating && route && (
+          <DirectionsPanel
+            routeInfo={route}
+            destinationName={navigationDestination}
+            isLoading={isLoading}
+            onClose={handleClearRoute}
+          />
+        )}
+      </AnimatePresence>
+
       {/* Sponsored banner - floating */}
       <AnimatePresence>
-        {!selectedLocation && !isSearchFocused && (
+        {!selectedLocation && !isSearchFocused && !isNavigating && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
             className="absolute bottom-6 left-4 right-4 safe-bottom"
           >
-            <div className="bg-gradient-to-r from-accent to-orange-400 rounded-2xl p-4 shadow-xl">
+            <div className="bg-gradient-to-r from-accent to-accent/70 rounded-2xl p-4 shadow-xl">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+                <div className="w-12 h-12 bg-accent-foreground/20 rounded-xl flex items-center justify-center">
                   <span className="text-2xl">☕</span>
                 </div>
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-white/80">Được tài trợ</p>
-                  <p className="text-white font-semibold">Highlands Coffee - Giảm 20% cho sinh viên</p>
+                  <p className="text-sm font-medium text-accent-foreground/80">Được tài trợ</p>
+                  <p className="text-accent-foreground font-semibold">Highlands Coffee - Giảm 20% cho sinh viên</p>
                 </div>
-                <button className="px-4 py-2 bg-white rounded-xl text-accent font-semibold text-sm shadow-lg">
+                <button className="px-4 py-2 bg-background rounded-xl text-accent font-semibold text-sm shadow-lg">
                   Xem ngay
                 </button>
               </div>
@@ -150,7 +200,7 @@ const Index = () => {
             location={selectedLocation}
             department={selectedDepartment}
             onClose={handleCloseSheet}
-            onNavigate={handleNavigate}
+            onNavigate={handleNavigateWithName}
           />
         )}
       </AnimatePresence>
