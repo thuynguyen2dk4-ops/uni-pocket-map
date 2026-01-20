@@ -7,11 +7,14 @@ import { BottomSheet } from '@/components/BottomSheet';
 import { DirectionsPanel } from '@/components/DirectionsPanel';
 import { Location, LocationType, Department } from '@/data/locations';
 import { Compass, Menu } from 'lucide-react';
+import { LanguageSwitcher } from '@/components/LanguageSwitcher';
+import { useLanguage } from '@/i18n/LanguageContext';
 import { useDirections, TransportMode, RoutePreference } from '@/hooks/useDirections';
 import { useRealtimeNavigation } from '@/hooks/useRealtimeNavigation';
 import { toast } from 'sonner';
 
 const Index = () => {
+  const { t } = useLanguage();
   const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
   const [selectedDepartment, setSelectedDepartment] = useState<Department | null>(null);
   const [flyToLocation, setFlyToLocation] = useState<Location | null>(null);
@@ -51,13 +54,13 @@ const Index = () => {
           setSelectedDepartment(null);
         },
         (err) => {
-          toast.error('Không thể lấy vị trí của bạn. Vui lòng cho phép truy cập vị trí.');
+          toast.error(t('locationError'));
           console.error('Geolocation error:', err);
         },
         { enableHighAccuracy: true }
       );
     } else {
-      toast.error('Trình duyệt không hỗ trợ định vị');
+      toast.error(t('browserNoLocation'));
     }
   }, [getDirections]);
 
@@ -110,7 +113,7 @@ const Index = () => {
     routeGeometry: route?.geometry || null,
     isNavigating,
     onOffRoute: () => {
-      toast.warning('Bạn đã đi lệch tuyến đường. Đang tính toán lại...');
+      toast.warning(t('offRouteWarning'));
       // Re-fetch directions if off route
       if (origin && destination) {
         getDirections(origin, destination, transportMode, routePreference);
@@ -157,13 +160,13 @@ const Index = () => {
                 <Compass className="w-6 h-6 text-primary-foreground" />
               </div>
               <div>
-                <h1 className="text-lg font-bold text-foreground">UniPocket</h1>
-                <p className="text-xs text-muted-foreground">Campus & Lifestyle Map</p>
+                <h1 className="text-lg font-bold text-foreground">{t('appName')}</h1>
+                <p className="text-xs text-muted-foreground">{t('appTagline')}</p>
               </div>
             </div>
-            <button className="w-10 h-10 bg-card rounded-xl flex items-center justify-center shadow-lg">
-              <Menu className="w-5 h-5 text-foreground" />
-            </button>
+            <div className="flex items-center gap-2">
+              <LanguageSwitcher />
+            </div>
           </motion.div>
 
           {/* Search bar */}

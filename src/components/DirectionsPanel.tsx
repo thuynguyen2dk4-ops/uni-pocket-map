@@ -8,6 +8,8 @@ import {
 import { formatDistance, formatDuration, RouteInfo, TransportMode, RouteStep, RoutePreference } from '@/hooks/useDirections';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { useLanguage } from '@/i18n/LanguageContext';
+import { TranslationKey } from '@/i18n/translations';
 
 interface DirectionsPanelProps {
   routeInfo: RouteInfo;
@@ -23,17 +25,6 @@ interface DirectionsPanelProps {
   onChangeTransportMode: (mode: TransportMode) => void;
   onChangeRoutePreference: (preference: RoutePreference) => void;
 }
-
-const transportModes: { mode: TransportMode; icon: typeof Footprints; label: string }[] = [
-  { mode: 'walking', icon: Footprints, label: 'Đi bộ' },
-  { mode: 'cycling', icon: Bike, label: 'Xe máy' },
-  { mode: 'driving', icon: Car, label: 'Ô tô' },
-];
-
-const routePreferences: { preference: RoutePreference; icon: typeof Ruler; label: string }[] = [
-  { preference: 'shortest', icon: Ruler, label: 'Ngắn nhất' },
-  { preference: 'fastest', icon: Gauge, label: 'Nhanh nhất' },
-];
 
 const getManeuverIcon = (type: string, modifier?: string) => {
   switch (type) {
@@ -78,11 +69,23 @@ export const DirectionsPanel = ({
   onChangeTransportMode,
   onChangeRoutePreference,
 }: DirectionsPanelProps) => {
+  const { t } = useLanguage();
   const [isExpanded, setIsExpanded] = useState(false);
 
   // Get current step for prominent display
   const currentStep = routeInfo.steps[currentStepIndex];
   const nextStep = routeInfo.steps[currentStepIndex + 1];
+
+  const transportModes: { mode: TransportMode; icon: typeof Footprints; labelKey: TranslationKey }[] = [
+    { mode: 'walking', icon: Footprints, labelKey: 'walking' },
+    { mode: 'cycling', icon: Bike, labelKey: 'cycling' },
+    { mode: 'driving', icon: Car, labelKey: 'driving' },
+  ];
+
+  const routePreferences: { preference: RoutePreference; icon: typeof Ruler; labelKey: TranslationKey }[] = [
+    { preference: 'shortest', icon: Ruler, labelKey: 'shortest' },
+    { preference: 'fastest', icon: Gauge, labelKey: 'fastest' },
+  ];
 
   return (
     <motion.div
@@ -99,7 +102,7 @@ export const DirectionsPanel = ({
                 <Navigation className="w-5 h-5 text-primary-foreground" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Đang chỉ đường đến</p>
+                <p className="text-sm text-muted-foreground">{t('navigatingTo')}</p>
                 <p className="font-semibold text-foreground line-clamp-1">{destinationName}</p>
               </div>
             </div>
@@ -113,7 +116,7 @@ export const DirectionsPanel = ({
 
           {/* Transport mode selector */}
           <div className="flex gap-2 mb-2">
-            {transportModes.map(({ mode, icon: Icon, label }) => (
+            {transportModes.map(({ mode, icon: Icon, labelKey }) => (
               <button
                 key={mode}
                 onClick={() => onChangeTransportMode(mode)}
@@ -125,14 +128,14 @@ export const DirectionsPanel = ({
                 )}
               >
                 <Icon className="w-4 h-4" />
-                <span className="text-sm font-medium">{label}</span>
+                <span className="text-sm font-medium">{t(labelKey)}</span>
               </button>
             ))}
           </div>
 
           {/* Route preference selector */}
           <div className="flex gap-2 mb-3">
-            {routePreferences.map(({ preference, icon: Icon, label }) => (
+            {routePreferences.map(({ preference, icon: Icon, labelKey }) => (
               <button
                 key={preference}
                 onClick={() => onChangeRoutePreference(preference)}
@@ -144,7 +147,7 @@ export const DirectionsPanel = ({
                 )}
               >
                 <Icon className="w-3 h-3" />
-                <span className="font-medium">{label}</span>
+                <span className="font-medium">{t(labelKey)}</span>
               </button>
             ))}
           </div>

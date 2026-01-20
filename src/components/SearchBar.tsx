@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Search, X, MapPin, Building2, Coffee, Home, Briefcase } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { searchLocations, findDepartment, Location, Department } from '@/data/locations';
+import { useLanguage } from '@/i18n/LanguageContext';
 
 interface SearchBarProps {
   onSelectLocation: (location: Location, department?: Department) => void;
@@ -30,6 +31,7 @@ const getTypeColor = (type: string) => {
 };
 
 export const SearchBar = ({ onSelectLocation, onFocus, onBlur }: SearchBarProps) => {
+  const { t, language } = useLanguage();
   const [query, setQuery] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const [results, setResults] = useState<Location[]>([]);
@@ -92,7 +94,7 @@ export const SearchBar = ({ onSelectLocation, onFocus, onBlur }: SearchBarProps)
           onChange={(e) => setQuery(e.target.value)}
           onFocus={handleFocus}
           onBlur={handleBlur}
-          placeholder="Tìm phòng ban, tòa nhà, hoặc quán ngon..."
+          placeholder={t('searchPlaceholder')}
           className="flex-1 bg-transparent outline-none text-foreground placeholder:text-muted-foreground text-base"
         />
         <AnimatePresence>
@@ -133,7 +135,7 @@ export const SearchBar = ({ onSelectLocation, onFocus, onBlur }: SearchBarProps)
                   </p>
                   <p className="text-sm text-muted-foreground">
                     {departmentResult.location.nameVi} • {departmentResult.department.floor}
-                    {departmentResult.department.room && ` • Phòng ${departmentResult.department.room}`}
+                    {departmentResult.department.room && ` • ${t('room')} ${departmentResult.department.room}`}
                   </p>
                 </div>
                 <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-1 rounded-full">

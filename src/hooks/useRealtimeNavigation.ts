@@ -198,9 +198,9 @@ export const useRealtimeNavigation = ({
 
   // Auto start/stop tracking based on navigation state
   useEffect(() => {
-    if (isNavigating) {
+    if (isNavigating && routeGeometry) {
       startTracking();
-    } else {
+    } else if (!isNavigating) {
       stopTracking();
     }
 
@@ -209,7 +209,8 @@ export const useRealtimeNavigation = ({
         navigator.geolocation.clearWatch(watchIdRef.current);
       }
     };
-  }, [isNavigating, startTracking, stopTracking]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isNavigating]);
 
   return {
     ...state,
