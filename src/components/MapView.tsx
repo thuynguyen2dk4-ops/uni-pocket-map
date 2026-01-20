@@ -3,6 +3,7 @@ import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { Location, VNU_CENTER, locations, LocationType } from '@/data/locations';
 import { RouteInfo } from '@/hooks/useDirections';
+import { MultiStopRouteInfo, Waypoint } from '@/hooks/useMultiStopDirections';
 import { getMapboxToken } from '@/lib/mapboxToken';
 import { MapboxTokenPrompt } from '@/components/map/MapboxTokenPrompt';
 import { useLanguage } from '@/i18n/LanguageContext';
@@ -16,6 +17,9 @@ interface MapViewProps {
   routeOrigin?: [number, number] | null;
   routeDestination?: [number, number] | null;
   onClearRoute?: () => void;
+  // Multi-stop support
+  multiStopRoute?: MultiStopRouteInfo | null;
+  isMultiStopMode?: boolean;
 }
 
 // Mapbox token is resolved at runtime (env or localStorage)
@@ -29,6 +33,8 @@ export const MapView = ({
   routeOrigin,
   routeDestination,
   onClearRoute,
+  multiStopRoute,
+  isMultiStopMode = false,
 }: MapViewProps) => {
   const { language } = useLanguage();
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -36,6 +42,7 @@ export const MapView = ({
   const markersRef = useRef<mapboxgl.Marker[]>([]);
   const originMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const destinationMarkerRef = useRef<mapboxgl.Marker | null>(null);
+  const waypointMarkersRef = useRef<mapboxgl.Marker[]>([]);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [mapboxToken, setMapboxTokenState] = useState<string | null>(null);
   const [isTokenChecked, setIsTokenChecked] = useState(false);
@@ -332,6 +339,221 @@ export const MapView = ({
     });
   }, [routeInfo, routeOrigin, routeDestination, mapLoaded]);
 
+  // Draw multi-stop waypoints on map
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+
+    // Clear existing waypoint markers
+    waypointMarkersRef.current.forEach(marker => marker.remove());
+    waypointMarkersRef.current = [];
+
+    // Also clear origin/destination markers when in multi-stop mode
+    if (isMultiStopMode) {
+      if (originMarkerRef.current) {
+        originMarkerRef.current.remove();
+        originMarkerRef.current = null;
+      }
+      if (destinationMarkerRef.current) {
+        destinationMarkerRef.current.remove();
+        destinationMarkerRef.current = null;
+      }
+    }
+
+    if (!multiStopRoute?.waypoints || multiStopRoute.waypoints.length === 0) return;
+
+    // Draw multi-stop route
+    if (multiStopRoute.geometry) {
+      // Remove existing route layers first
+      if (map.current.getLayer(routeArrowLayerId)) {
+        map.current.removeLayer(routeArrowLayerId);
+      }
+      if (map.current.getLayer(routeLayerId)) {
+        map.current.removeLayer(routeLayerId);
+      }
+      if (map.current.getSource(routeSourceId)) {
+        map.current.removeSource(routeSourceId);
+      }
+
+      // Add route source
+      map.current.addSource(routeSourceId, {
+        type: 'geojson',
+        data: {
+          type: 'Feature',
+          properties: {},
+          geometry: multiStopRoute.geometry,
+        },
+      });
+
+      // Add route layer with gradient-like effect
+      map.current.addLayer({
+        id: routeLayerId,
+        type: 'line',
+        source: routeSourceId,
+        layout: {
+          'line-join': 'round',
+          'line-cap': 'round',
+        },
+        paint: {
+          'line-color': '#8b5cf6', // Purple for multi-stop
+          'line-width': 6,
+          'line-opacity': 0.85,
+        },
+      });
+
+      // Add arrow symbols
+      map.current.addLayer({
+        id: routeArrowLayerId,
+        type: 'symbol',
+        source: routeSourceId,
+        layout: {
+          'symbol-placement': 'line',
+          'symbol-spacing': 80,
+          'icon-image': 'arrow-right',
+          'icon-size': 0.6,
+          'icon-allow-overlap': true,
+          'icon-ignore-placement': true,
+        },
+      });
+    }
+
+    // Color palette for waypoints
+    const waypointColors = [
+      '#22c55e', // green - origin
+      '#3b82f6', // blue
+      '#f59e0b', // amber
+      '#ec4899', // pink
+      '#14b8a6', // teal
+      '#8b5cf6', // purple
+      '#ef4444', // red - destination
+    ];
+
+    // Add markers for each waypoint
+    multiStopRoute.waypoints.forEach((waypoint, index) => {
+      const isFirst = index === 0;
+      const isLast = index === multiStopRoute.waypoints.length - 1;
+      
+      // Determine color
+      let color = waypointColors[Math.min(index, waypointColors.length - 2)];
+      if (isLast) color = '#ef4444'; // Red for final destination
+      if (isFirst) color = '#22c55e'; // Green for origin
+
+      const el = document.createElement('div');
+      el.className = 'waypoint-marker';
+      
+      if (isFirst) {
+        // Origin marker - pulsing circle
+        el.innerHTML = `
+          <div style="
+            position: relative;
+            width: 32px;
+            height: 32px;
+          ">
+            <div style="
+              position: absolute;
+              inset: 0;
+              background: ${color};
+              border-radius: 50%;
+              opacity: 0.3;
+              animation: waypointPulse 2s ease-in-out infinite;
+            "></div>
+            <div style="
+              position: absolute;
+              inset: 4px;
+              background: ${color};
+              border-radius: 50%;
+              border: 3px solid white;
+              box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            ">
+              <div style="width: 8px; height: 8px; background: white; border-radius: 50%;"></div>
+            </div>
+          </div>
+        `;
+      } else if (isLast) {
+        // Destination marker - flag shape
+        el.innerHTML = `
+          <div style="
+            width: 36px;
+            height: 36px;
+            background: ${color};
+            border-radius: 50% 50% 50% 0;
+            transform: rotate(-45deg);
+            border: 3px solid white;
+            box-shadow: 0 4px 12px rgba(239,68,68,0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          ">
+            <span style="
+              transform: rotate(45deg);
+              font-size: 14px;
+              font-weight: bold;
+              color: white;
+            ">🏁</span>
+          </div>
+        `;
+      } else {
+        // Intermediate waypoints - numbered circles
+        el.innerHTML = `
+          <div style="
+            width: 32px;
+            height: 32px;
+            background: ${color};
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: bold;
+            color: white;
+          ">
+            ${index}
+          </div>
+          <div style="
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            white-space: nowrap;
+            margin-top: 4px;
+            max-width: 120px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          ">${waypoint.name}</div>
+        `;
+      }
+
+      const marker = new mapboxgl.Marker({ element: el, anchor: isLast ? 'bottom' : 'center' })
+        .setLngLat(waypoint.coordinates)
+        .addTo(map.current!);
+
+      waypointMarkersRef.current.push(marker);
+    });
+
+    // Fit map to show all waypoints
+    if (multiStopRoute.geometry) {
+      const coordinates = multiStopRoute.geometry.coordinates as [number, number][];
+      const bounds = coordinates.reduce(
+        (bounds, coord) => bounds.extend(coord as [number, number]),
+        new mapboxgl.LngLatBounds(coordinates[0], coordinates[0])
+      );
+
+      map.current.fitBounds(bounds, {
+        padding: { top: 200, bottom: 350, left: 50, right: 50 },
+        duration: 1000,
+      });
+    }
+  }, [multiStopRoute, isMultiStopMode, mapLoaded]);
+
   // Add pulse animation style
   useEffect(() => {
     const style = document.createElement('style');
@@ -339,6 +561,10 @@ export const MapView = ({
       @keyframes pulse {
         0%, 100% { box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
         50% { box-shadow: 0 4px 20px rgba(249, 115, 22, 0.6); }
+      }
+      @keyframes waypointPulse {
+        0%, 100% { transform: scale(1); opacity: 0.3; }
+        50% { transform: scale(1.5); opacity: 0; }
       }
     `;
     document.head.appendChild(style);
