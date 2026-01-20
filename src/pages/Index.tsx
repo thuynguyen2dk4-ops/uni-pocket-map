@@ -5,12 +5,14 @@ import { SearchBar } from '@/components/SearchBar';
 import { CategoryFilter } from '@/components/CategoryFilter';
 import { BottomSheet } from '@/components/BottomSheet';
 import { DirectionsPanel } from '@/components/DirectionsPanel';
+import { MultiStopPanel } from '@/components/MultiStopPanel';
 import { Location, LocationType, Department } from '@/data/locations';
 import { Compass, Menu } from 'lucide-react';
 import { LanguageSwitcher, LanguageIndicator } from '@/components/LanguageSwitcher';
 import { AnimatedText } from '@/components/AnimatedText';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { useDirections, TransportMode, RoutePreference } from '@/hooks/useDirections';
+import { useMultiStopDirections, Waypoint } from '@/hooks/useMultiStopDirections';
 import { useRealtimeNavigation } from '@/hooks/useRealtimeNavigation';
 import { toast } from 'sonner';
 
@@ -24,16 +26,60 @@ const Index = () => {
   ]);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
+  const [isMultiStopMode, setIsMultiStopMode] = useState(false);
+  const [isAddingStop, setIsAddingStop] = useState(false);
   const [routeOrigin, setRouteOrigin] = useState<[number, number] | null>(null);
   const [routeDestination, setRouteDestination] = useState<[number, number] | null>(null);
   
   const { route, isLoading, getDirections, clearDirections, transportMode, setTransportMode, routePreference, setRoutePreference, origin, destination } = useDirections();
+  
+  // Multi-stop directions
+  const {
+    route: multiStopRoute,
+    waypoints: multiStopWaypoints,
+    isLoading: isMultiStopLoading,
+    transportMode: multiStopTransportMode,
+    addWaypoint,
+    removeWaypoint,
+    reorderWaypoints,
+    getMultiStopDirections,
+    clearRoute: clearMultiStopRoute,
+    setTransportMode: setMultiStopTransportMode,
+  } = useMultiStopDirections();
 
   const handleSelectLocation = useCallback((location: Location, department?: Department) => {
+    // If we're in add stop mode, add this location as a waypoint
+    if (isAddingStop && isMultiStopMode) {
+      const waypoint: Waypoint = {
+        coordinates: [location.lng, location.lat],
+        name: language === 'en' && location.name ? location.name : location.nameVi,
+        location,
+      };
+      addWaypoint(waypoint);
+      setIsAddingStop(false);
+      
+      // Get updated route
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const originWaypoint: Waypoint = {
+              coordinates: [position.coords.longitude, position.coords.latitude],
+              name: language === 'vi' ? 'Vị trí của bạn' : 'Your location',
+            };
+            getMultiStopDirections(originWaypoint, [...multiStopWaypoints, waypoint], multiStopTransportMode);
+          },
+          () => {
+            toast.error(t('locationError'));
+          }
+        );
+      }
+      return;
+    }
+    
     setSelectedLocation(location);
     setSelectedDepartment(department || null);
     setFlyToLocation(location);
-  }, []);
+  }, [isAddingStop, isMultiStopMode, addWaypoint, language, getMultiStopDirections, multiStopWaypoints, multiStopTransportMode, t]);
 
   const handleCloseSheet = useCallback(() => {
     setSelectedLocation(null);
@@ -86,7 +132,9 @@ const Index = () => {
     setRouteOrigin(null);
     setRouteDestination(null);
     setIsNavigating(false);
-  }, [clearDirections]);
+    setIsMultiStopMode(false);
+    clearMultiStopRoute();
+  }, [clearDirections, clearMultiStopRoute]);
 
   const handleToggleCategory = useCallback((category: LocationType) => {
     setActiveCategories(prev => {
@@ -127,6 +175,74 @@ const Index = () => {
     setNavigationDestination(destName);
     handleNavigate(location);
   }, [handleNavigate, language]);
+
+  // Start multi-stop navigation
+  const handleStartMultiStop = useCallback((location: Location) => {
+    const destName = language === 'en' && location.name ? location.name : location.nameVi;
+    
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const originWaypoint: Waypoint = {
+            coordinates: [position.coords.longitude, position.coords.latitude],
+            name: language === 'vi' ? 'Vị trí của bạn' : 'Your location',
+          };
+          const destWaypoint: Waypoint = {
+            coordinates: [location.lng, location.lat],
+            name: destName,
+            location,
+          };
+          addWaypoint(destWaypoint);
+          getMultiStopDirections(originWaypoint, [destWaypoint], 'walking');
+          setIsMultiStopMode(true);
+          setSelectedLocation(null);
+          setSelectedDepartment(null);
+        },
+        (err) => {
+          toast.error(t('locationError'));
+          console.error('Geolocation error:', err);
+        },
+        { enableHighAccuracy: true }
+      );
+    } else {
+      toast.error(t('browserNoLocation'));
+    }
+  }, [language, addWaypoint, getMultiStopDirections, t]);
+
+  const handleAddStopClick = useCallback(() => {
+    setIsAddingStop(true);
+    toast.info(language === 'vi' ? 'Chọn điểm dừng tiếp theo trên bản đồ' : 'Select next stop on the map');
+  }, [language]);
+
+  const handleRemoveWaypoint = useCallback((index: number) => {
+    removeWaypoint(index);
+    // Recalculate route
+    const updatedWaypoints = multiStopWaypoints.filter((_, i) => i !== index);
+    if (updatedWaypoints.length > 0 && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition((position) => {
+        const originWaypoint: Waypoint = {
+          coordinates: [position.coords.longitude, position.coords.latitude],
+          name: language === 'vi' ? 'Vị trí của bạn' : 'Your location',
+        };
+        getMultiStopDirections(originWaypoint, updatedWaypoints, multiStopTransportMode);
+      });
+    } else if (updatedWaypoints.length === 0) {
+      handleClearRoute();
+    }
+  }, [removeWaypoint, multiStopWaypoints, language, getMultiStopDirections, multiStopTransportMode, handleClearRoute]);
+
+  const handleMultiStopTransportChange = useCallback((mode: TransportMode) => {
+    setMultiStopTransportMode(mode);
+    if (multiStopWaypoints.length > 0 && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition((position) => {
+        const originWaypoint: Waypoint = {
+          coordinates: [position.coords.longitude, position.coords.latitude],
+          name: language === 'vi' ? 'Vị trí của bạn' : 'Your location',
+        };
+        getMultiStopDirections(originWaypoint, multiStopWaypoints, mode);
+      });
+    }
+  }, [setMultiStopTransportMode, multiStopWaypoints, language, getMultiStopDirections]);
 
   return (
     <div className="relative h-screen w-full overflow-hidden bg-background">
@@ -204,9 +320,27 @@ const Index = () => {
         </div>
       </div>
 
+      {/* Multi-stop panel */}
+      <AnimatePresence>
+        {isMultiStopMode && (
+          <MultiStopPanel
+            routeInfo={multiStopRoute}
+            waypoints={multiStopWaypoints}
+            isLoading={isMultiStopLoading}
+            transportMode={multiStopTransportMode}
+            onClose={handleClearRoute}
+            onChangeTransportMode={handleMultiStopTransportChange}
+            onRemoveWaypoint={handleRemoveWaypoint}
+            onReorderWaypoints={reorderWaypoints}
+            onAddStop={handleAddStopClick}
+            isAddingStop={isAddingStop}
+          />
+        )}
+      </AnimatePresence>
+
       {/* Directions panel */}
       <AnimatePresence>
-        {isNavigating && route && (
+        {isNavigating && route && !isMultiStopMode && (
           <DirectionsPanel
             routeInfo={route}
             destinationName={navigationDestination}
@@ -226,7 +360,7 @@ const Index = () => {
 
       {/* Sponsored banner - floating */}
       <AnimatePresence>
-        {!selectedLocation && !isSearchFocused && !isNavigating && (
+        {!selectedLocation && !isSearchFocused && !isNavigating && !isMultiStopMode && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -270,24 +404,25 @@ const Index = () => {
 
       {/* Bottom sheet */}
       <AnimatePresence>
-        {selectedLocation && (
+        {selectedLocation && !isMultiStopMode && (
           <BottomSheet
             location={selectedLocation}
             department={selectedDepartment}
             onClose={handleCloseSheet}
             onNavigate={handleNavigateWithName}
+            onStartMultiStop={handleStartMultiStop}
           />
         )}
       </AnimatePresence>
 
-      {/* Overlay when search is focused */}
+      {/* Overlay when search is focused or adding stop */}
       <AnimatePresence>
-        {isSearchFocused && (
+        {(isSearchFocused || isAddingStop) && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 bg-background/60 backdrop-blur-sm z-40"
+            className="absolute inset-0 bg-background/60 backdrop-blur-sm z-40 pointer-events-none"
             style={{ top: '140px' }}
           />
         )}
