@@ -5,6 +5,7 @@ import { Location, VNU_CENTER, locations, LocationType } from '@/data/locations'
 import { RouteInfo } from '@/hooks/useDirections';
 import { getMapboxToken } from '@/lib/mapboxToken';
 import { MapboxTokenPrompt } from '@/components/map/MapboxTokenPrompt';
+import { useLanguage } from '@/i18n/LanguageContext';
 
 interface MapViewProps {
   selectedLocation: Location | null;
@@ -29,6 +30,7 @@ export const MapView = ({
   routeDestination,
   onClearRoute,
 }: MapViewProps) => {
+  const { language } = useLanguage();
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
@@ -103,7 +105,7 @@ export const MapView = ({
     };
   }, [mapboxToken]);
 
-  // Update markers when categories or locations change
+  // Update markers when categories, locations, or language change
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
 
@@ -121,6 +123,9 @@ export const MapView = ({
       
       const isSelected = selectedLocation?.id === location.id;
       const size = location.isSponsored ? 48 : 40;
+      
+      // Get localized name
+      const locationName = language === 'en' && location.name ? location.name : location.nameVi;
       
       el.innerHTML = `
         <div style="
@@ -155,7 +160,7 @@ export const MapView = ({
             font-size: 10px;
             white-space: nowrap;
             margin-top: 4px;
-          ">${location.name}</div>
+          ">${locationName}</div>
         ` : ''}
       `;
 
@@ -169,7 +174,7 @@ export const MapView = ({
 
       markersRef.current.push(marker);
     });
-  }, [activeCategories, mapLoaded, selectedLocation, onSelectLocation]);
+  }, [activeCategories, mapLoaded, selectedLocation, onSelectLocation, language]);
 
   // Fly to location
   useEffect(() => {
