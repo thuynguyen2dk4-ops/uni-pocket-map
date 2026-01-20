@@ -7,14 +7,14 @@ import { BottomSheet } from '@/components/BottomSheet';
 import { DirectionsPanel } from '@/components/DirectionsPanel';
 import { Location, LocationType, Department } from '@/data/locations';
 import { Compass, Menu } from 'lucide-react';
-import { LanguageSwitcher } from '@/components/LanguageSwitcher';
+import { LanguageSwitcher, LanguageIndicator } from '@/components/LanguageSwitcher';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { useDirections, TransportMode, RoutePreference } from '@/hooks/useDirections';
 import { useRealtimeNavigation } from '@/hooks/useRealtimeNavigation';
 import { toast } from 'sonner';
 
 const Index = () => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
   const [selectedDepartment, setSelectedDepartment] = useState<Department | null>(null);
   const [flyToLocation, setFlyToLocation] = useState<Location | null>(null);
@@ -122,9 +122,10 @@ const Index = () => {
   });
 
   const handleNavigateWithName = useCallback((location: Location) => {
-    setNavigationDestination(location.nameVi);
+    const destName = language === 'en' && location.name ? location.name : location.nameVi;
+    setNavigationDestination(destName);
     handleNavigate(location);
-  }, [handleNavigate]);
+  }, [handleNavigate, language]);
 
   return (
     <div className="relative h-screen w-full overflow-hidden bg-background">
@@ -237,11 +238,19 @@ const Index = () => {
                   <span className="text-2xl">☕</span>
                 </div>
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-accent-foreground/80">Được tài trợ</p>
-                  <p className="text-accent-foreground font-semibold">Highlands Coffee - Giảm 20% cho sinh viên</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium text-accent-foreground/80">{t('sponsored')}</p>
+                    <LanguageIndicator />
+                  </div>
+                  <p className="text-accent-foreground font-semibold">
+                    {language === 'en' 
+                      ? 'Highlands Coffee - 20% off for students'
+                      : 'Highlands Coffee - Giảm 20% cho sinh viên'
+                    }
+                  </p>
                 </div>
                 <button className="px-4 py-2 bg-background rounded-xl text-accent font-semibold text-sm shadow-lg">
-                  Xem ngay
+                  {t('viewNow')}
                 </button>
               </div>
             </div>
