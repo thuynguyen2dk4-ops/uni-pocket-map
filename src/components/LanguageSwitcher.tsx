@@ -4,13 +4,48 @@ import { Language } from '@/i18n/translations';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 
-export const LanguageSwitcher = () => {
+export const LanguageSwitcher = ({ compact = false }: { compact?: boolean }) => {
   const { language, setLanguage } = useLanguage();
 
   const languages: { code: Language; label: string; labelFull: string; flag: string }[] = [
     { code: 'vi', label: 'VI', labelFull: 'Tiếng Việt', flag: '🇻🇳' },
     { code: 'en', label: 'EN', labelFull: 'English', flag: '🇺🇸' },
   ];
+
+  if (compact) {
+    return (
+      <div className="flex items-center bg-card/90 backdrop-blur-sm rounded-full shadow-md border border-border overflow-hidden">
+        {languages.map(({ code, flag }) => (
+          <motion.button
+            key={code}
+            onClick={() => setLanguage(code)}
+            className={cn(
+              "relative flex items-center justify-center w-8 h-8 text-sm transition-colors duration-200",
+              language === code
+                ? "text-primary-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+            whileTap={{ scale: 0.9 }}
+          >
+            {language === code && (
+              <motion.div
+                layoutId="language-active-bg-compact"
+                className="absolute inset-0.5 bg-primary rounded-full"
+                initial={false}
+                transition={{ type: "spring", stiffness: 400, damping: 30 }}
+              />
+            )}
+            <motion.span 
+              className="relative z-10 text-base"
+              animate={{ scale: language === code ? 1.1 : 0.9 }}
+            >
+              {flag}
+            </motion.span>
+          </motion.button>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center bg-card rounded-2xl shadow-lg border-2 border-border overflow-hidden">

@@ -278,52 +278,42 @@ const Index = () => {
       {/* Overlay gradient for better readability */}
       <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-background/80 via-background/40 to-transparent pointer-events-none" />
 
-      {/* Top controls */}
+      {/* Top controls - Compact */}
       <div className="absolute top-0 left-0 right-0 safe-top">
-        <div className="px-4 pt-4">
-          {/* Header */}
+        <div className="px-3 pt-3">
+          {/* Compact Header with Search */}
           <motion.div 
-            className="flex items-center justify-between mb-3"
+            className="flex items-center gap-2 mb-2"
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
           >
-            <div className="flex items-center gap-2">
-              <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center shadow-lg">
-                <Compass className="w-6 h-6 text-primary-foreground" />
-              </div>
-              <div>
-                <AnimatedText as="h1" className="text-lg font-bold text-foreground">{t('appName')}</AnimatedText>
-                <AnimatedText as="p" className="text-xs text-muted-foreground">{t('appTagline')}</AnimatedText>
-              </div>
+            {/* Logo */}
+            <div className="w-9 h-9 bg-primary rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+              <Compass className="w-5 h-5 text-primary-foreground" />
             </div>
-            <div className="flex items-center gap-2">
-              <LanguageSwitcher />
+            
+            {/* Search bar - expanded */}
+            <div className="flex-1">
+              <SearchBar
+                onSelectLocation={handleSelectLocation}
+                onFocus={() => setIsSearchFocused(true)}
+                onBlur={() => setIsSearchFocused(false)}
+              />
             </div>
+            
+            {/* Language switcher - compact */}
+            <LanguageSwitcher compact />
           </motion.div>
 
-          {/* Search bar */}
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-          >
-            <SearchBar
-              onSelectLocation={handleSelectLocation}
-              onFocus={() => setIsSearchFocused(true)}
-              onBlur={() => setIsSearchFocused(false)}
-            />
-          </motion.div>
-
-          {/* Category filter */}
+          {/* Category filter - smaller */}
           <AnimatePresence>
-            {!isSearchFocused && !isNavigating && (
+            {!isSearchFocused && !isNavigating && !isMultiStopMode && (
               <motion.div
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
-                transition={{ delay: 0.3 }}
-                className="mt-3"
+                transition={{ delay: 0.2 }}
               >
                 <CategoryFilter
                   activeCategories={activeCategories}

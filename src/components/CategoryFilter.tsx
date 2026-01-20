@@ -3,6 +3,7 @@ import { Building2, Coffee, Home, Briefcase } from 'lucide-react';
 import { LocationType } from '@/data/locations';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { TranslationKey } from '@/i18n/translations';
+import { cn } from '@/lib/utils';
 
 interface CategoryFilterProps {
   activeCategories: LocationType[];
@@ -20,7 +21,7 @@ export const CategoryFilter = ({ activeCategories, onToggleCategory }: CategoryF
   ];
 
   return (
-    <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+    <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
       {categories.map(({ type, labelKey, icon: Icon }) => {
         const isActive = activeCategories.includes(type);
         
@@ -28,17 +29,15 @@ export const CategoryFilter = ({ activeCategories, onToggleCategory }: CategoryF
           <motion.button
             key={type}
             onClick={() => onToggleCategory(type)}
-            className={`category-chip flex-shrink-0 ${
-              isActive ? 'category-chip-active' : 'category-chip-inactive'
-            }`}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all",
+              isActive 
+                ? "bg-primary text-primary-foreground shadow-md" 
+                : "bg-card/90 backdrop-blur-sm text-muted-foreground border border-border hover:bg-muted"
+            )}
             whileTap={{ scale: 0.95 }}
-            animate={{
-              backgroundColor: isActive ? 'hsl(var(--primary))' : 'hsl(var(--muted))',
-              color: isActive ? 'hsl(var(--primary-foreground))' : 'hsl(var(--muted-foreground))',
-            }}
-            transition={{ duration: 0.2 }}
           >
-            <Icon className="w-4 h-4" />
+            <Icon className="w-3.5 h-3.5" />
             <span>{t(labelKey)}</span>
           </motion.button>
         );
