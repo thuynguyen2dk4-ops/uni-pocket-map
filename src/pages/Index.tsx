@@ -7,7 +7,7 @@ import { BottomSheet } from '@/components/BottomSheet';
 import { DirectionsPanel } from '@/components/DirectionsPanel';
 import { Location, LocationType, Department } from '@/data/locations';
 import { Compass, Menu } from 'lucide-react';
-import { useDirections } from '@/hooks/useDirections';
+import { useDirections, TransportMode } from '@/hooks/useDirections';
 import { toast } from 'sonner';
 
 const Index = () => {
@@ -22,7 +22,7 @@ const Index = () => {
   const [routeOrigin, setRouteOrigin] = useState<[number, number] | null>(null);
   const [routeDestination, setRouteDestination] = useState<[number, number] | null>(null);
   
-  const { route, isLoading, getDirections, clearDirections, error } = useDirections();
+  const { route, isLoading, getDirections, clearDirections, transportMode, setTransportMode, origin, destination } = useDirections();
 
   const handleSelectLocation = useCallback((location: Location, department?: Department) => {
     setSelectedLocation(location);
@@ -35,16 +35,16 @@ const Index = () => {
     setSelectedDepartment(null);
   }, []);
 
-  const handleNavigate = useCallback((location: Location) => {
+  const handleNavigate = useCallback((location: Location, mode: TransportMode = 'walking') => {
     // Get user's current location and calculate route
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          const origin: [number, number] = [position.coords.longitude, position.coords.latitude];
-          const destination: [number, number] = [location.lng, location.lat];
-          setRouteOrigin(origin);
-          setRouteDestination(destination);
-          getDirections(origin, destination);
+          const originCoords: [number, number] = [position.coords.longitude, position.coords.latitude];
+          const destinationCoords: [number, number] = [location.lng, location.lat];
+          setRouteOrigin(originCoords);
+          setRouteDestination(destinationCoords);
+          getDirections(originCoords, destinationCoords, mode);
           setIsNavigating(true);
           setSelectedLocation(null);
           setSelectedDepartment(null);
@@ -59,6 +59,14 @@ const Index = () => {
       toast.error('Trình duyệt không hỗ trợ định vị');
     }
   }, [getDirections]);
+
+  const handleChangeTransportMode = useCallback((mode: TransportMode) => {
+    setTransportMode(mode);
+    // Re-fetch directions with new mode if we have origin and destination
+    if (origin && destination) {
+      getDirections(origin, destination, mode);
+    }
+  }, [getDirections, origin, destination, setTransportMode]);
 
   const handleClearRoute = useCallback(() => {
     clearDirections();
@@ -169,7 +177,9 @@ const Index = () => {
             routeInfo={route}
             destinationName={navigationDestination}
             isLoading={isLoading}
+            transportMode={transportMode}
             onClose={handleClearRoute}
+            onChangeTransportMode={handleChangeTransportMode}
           />
         )}
       </AnimatePresence>

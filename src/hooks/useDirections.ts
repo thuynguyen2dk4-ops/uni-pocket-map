@@ -1,6 +1,8 @@
 import { useState, useCallback } from 'react';
 import { getMapboxToken } from '@/lib/mapboxToken';
 
+export type TransportMode = 'walking' | 'driving' | 'cycling';
+
 export interface RouteInfo {
   distance: number; // in meters
   duration: number; // in seconds
@@ -13,6 +15,7 @@ export interface DirectionsState {
   route: RouteInfo | null;
   isLoading: boolean;
   error: string | null;
+  transportMode: TransportMode;
 }
 
 export const useDirections = () => {
@@ -22,16 +25,23 @@ export const useDirections = () => {
     route: null,
     isLoading: false,
     error: null,
+    transportMode: 'walking',
   });
+
+  const setTransportMode = useCallback((mode: TransportMode) => {
+    setState(prev => ({ ...prev, transportMode: mode }));
+  }, []);
 
   const getDirections = useCallback(async (
     origin: [number, number],
-    destination: [number, number]
+    destination: [number, number],
+    mode: TransportMode = 'walking'
   ) => {
     setState(prev => ({ 
       ...prev, 
       origin, 
       destination, 
+      transportMode: mode,
       isLoading: true, 
       error: null 
     }));
@@ -47,9 +57,13 @@ export const useDirections = () => {
         return;
       }
 
+      // Map transport mode to Mapbox profile
+      // Note: Mapbox doesn't have a motorcycle profile, use driving for both motorcycle and car
+      const profile = mode === 'walking' ? 'walking' : mode === 'cycling' ? 'cycling' : 'driving';
+
       // Use walking profile with steps for better pedestrian routing
       const response = await fetch(
-        `https://api.mapbox.com/directions/v5/mapbox/walking/${origin[0]},${origin[1]};${destination[0]},${destination[1]}?geometries=geojson&steps=true&overview=full&access_token=${token}`
+        `https://api.mapbox.com/directions/v5/mapbox/${profile}/${origin[0]},${origin[1]};${destination[0]},${destination[1]}?geometries=geojson&steps=true&overview=full&access_token=${token}`
       );
 
       if (!response.ok) {
@@ -82,19 +96,21 @@ export const useDirections = () => {
   }, []);
 
   const clearDirections = useCallback(() => {
-    setState({
+    setState(prev => ({
       origin: null,
       destination: null,
       route: null,
       isLoading: false,
       error: null,
-    });
+      transportMode: prev.transportMode,
+    }));
   }, []);
 
   return {
     ...state,
     getDirections,
     clearDirections,
+    setTransportMode,
   };
 };
 
