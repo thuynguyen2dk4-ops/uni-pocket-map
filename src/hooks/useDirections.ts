@@ -72,9 +72,9 @@ export const useDirections = () => {
       // Note: Mapbox doesn't have a motorcycle profile, use driving for both motorcycle and car
       const profile = mode === 'walking' ? 'walking' : mode === 'cycling' ? 'cycling' : 'driving';
 
-      // Use walking profile with steps for better pedestrian routing
+      // Request alternatives and pick shortest route
       const response = await fetch(
-        `https://api.mapbox.com/directions/v5/mapbox/${profile}/${origin[0]},${origin[1]};${destination[0]},${destination[1]}?geometries=geojson&steps=true&overview=full&access_token=${token}`
+        `https://api.mapbox.com/directions/v5/mapbox/${profile}/${origin[0]},${origin[1]};${destination[0]},${destination[1]}?geometries=geojson&steps=true&overview=full&alternatives=true&access_token=${token}`
       );
 
       if (!response.ok) {
@@ -84,7 +84,9 @@ export const useDirections = () => {
       const data = await response.json();
 
       if (data.routes && data.routes.length > 0) {
-        const route = data.routes[0];
+        // Sort routes by distance and pick the shortest one
+        const sortedRoutes = [...data.routes].sort((a: any, b: any) => a.distance - b.distance);
+        const route = sortedRoutes[0];
         
         // Extract steps from legs
         const steps: RouteStep[] = [];
