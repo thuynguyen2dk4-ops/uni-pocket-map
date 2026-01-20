@@ -1,0 +1,144 @@
+export type Language = 'vi' | 'en';
+
+export const translations = {
+  vi: {
+    // App header
+    appName: 'UniPocket',
+    appTagline: 'Campus & Lifestyle Map',
+    
+    // Search
+    searchPlaceholder: 'Tìm phòng ban, tòa nhà, hoặc quán ngon...',
+    
+    // Categories
+    categoryBuilding: 'Tòa nhà',
+    categoryFood: 'Ăn uống',
+    categoryHousing: 'Nhà trọ',
+    categoryJob: 'Việc làm',
+    
+    // Bottom sheet
+    reviews: 'Đánh giá',
+    departments: 'Phòng ban',
+    floor: 'Tầng',
+    room: 'Phòng',
+    seeMore: 'Xem thêm',
+    directions: 'Chỉ đường',
+    sponsored: 'Được tài trợ',
+    viewNow: 'Xem ngay',
+    
+    // Directions panel
+    navigatingTo: 'Đang chỉ đường đến',
+    calculatingRoute: 'Đang tính toán tuyến đường...',
+    hideInstructions: 'Ẩn hướng dẫn',
+    viewSteps: 'Xem {count} bước hướng dẫn',
+    continueStright: 'Tiếp tục đi thẳng',
+    youAreHere: '← Bạn đang ở đây',
+    next: 'Tiếp theo:',
+    continue: 'Tiếp tục',
+    accuracy: 'Độ chính xác',
+    remaining: 'Còn',
+    
+    // Transport modes
+    walking: 'Đi bộ',
+    cycling: 'Xe máy',
+    driving: 'Ô tô',
+    
+    // Route preferences
+    shortest: 'Ngắn nhất',
+    fastest: 'Nhanh nhất',
+    
+    // Time/Distance
+    minutes: 'phút',
+    hours: 'giờ',
+    meters: 'm',
+    kilometers: 'km',
+    
+    // Errors
+    locationError: 'Không thể lấy vị trí của bạn. Vui lòng cho phép truy cập vị trí.',
+    browserNoLocation: 'Trình duyệt không hỗ trợ định vị',
+    offRouteWarning: 'Bạn đã đi lệch tuyến đường. Đang tính toán lại...',
+    tokenNotConfigured: 'Mapbox Token chưa được cấu hình',
+    
+    // Mapbox token prompt
+    enterToken: 'Nhập Mapbox Access Token',
+    tokenDescription: 'Để sử dụng bản đồ, bạn cần cung cấp Mapbox Access Token.',
+    getToken: 'Lấy token miễn phí tại',
+    tokenPlaceholder: 'pk.eyJ1Ijoi...',
+    saveToken: 'Lưu Token',
+    
+    // Language
+    language: 'Ngôn ngữ',
+    vietnamese: 'Tiếng Việt',
+    english: 'English',
+  },
+  en: {
+    // App header
+    appName: 'UniPocket',
+    appTagline: 'Campus & Lifestyle Map',
+    
+    // Search
+    searchPlaceholder: 'Search departments, buildings, or restaurants...',
+    
+    // Categories
+    categoryBuilding: 'Buildings',
+    categoryFood: 'Food & Drink',
+    categoryHousing: 'Housing',
+    categoryJob: 'Jobs',
+    
+    // Bottom sheet
+    reviews: 'Reviews',
+    departments: 'Departments',
+    floor: 'Floor',
+    room: 'Room',
+    seeMore: 'See more',
+    directions: 'Directions',
+    sponsored: 'Sponsored',
+    viewNow: 'View now',
+    
+    // Directions panel
+    navigatingTo: 'Navigating to',
+    calculatingRoute: 'Calculating route...',
+    hideInstructions: 'Hide instructions',
+    viewSteps: 'View {count} steps',
+    continueStright: 'Continue straight',
+    youAreHere: '← You are here',
+    next: 'Next:',
+    continue: 'Continue',
+    accuracy: 'Accuracy',
+    remaining: 'Remaining',
+    
+    // Transport modes
+    walking: 'Walk',
+    cycling: 'Bike',
+    driving: 'Drive',
+    
+    // Route preferences
+    shortest: 'Shortest',
+    fastest: 'Fastest',
+    
+    // Time/Distance
+    minutes: 'min',
+    hours: 'hr',
+    meters: 'm',
+    kilometers: 'km',
+    
+    // Errors
+    locationError: 'Unable to get your location. Please allow location access.',
+    browserNoLocation: 'Browser does not support geolocation',
+    offRouteWarning: 'You are off route. Recalculating...',
+    tokenNotConfigured: 'Mapbox Token not configured',
+    
+    // Mapbox token prompt
+    enterToken: 'Enter Mapbox Access Token',
+    tokenDescription: 'To use the map, you need to provide a Mapbox Access Token.',
+    getToken: 'Get a free token at',
+    tokenPlaceholder: 'pk.eyJ1Ijoi...',
+    saveToken: 'Save Token',
+    
+    // Language
+    language: 'Language',
+    vietnamese: 'Tiếng Việt',
+    english: 'English',
+  },
+} as const;
+
+export type TranslationKey = keyof typeof translations.vi;
