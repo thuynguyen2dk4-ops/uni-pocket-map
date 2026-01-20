@@ -8,6 +8,7 @@ import { DirectionsPanel } from '@/components/DirectionsPanel';
 import { Location, LocationType, Department } from '@/data/locations';
 import { Compass, Menu } from 'lucide-react';
 import { useDirections, TransportMode, RoutePreference } from '@/hooks/useDirections';
+import { useRealtimeNavigation } from '@/hooks/useRealtimeNavigation';
 import { toast } from 'sonner';
 
 const Index = () => {
@@ -96,6 +97,26 @@ const Index = () => {
 
   // Track destination name for directions panel
   const [navigationDestination, setNavigationDestination] = useState<string>('');
+
+  // Real-time navigation
+  const { 
+    currentStepIndex, 
+    distanceToNextStep, 
+    isTracking, 
+    accuracy: userAccuracy,
+    isOffRoute 
+  } = useRealtimeNavigation({
+    steps: route?.steps || [],
+    routeGeometry: route?.geometry || null,
+    isNavigating,
+    onOffRoute: () => {
+      toast.warning('Bạn đã đi lệch tuyến đường. Đang tính toán lại...');
+      // Re-fetch directions if off route
+      if (origin && destination) {
+        getDirections(origin, destination, transportMode, routePreference);
+      }
+    },
+  });
 
   const handleNavigateWithName = useCallback((location: Location) => {
     setNavigationDestination(location.nameVi);
@@ -187,6 +208,10 @@ const Index = () => {
             isLoading={isLoading}
             transportMode={transportMode}
             routePreference={routePreference}
+            currentStepIndex={currentStepIndex}
+            distanceToNextStep={distanceToNextStep}
+            isTracking={isTracking}
+            userAccuracy={userAccuracy}
             onClose={handleClearRoute}
             onChangeTransportMode={handleChangeTransportMode}
             onChangeRoutePreference={handleChangeRoutePreference}

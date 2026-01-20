@@ -15,6 +15,10 @@ interface DirectionsPanelProps {
   isLoading: boolean;
   transportMode: TransportMode;
   routePreference: RoutePreference;
+  currentStepIndex?: number;
+  distanceToNextStep?: number;
+  isTracking?: boolean;
+  userAccuracy?: number | null;
   onClose: () => void;
   onChangeTransportMode: (mode: TransportMode) => void;
   onChangeRoutePreference: (preference: RoutePreference) => void;
@@ -66,11 +70,19 @@ export const DirectionsPanel = ({
   isLoading,
   transportMode,
   routePreference,
+  currentStepIndex = 0,
+  distanceToNextStep = 0,
+  isTracking = false,
+  userAccuracy,
   onClose,
   onChangeTransportMode,
   onChangeRoutePreference,
 }: DirectionsPanelProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
+
+  // Get current step for prominent display
+  const currentStep = routeInfo.steps[currentStepIndex];
+  const nextStep = routeInfo.steps[currentStepIndex + 1];
 
   return (
     <motion.div
@@ -144,6 +156,42 @@ export const DirectionsPanel = ({
             </div>
           ) : (
             <>
+              {/* Current step - realtime navigation */}
+              {isTracking && currentStep && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="bg-primary text-primary-foreground p-4 rounded-xl mb-3"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-primary-foreground/20 rounded-full flex items-center justify-center">
+                      {getManeuverIcon(currentStep.maneuver.type, currentStep.maneuver.modifier)}
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-lg font-semibold leading-tight">
+                        {currentStep.instruction || 'Tiếp tục đi thẳng'}
+                      </p>
+                      {distanceToNextStep > 0 && (
+                        <p className="text-primary-foreground/80 text-sm mt-1">
+                          Còn {formatDistance(distanceToNextStep)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  {nextStep && (
+                    <div className="mt-3 pt-3 border-t border-primary-foreground/20 flex items-center gap-2 text-sm text-primary-foreground/70">
+                      <span>Tiếp theo:</span>
+                      <span className="font-medium">{nextStep.instruction || 'Tiếp tục'}</span>
+                    </div>
+                  )}
+                  {userAccuracy && (
+                    <div className="mt-2 text-xs text-primary-foreground/60">
+                      📍 Độ chính xác: ±{Math.round(userAccuracy)}m
+                    </div>
+                  )}
+                </motion.div>
+              )}
+
               <div className="flex items-center gap-4 mb-3">
                 <div className="flex items-center gap-2 bg-primary/10 px-3 py-2 rounded-xl">
                   <Route className="w-4 h-4 text-primary" />
@@ -153,6 +201,12 @@ export const DirectionsPanel = ({
                   <Clock className="w-4 h-4 text-muted-foreground" />
                   <span className="font-medium text-foreground">{formatDuration(routeInfo.duration)}</span>
                 </div>
+                {isTracking && (
+                  <div className="flex items-center gap-1 text-xs text-green-600">
+                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                    <span>Live</span>
+                  </div>
+                )}
               </div>
 
               {/* Toggle steps button */}
@@ -189,34 +243,53 @@ export const DirectionsPanel = ({
             >
               <ScrollArea className="max-h-64 border-t border-border">
                 <div className="p-3 space-y-2">
-                  {routeInfo.steps.map((step, index) => (
-                    <div
-                      key={index}
-                      className={cn(
-                        "flex items-start gap-3 p-3 rounded-xl",
-                        index === 0 ? "bg-green-500/10" : 
-                        index === routeInfo.steps.length - 1 ? "bg-red-500/10" : "bg-muted/50"
-                      )}
-                    >
-                      <div className={cn(
-                        "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0",
-                        index === 0 ? "bg-green-500 text-white" :
-                        index === routeInfo.steps.length - 1 ? "bg-red-500 text-white" : "bg-muted text-muted-foreground"
-                      )}>
-                        {getManeuverIcon(step.maneuver.type, step.maneuver.modifier)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-foreground leading-tight">
-                          {step.instruction || 'Tiếp tục đi thẳng'}
-                        </p>
-                        <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-                          <span>{formatDistance(step.distance)}</span>
-                          <span>•</span>
-                          <span>{formatDuration(step.duration)}</span>
+                  {routeInfo.steps.map((step, index) => {
+                    const isCurrentStep = isTracking && index === currentStepIndex;
+                    const isCompleted = isTracking && index < currentStepIndex;
+                    
+                    return (
+                      <div
+                        key={index}
+                        className={cn(
+                          "flex items-start gap-3 p-3 rounded-xl transition-all",
+                          isCurrentStep ? "bg-primary/20 ring-2 ring-primary" :
+                          isCompleted ? "bg-muted/30 opacity-60" :
+                          index === 0 ? "bg-primary/10" : 
+                          index === routeInfo.steps.length - 1 ? "bg-destructive/10" : "bg-muted/50"
+                        )}
+                      >
+                        <div className={cn(
+                          "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0",
+                          isCurrentStep ? "bg-primary text-primary-foreground" :
+                          isCompleted ? "bg-muted text-muted-foreground" :
+                          index === 0 ? "bg-primary text-primary-foreground" :
+                          index === routeInfo.steps.length - 1 ? "bg-destructive text-destructive-foreground" : "bg-muted text-muted-foreground"
+                        )}>
+                          {isCompleted ? (
+                            <span className="text-xs">✓</span>
+                          ) : (
+                            getManeuverIcon(step.maneuver.type, step.maneuver.modifier)
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={cn(
+                            "text-sm leading-tight",
+                            isCurrentStep ? "text-foreground font-medium" : "text-foreground"
+                          )}>
+                            {step.instruction || 'Tiếp tục đi thẳng'}
+                          </p>
+                          <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                            <span>{formatDistance(step.distance)}</span>
+                            <span>•</span>
+                            <span>{formatDuration(step.duration)}</span>
+                            {isCurrentStep && (
+                              <span className="text-primary font-medium ml-2">← Bạn đang ở đây</span>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </ScrollArea>
             </motion.div>
