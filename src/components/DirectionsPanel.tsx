@@ -1,20 +1,31 @@
 import { motion } from 'framer-motion';
-import { X, Navigation, Clock, Route } from 'lucide-react';
+import { X, Navigation, Clock, Route, Footprints, Bike, Car } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { formatDistance, formatDuration, RouteInfo } from '@/hooks/useDirections';
+import { formatDistance, formatDuration, RouteInfo, TransportMode } from '@/hooks/useDirections';
+import { cn } from '@/lib/utils';
 
 interface DirectionsPanelProps {
   routeInfo: RouteInfo;
   destinationName: string;
   isLoading: boolean;
+  transportMode: TransportMode;
   onClose: () => void;
+  onChangeTransportMode: (mode: TransportMode) => void;
 }
+
+const transportModes: { mode: TransportMode; icon: typeof Footprints; label: string }[] = [
+  { mode: 'walking', icon: Footprints, label: 'Đi bộ' },
+  { mode: 'cycling', icon: Bike, label: 'Xe máy' },
+  { mode: 'driving', icon: Car, label: 'Ô tô' },
+];
 
 export const DirectionsPanel = ({
   routeInfo,
   destinationName,
   isLoading,
+  transportMode,
   onClose,
+  onChangeTransportMode,
 }: DirectionsPanelProps) => {
   return (
     <motion.div
@@ -42,6 +53,25 @@ export const DirectionsPanel = ({
           </button>
         </div>
 
+        {/* Transport mode selector */}
+        <div className="flex gap-2 mb-3">
+          {transportModes.map(({ mode, icon: Icon, label }) => (
+            <button
+              key={mode}
+              onClick={() => onChangeTransportMode(mode)}
+              className={cn(
+                "flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-xl transition-all",
+                transportMode === mode
+                  ? "bg-primary text-primary-foreground shadow-md"
+                  : "bg-muted text-muted-foreground hover:bg-muted/80"
+              )}
+            >
+              <Icon className="w-4 h-4" />
+              <span className="text-sm font-medium">{label}</span>
+            </button>
+          ))}
+        </div>
+
         {isLoading ? (
           <div className="flex items-center justify-center py-4">
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
@@ -56,9 +86,6 @@ export const DirectionsPanel = ({
             <div className="flex items-center gap-2 bg-muted px-3 py-2 rounded-xl">
               <Clock className="w-4 h-4 text-muted-foreground" />
               <span className="font-medium text-foreground">{formatDuration(routeInfo.duration)}</span>
-            </div>
-            <div className="flex-1 text-right">
-              <span className="text-xs text-muted-foreground">🚶 Đi bộ</span>
             </div>
           </div>
         )}
