@@ -47,8 +47,9 @@ export const useDirections = () => {
         return;
       }
 
+      // Use walking profile with steps for better pedestrian routing
       const response = await fetch(
-        `https://api.mapbox.com/directions/v5/mapbox/walking/${origin[0]},${origin[1]};${destination[0]},${destination[1]}?geometries=geojson&access_token=${token}`
+        `https://api.mapbox.com/directions/v5/mapbox/walking/${origin[0]},${origin[1]};${destination[0]},${destination[1]}?geometries=geojson&steps=true&overview=full&access_token=${token}`
       );
 
       if (!response.ok) {
