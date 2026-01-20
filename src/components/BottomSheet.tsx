@@ -3,6 +3,7 @@ import { X, Navigation, Star, Clock, Phone, MapPin, Sparkles, ChevronUp } from '
 import { Location, Department } from '@/data/locations';
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
+import { useLanguage } from '@/i18n/LanguageContext';
 
 interface BottomSheetProps {
   location: Location | null;
@@ -13,8 +14,12 @@ interface BottomSheetProps {
 
 export const BottomSheet = ({ location, department, onClose, onNavigate }: BottomSheetProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const { t, language } = useLanguage();
 
   if (!location) return null;
+  
+  // Get localized name
+  const locationName = language === 'en' && location.name ? location.name : location.nameVi;
 
   const handleDragEnd = (_: any, info: PanInfo) => {
     if (info.velocity.y > 500 || info.offset.y > 150) {
@@ -50,7 +55,7 @@ export const BottomSheet = ({ location, department, onClose, onNavigate }: Botto
           <div className="relative -mx-5 mb-4">
             <img
               src={location.image}
-              alt={location.nameVi}
+              alt={locationName}
               className="w-full h-48 object-cover"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
@@ -73,14 +78,14 @@ export const BottomSheet = ({ location, department, onClose, onNavigate }: Botto
 
             {/* Title overlay */}
             <div className="absolute bottom-4 left-5 right-5">
-              <h2 className="text-2xl font-bold text-white mb-1">{location.nameVi}</h2>
+              <h2 className="text-2xl font-bold text-white mb-1">{locationName}</h2>
               {location.rating && (
                 <div className="flex items-center gap-2">
                   <div className="flex items-center gap-1 bg-white/20 backdrop-blur px-2 py-1 rounded-full">
                     <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
                     <span className="text-white font-semibold text-sm">{location.rating}</span>
                   </div>
-                  <span className="text-white/80 text-sm">({location.reviewCount} đánh giá)</span>
+                  <span className="text-white/80 text-sm">({t('reviewCount', { count: location.reviewCount || 0 })})</span>
                 </div>
               )}
             </div>
@@ -101,7 +106,7 @@ export const BottomSheet = ({ location, department, onClose, onNavigate }: Botto
                   <p className="font-semibold text-foreground">{department.name}</p>
                   <p className="text-sm text-primary font-medium">
                     {department.floor}
-                    {department.room && ` • Phòng ${department.room}`}
+                    {department.room && ` • ${t('room')} ${department.room}`}
                   </p>
                 </div>
               </div>
@@ -148,7 +153,7 @@ export const BottomSheet = ({ location, department, onClose, onNavigate }: Botto
           {/* Departments list for buildings */}
           {location.departments && location.departments.length > 0 && !department && (
             <div className="mb-5">
-              <h3 className="font-semibold text-foreground mb-3">Phòng ban</h3>
+              <h3 className="font-semibold text-foreground mb-3">{t('departments')}</h3>
               <div className="space-y-2">
                 {location.departments.map((dept, index) => (
                   <div
@@ -158,7 +163,7 @@ export const BottomSheet = ({ location, department, onClose, onNavigate }: Botto
                     <span className="text-sm text-foreground">{dept.name}</span>
                     <span className="text-xs text-muted-foreground">
                       {dept.floor}
-                      {dept.room && ` • P.${dept.room}`}
+                      {dept.room && ` • ${t('roomShort')}${dept.room}`}
                     </span>
                   </div>
                 ))}
@@ -169,7 +174,7 @@ export const BottomSheet = ({ location, department, onClose, onNavigate }: Botto
           {/* Reviews */}
           {location.reviews && location.reviews.length > 0 && (
             <div className="mb-5">
-              <h3 className="font-semibold text-foreground mb-3">Đánh giá</h3>
+              <h3 className="font-semibold text-foreground mb-3">{t('reviews')}</h3>
               <div className="space-y-3">
                 {location.reviews.map((review, index) => (
                   <div key={index} className="p-4 bg-muted/50 rounded-2xl">
@@ -201,7 +206,7 @@ export const BottomSheet = ({ location, department, onClose, onNavigate }: Botto
             className="w-full h-14 text-base font-semibold rounded-2xl bg-primary hover:bg-primary/90"
           >
             <Navigation className="w-5 h-5 mr-2" />
-            Chỉ đường
+            {t('directions')}
           </Button>
 
           {/* Expand hint */}
@@ -211,7 +216,7 @@ export const BottomSheet = ({ location, department, onClose, onNavigate }: Botto
               className="w-full flex items-center justify-center gap-1 text-muted-foreground text-sm mt-4"
             >
               <ChevronUp className="w-4 h-4" />
-              Xem thêm
+              {t('seeMore')}
             </button>
           )}
         </div>

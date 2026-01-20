@@ -20,10 +20,12 @@ export const translations = {
     departments: 'Phòng ban',
     floor: 'Tầng',
     room: 'Phòng',
+    roomShort: 'P.',
     seeMore: 'Xem thêm',
     directions: 'Chỉ đường',
     sponsored: 'Được tài trợ',
     viewNow: 'Xem ngay',
+    reviewCount: '{count} đánh giá',
     
     // Directions panel
     navigatingTo: 'Đang chỉ đường đến',
@@ -59,11 +61,13 @@ export const translations = {
     tokenNotConfigured: 'Mapbox Token chưa được cấu hình',
     
     // Mapbox token prompt
-    enterToken: 'Nhập Mapbox Access Token',
-    tokenDescription: 'Để sử dụng bản đồ, bạn cần cung cấp Mapbox Access Token.',
-    getToken: 'Lấy token miễn phí tại',
+    mapboxTokenRequired: 'Cần Mapbox Token để xem bản đồ',
+    mapboxTokenInstructions: 'Dán Access Token của bạn (public token) để chạy demo ngay.',
     tokenPlaceholder: 'pk.eyJ1Ijoi...',
-    saveToken: 'Lưu Token',
+    saveTokenAndLoad: 'Lưu token & tải bản đồ',
+    tokenSavedInBrowser: 'Token sẽ được lưu trong trình duyệt (localStorage).',
+    tokenEmptyError: 'Vui lòng dán Mapbox Access Token',
+    tokenTooShortError: 'Token có vẻ chưa đúng (quá ngắn)',
     
     // Language
     language: 'Ngôn ngữ',
@@ -89,10 +93,12 @@ export const translations = {
     departments: 'Departments',
     floor: 'Floor',
     room: 'Room',
+    roomShort: 'R.',
     seeMore: 'See more',
     directions: 'Directions',
     sponsored: 'Sponsored',
     viewNow: 'View now',
+    reviewCount: '{count} reviews',
     
     // Directions panel
     navigatingTo: 'Navigating to',
@@ -128,11 +134,13 @@ export const translations = {
     tokenNotConfigured: 'Mapbox Token not configured',
     
     // Mapbox token prompt
-    enterToken: 'Enter Mapbox Access Token',
-    tokenDescription: 'To use the map, you need to provide a Mapbox Access Token.',
-    getToken: 'Get a free token at',
+    mapboxTokenRequired: 'Mapbox Token required to view the map',
+    mapboxTokenInstructions: 'Paste your Access Token (public token) to run the demo.',
     tokenPlaceholder: 'pk.eyJ1Ijoi...',
-    saveToken: 'Save Token',
+    saveTokenAndLoad: 'Save token & load map',
+    tokenSavedInBrowser: 'Token will be saved in browser (localStorage).',
+    tokenEmptyError: 'Please paste your Mapbox Access Token',
+    tokenTooShortError: 'Token seems invalid (too short)',
     
     // Language
     language: 'Language',
