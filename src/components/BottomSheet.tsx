@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { useState } from 'react';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { LanguageIndicator } from '@/components/LanguageSwitcher';
+import { AnimatedText, AnimatedBlock } from '@/components/AnimatedText';
 
 interface BottomSheetProps {
   location: Location | null;
@@ -85,7 +86,18 @@ export const BottomSheet = ({ location, department, onClose, onNavigate }: Botto
             {/* Title overlay */}
             <div className="absolute bottom-4 left-5 right-5">
               <div className="flex items-center gap-2 mb-1">
-                <h2 className="text-2xl font-bold text-white">{locationName}</h2>
+                <AnimatePresence mode="wait">
+                  <motion.h2
+                    key={language + locationName}
+                    initial={{ opacity: 0, y: 10, filter: 'blur(4px)' }}
+                    animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                    exit={{ opacity: 0, y: -10, filter: 'blur(4px)' }}
+                    transition={{ duration: 0.25 }}
+                    className="text-2xl font-bold text-white"
+                  >
+                    {locationName}
+                  </motion.h2>
+                </AnimatePresence>
                 <LanguageIndicator className="bg-white/20 text-white border-0" />
               </div>
               {location.rating && (
@@ -94,7 +106,7 @@ export const BottomSheet = ({ location, department, onClose, onNavigate }: Botto
                     <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
                     <span className="text-white font-semibold text-sm">{location.rating}</span>
                   </div>
-                  <span className="text-white/80 text-sm">({t('reviewCount', { count: location.reviewCount || 0 })})</span>
+                  <AnimatedText as="span" className="text-white/80 text-sm">({t('reviewCount', { count: location.reviewCount || 0 })})</AnimatedText>
                 </div>
               )}
             </div>
@@ -123,7 +135,7 @@ export const BottomSheet = ({ location, department, onClose, onNavigate }: Botto
           )}
 
           {/* Info cards */}
-          <div className="space-y-3 mb-5">
+          <AnimatedBlock className="space-y-3 mb-5">
             <div className="flex items-center gap-3 text-muted-foreground">
               <MapPin className="w-5 h-5 flex-shrink-0" />
               <span className="text-sm">{locationAddress}</span>
@@ -140,10 +152,10 @@ export const BottomSheet = ({ location, department, onClose, onNavigate }: Botto
                 <span className="text-sm">{location.phone}</span>
               </div>
             )}
-          </div>
+          </AnimatedBlock>
 
           {/* Description */}
-          <p className="text-foreground mb-5">{locationDescription}</p>
+          <AnimatedText as="p" className="text-foreground mb-5">{locationDescription}</AnimatedText>
 
           {/* Tags */}
           {locationTags && (

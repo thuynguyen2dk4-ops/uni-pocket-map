@@ -8,6 +8,7 @@ import { DirectionsPanel } from '@/components/DirectionsPanel';
 import { Location, LocationType, Department } from '@/data/locations';
 import { Compass, Menu } from 'lucide-react';
 import { LanguageSwitcher, LanguageIndicator } from '@/components/LanguageSwitcher';
+import { AnimatedText } from '@/components/AnimatedText';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { useDirections, TransportMode, RoutePreference } from '@/hooks/useDirections';
 import { useRealtimeNavigation } from '@/hooks/useRealtimeNavigation';
@@ -161,8 +162,8 @@ const Index = () => {
                 <Compass className="w-6 h-6 text-primary-foreground" />
               </div>
               <div>
-                <h1 className="text-lg font-bold text-foreground">{t('appName')}</h1>
-                <p className="text-xs text-muted-foreground">{t('appTagline')}</p>
+                <AnimatedText as="h1" className="text-lg font-bold text-foreground">{t('appName')}</AnimatedText>
+                <AnimatedText as="p" className="text-xs text-muted-foreground">{t('appTagline')}</AnimatedText>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -239,15 +240,24 @@ const Index = () => {
                 </div>
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium text-accent-foreground/80">{t('sponsored')}</p>
+                    <AnimatedText as="p" className="text-sm font-medium text-accent-foreground/80">{t('sponsored')}</AnimatedText>
                     <LanguageIndicator />
                   </div>
-                  <p className="text-accent-foreground font-semibold">
-                    {language === 'en' 
-                      ? 'Highlands Coffee - 20% off for students'
-                      : 'Highlands Coffee - Giảm 20% cho sinh viên'
-                    }
-                  </p>
+                  <AnimatePresence mode="wait">
+                    <motion.p
+                      key={language}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 10 }}
+                      transition={{ duration: 0.2 }}
+                      className="text-accent-foreground font-semibold"
+                    >
+                      {language === 'en' 
+                        ? 'Highlands Coffee - 20% off for students'
+                        : 'Highlands Coffee - Giảm 20% cho sinh viên'
+                      }
+                    </motion.p>
+                  </AnimatePresence>
                 </div>
                 <button className="px-4 py-2 bg-background rounded-xl text-accent font-semibold text-sm shadow-lg">
                   {t('viewNow')}
