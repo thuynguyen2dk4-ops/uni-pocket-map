@@ -244,6 +244,19 @@ const Index = () => {
     }
   }, [setMultiStopTransportMode, multiStopWaypoints, language, getMultiStopDirections]);
 
+  const handleReorderWaypoints = useCallback((newOrder: Waypoint[]) => {
+    // Recalculate route with new order
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition((position) => {
+        const originWaypoint: Waypoint = {
+          coordinates: [position.coords.longitude, position.coords.latitude],
+          name: language === 'vi' ? 'Vị trí của bạn' : 'Your location',
+        };
+        getMultiStopDirections(originWaypoint, newOrder, multiStopTransportMode);
+      });
+    }
+  }, [language, getMultiStopDirections, multiStopTransportMode]);
+
   return (
     <div className="relative h-screen w-full overflow-hidden bg-background">
       {/* Full-screen map */}
@@ -331,7 +344,7 @@ const Index = () => {
             onClose={handleClearRoute}
             onChangeTransportMode={handleMultiStopTransportChange}
             onRemoveWaypoint={handleRemoveWaypoint}
-            onReorderWaypoints={reorderWaypoints}
+            onReorderWaypoints={handleReorderWaypoints}
             onAddStop={handleAddStopClick}
             isAddingStop={isAddingStop}
           />

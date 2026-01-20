@@ -21,7 +21,7 @@ interface MultiStopPanelProps {
   onClose: () => void;
   onChangeTransportMode: (mode: TransportMode) => void;
   onRemoveWaypoint: (index: number) => void;
-  onReorderWaypoints: (fromIndex: number, toIndex: number) => void;
+  onReorderWaypoints: (newOrder: Waypoint[]) => void;
   onAddStop: () => void;
   isAddingStop: boolean;
 }
@@ -40,6 +40,10 @@ export const MultiStopPanel = ({
 }: MultiStopPanelProps) => {
   const { t, language } = useLanguage();
   const [expandedLeg, setExpandedLeg] = useState<number | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  
+  // Create draggable waypoints (exclude origin - index 0)
+  const draggableWaypoints = routeInfo?.waypoints.slice(1) || [];
   
   const getTranslatedInstruction = (instruction: string) => {
     return translateInstruction(instruction, language) || t('continueStright');
@@ -102,52 +106,111 @@ export const MultiStopPanel = ({
             ))}
           </div>
 
-          {/* Waypoints list */}
+          {/* Waypoints list with drag & drop */}
           <div className="space-y-2 mb-3">
-            {routeInfo?.waypoints.map((waypoint, index) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: index * 0.05 }}
-                className="flex items-center gap-2 p-2 bg-muted/50 rounded-xl"
-              >
-                <div className={cn(
-                  "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0",
-                  index === 0 
-                    ? "bg-green-500 text-white" 
-                    : index === routeInfo.waypoints.length - 1 
-                      ? "bg-destructive text-destructive-foreground"
-                      : "bg-primary text-primary-foreground"
-                )}>
-                  {index === 0 ? (
-                    <Circle className="w-4 h-4 fill-current" />
-                  ) : index === routeInfo.waypoints.length - 1 ? (
-                    <Flag className="w-4 h-4" />
-                  ) : (
-                    <span className="text-xs font-bold">{index}</span>
-                  )}
+            {/* Origin - not draggable */}
+            {routeInfo?.waypoints[0] && (
+              <div className="flex items-center gap-2 p-2 bg-muted/50 rounded-xl">
+                <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 bg-green-500 text-white">
+                  <Circle className="w-4 h-4 fill-current" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-foreground truncate">
-                    {waypoint.name}
+                    {routeInfo.waypoints[0].name}
                   </p>
-                  {index > 0 && routeInfo.legs[index - 1] && (
-                    <p className="text-xs text-muted-foreground">
-                      {formatDistance(routeInfo.legs[index - 1].distance)} • {formatDuration(routeInfo.legs[index - 1].duration, language)}
-                    </p>
-                  )}
+                  <p className="text-xs text-muted-foreground">
+                    {language === 'vi' ? 'Điểm xuất phát' : 'Starting point'}
+                  </p>
                 </div>
-                {index > 0 && index < routeInfo.waypoints.length && (
-                  <button
-                    onClick={() => onRemoveWaypoint(index - 1)}
-                    className="w-7 h-7 bg-destructive/10 hover:bg-destructive/20 rounded-full flex items-center justify-center transition-colors"
-                  >
-                    <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                  </button>
-                )}
-              </motion.div>
-            ))}
+              </div>
+            )}
+            
+            {/* Draggable waypoints */}
+            {draggableWaypoints.length > 0 && (
+              <Reorder.Group
+                axis="y"
+                values={draggableWaypoints}
+                onReorder={(newOrder) => onReorderWaypoints(newOrder)}
+                className="space-y-2"
+              >
+                {draggableWaypoints.map((waypoint, index) => {
+                  const isLast = index === draggableWaypoints.length - 1;
+                  const legIndex = index; // leg index matches draggable index
+                  
+                  return (
+                    <Reorder.Item
+                      key={waypoint.name + index}
+                      value={waypoint}
+                      onDragStart={() => setIsDragging(true)}
+                      onDragEnd={() => setIsDragging(false)}
+                      className="cursor-grab active:cursor-grabbing"
+                      whileDrag={{ 
+                        scale: 1.02, 
+                        boxShadow: "0 10px 30px rgba(0,0,0,0.2)",
+                        zIndex: 50 
+                      }}
+                    >
+                      <motion.div
+                        layout
+                        className={cn(
+                          "flex items-center gap-2 p-2 rounded-xl transition-colors",
+                          isDragging ? "bg-muted" : "bg-muted/50 hover:bg-muted/70"
+                        )}
+                      >
+                        {/* Drag handle */}
+                        <div className="flex items-center justify-center w-6 text-muted-foreground">
+                          <GripVertical className="w-4 h-4" />
+                        </div>
+                        
+                        {/* Icon */}
+                        <div className={cn(
+                          "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0",
+                          isLast 
+                            ? "bg-destructive text-destructive-foreground"
+                            : "bg-primary text-primary-foreground"
+                        )}>
+                          {isLast ? (
+                            <Flag className="w-4 h-4" />
+                          ) : (
+                            <span className="text-xs font-bold">{index + 1}</span>
+                          )}
+                        </div>
+                        
+                        {/* Content */}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate">
+                            {waypoint.name}
+                          </p>
+                          {routeInfo?.legs[legIndex] && (
+                            <p className="text-xs text-muted-foreground">
+                              {formatDistance(routeInfo.legs[legIndex].distance)} • {formatDuration(routeInfo.legs[legIndex].duration, language)}
+                            </p>
+                          )}
+                        </div>
+                        
+                        {/* Delete button */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onRemoveWaypoint(index);
+                          }}
+                          className="w-7 h-7 bg-destructive/10 hover:bg-destructive/20 rounded-full flex items-center justify-center transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                        </button>
+                      </motion.div>
+                    </Reorder.Item>
+                  );
+                })}
+              </Reorder.Group>
+            )}
+            
+            {/* Drag hint */}
+            {draggableWaypoints.length > 1 && !isDragging && (
+              <p className="text-xs text-center text-muted-foreground">
+                {language === 'vi' ? '↕️ Kéo để sắp xếp lại' : '↕️ Drag to reorder'}
+              </p>
+            )}
           </div>
 
           {/* Add stop button */}
