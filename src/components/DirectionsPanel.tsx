@@ -72,6 +72,7 @@ export const DirectionsPanel = ({
 }: DirectionsPanelProps) => {
   const { t, language } = useLanguage();
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isMinimized, setIsMinimized] = useState(false);
   
   // Helper to translate instruction
   const getTranslatedInstruction = (instruction: string) => {
@@ -93,69 +94,103 @@ export const DirectionsPanel = ({
     { preference: 'fastest', icon: Gauge, labelKey: 'fastest' },
   ];
 
+  // Minimized view - just a small floating pill
+  if (isMinimized) {
+    return (
+      <motion.div
+        initial={{ y: -50, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: -50, opacity: 0 }}
+        className="absolute top-16 left-3 right-3 z-30"
+      >
+        <button
+          onClick={() => setIsMinimized(false)}
+          className="w-full flex items-center gap-3 p-2.5 bg-card/95 backdrop-blur-sm rounded-full shadow-lg border border-border"
+        >
+          <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center flex-shrink-0">
+            <Navigation className="w-4 h-4 text-primary-foreground" />
+          </div>
+          <div className="flex-1 text-left min-w-0">
+            <p className="text-sm font-medium text-foreground truncate">{destinationName}</p>
+          </div>
+          <div className="flex items-center gap-2 text-xs">
+            <span className="font-bold text-primary">{formatDistance(routeInfo.distance)}</span>
+            <span className="text-muted-foreground">•</span>
+            <span className="text-muted-foreground">{formatDuration(routeInfo.duration, language)}</span>
+          </div>
+          <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+        </button>
+      </motion.div>
+    );
+  }
+
   return (
     <motion.div
       initial={{ y: -100, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       exit={{ y: -100, opacity: 0 }}
-      className="absolute top-32 left-4 right-4 z-30"
+      className="absolute top-16 left-3 right-3 z-30"
     >
-      <div className="bg-card rounded-2xl shadow-xl border border-border overflow-hidden">
-        <div className="p-4">
-          <div className="flex items-start justify-between mb-3">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center">
-                <Navigation className="w-5 h-5 text-primary-foreground" />
+      <div className="bg-card/95 backdrop-blur-sm rounded-2xl shadow-xl border border-border overflow-hidden">
+        <div className="p-3">
+          {/* Compact header */}
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center flex-shrink-0">
+                <Navigation className="w-4 h-4 text-primary-foreground" />
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">{t('navigatingTo')}</p>
-                <p className="font-semibold text-foreground line-clamp-1">{destinationName}</p>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs text-muted-foreground">{t('navigatingTo')}</p>
+                <p className="font-medium text-sm text-foreground truncate">{destinationName}</p>
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="w-8 h-8 bg-muted rounded-full flex items-center justify-center"
-            >
-              <X className="w-4 h-4 text-muted-foreground" />
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setIsMinimized(true)}
+                className="w-7 h-7 bg-muted/50 hover:bg-muted rounded-full flex items-center justify-center"
+              >
+                <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" />
+              </button>
+              <button
+                onClick={onClose}
+                className="w-7 h-7 bg-muted/50 hover:bg-destructive/20 rounded-full flex items-center justify-center"
+              >
+                <X className="w-3.5 h-3.5 text-muted-foreground" />
+              </button>
+            </div>
           </div>
 
-          {/* Transport mode selector */}
-          <div className="flex gap-2 mb-2">
-            {transportModes.map(({ mode, icon: Icon, labelKey }) => (
-              <button
-                key={mode}
-                onClick={() => onChangeTransportMode(mode)}
-                className={cn(
-                  "flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-xl transition-all",
-                  transportMode === mode
-                    ? "bg-primary text-primary-foreground shadow-md"
-                    : "bg-muted text-muted-foreground hover:bg-muted/80"
-                )}
-              >
-                <Icon className="w-4 h-4" />
-                <span className="text-sm font-medium">{t(labelKey)}</span>
-              </button>
-            ))}
-          </div>
-
-          {/* Route preference selector */}
-          <div className="flex gap-2 mb-3">
-            {routePreferences.map(({ preference, icon: Icon, labelKey }) => (
-              <button
-                key={preference}
-                onClick={() => onChangeRoutePreference(preference)}
-                className={cn(
-                  "flex-1 flex items-center justify-center gap-2 py-1.5 px-3 rounded-lg transition-all text-xs",
-                  routePreference === preference
-                    ? "bg-secondary text-secondary-foreground border-2 border-primary"
-                    : "bg-muted/50 text-muted-foreground hover:bg-muted/80 border-2 border-transparent"
-                )}
-              >
-                <Icon className="w-3 h-3" />
-                <span className="font-medium">{t(labelKey)}</span>
-              </button>
-            ))}
+          {/* Compact transport mode + route summary */}
+          <div className="flex items-center gap-2 mb-2">
+            {/* Transport icons only */}
+            <div className="flex bg-muted/50 rounded-lg p-0.5">
+              {transportModes.map(({ mode, icon: Icon }) => (
+                <button
+                  key={mode}
+                  onClick={() => onChangeTransportMode(mode)}
+                  className={cn(
+                    "p-1.5 rounded-md transition-all",
+                    transportMode === mode
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                </button>
+              ))}
+            </div>
+            
+            {/* Route info */}
+            <div className="flex items-center gap-2 flex-1 justify-end">
+              <div className="flex items-center gap-1 bg-primary/10 px-2 py-1 rounded-lg">
+                <Route className="w-3 h-3 text-primary" />
+                <span className="text-xs font-bold text-primary">{formatDistance(routeInfo.distance)}</span>
+              </div>
+              <div className="flex items-center gap-1 bg-muted/50 px-2 py-1 rounded-lg">
+                <Clock className="w-3 h-3 text-muted-foreground" />
+                <span className="text-xs font-medium text-foreground">{formatDuration(routeInfo.duration, language)}</span>
+              </div>
+            </div>
           </div>
 
           {isLoading ? (
