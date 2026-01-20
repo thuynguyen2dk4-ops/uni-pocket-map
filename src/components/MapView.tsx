@@ -3,6 +3,8 @@ import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { Location, VNU_CENTER, locations, LocationType } from '@/data/locations';
 import { RouteInfo } from '@/hooks/useDirections';
+import { getMapboxToken } from '@/lib/mapboxToken';
+import { MapboxTokenPrompt } from '@/components/map/MapboxTokenPrompt';
 
 interface MapViewProps {
   selectedLocation: Location | null;
@@ -13,7 +15,7 @@ interface MapViewProps {
   onClearRoute?: () => void;
 }
 
-const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
+// Mapbox token is resolved at runtime (env or localStorage)
 
 export const MapView = ({ 
   selectedLocation, 
@@ -27,6 +29,7 @@ export const MapView = ({
   const map = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [mapboxToken, setMapboxToken] = useState<string | null>(() => getMapboxToken());
   const routeLayerId = 'route-line';
   const routeSourceId = 'route-source';
 
@@ -50,9 +53,9 @@ export const MapView = ({
 
   // Initialize map
   useEffect(() => {
-    if (!mapContainer.current || map.current) return;
+    if (!mapContainer.current || map.current || !mapboxToken) return;
 
-    mapboxgl.accessToken = MAPBOX_TOKEN;
+    mapboxgl.accessToken = mapboxToken;
 
     map.current = new mapboxgl.Map({
       container: mapContainer.current,
@@ -77,7 +80,7 @@ export const MapView = ({
       map.current?.remove();
       map.current = null;
     };
-  }, []);
+  }, [mapboxToken]);
 
   // Update markers when categories or locations change
   useEffect(() => {
@@ -225,13 +228,10 @@ export const MapView = ({
     return () => { document.head.removeChild(style); };
   }, []);
 
-  if (!MAPBOX_TOKEN) {
+  if (!mapboxToken) {
     return (
-      <div className="w-full h-full bg-gradient-to-br from-secondary to-muted flex items-center justify-center">
-        <div className="text-center p-4">
-          <div className="text-4xl mb-2">🗺️</div>
-          <p className="text-muted-foreground">Mapbox Token chưa được cấu hình</p>
-        </div>
+      <div className="w-full h-full bg-gradient-to-br from-secondary to-muted flex items-center justify-center p-4">
+        <MapboxTokenPrompt onSaved={(token) => setMapboxToken(token)} />
       </div>
     );
   }
