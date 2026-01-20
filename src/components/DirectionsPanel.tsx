@@ -105,20 +105,13 @@ export const DirectionsPanel = ({
       >
         <button
           onClick={() => setIsMinimized(false)}
-          className="w-full flex items-center gap-3 p-2.5 bg-card/95 backdrop-blur-sm rounded-full shadow-lg border border-border"
+          className="w-full flex items-center gap-2 px-3 py-2 bg-card/95 backdrop-blur-sm rounded-full shadow-lg border border-border"
         >
-          <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center flex-shrink-0">
-            <Navigation className="w-4 h-4 text-primary-foreground" />
-          </div>
-          <div className="flex-1 text-left min-w-0">
-            <p className="text-sm font-medium text-foreground truncate">{destinationName}</p>
-          </div>
-          <div className="flex items-center gap-2 text-xs">
-            <span className="font-bold text-primary">{formatDistance(routeInfo.distance)}</span>
-            <span className="text-muted-foreground">•</span>
-            <span className="text-muted-foreground">{formatDuration(routeInfo.duration, language)}</span>
-          </div>
-          <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+          <Navigation className="w-4 h-4 text-primary" />
+          <span className="text-xs font-medium text-foreground truncate flex-1 text-left">{destinationName}</span>
+          <span className="text-xs font-bold text-primary">{formatDistance(routeInfo.distance)}</span>
+          <span className="text-xs text-muted-foreground">{formatDuration(routeInfo.duration, language)}</span>
+          <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
         </button>
       </motion.div>
     );
@@ -131,214 +124,62 @@ export const DirectionsPanel = ({
       exit={{ y: -100, opacity: 0 }}
       className="absolute top-16 left-3 right-3 z-30"
     >
-      <div className="bg-card/95 backdrop-blur-sm rounded-2xl shadow-xl border border-border overflow-hidden">
-        <div className="p-3">
-          {/* Compact header */}
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2 flex-1 min-w-0">
-              <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center flex-shrink-0">
-                <Navigation className="w-4 h-4 text-primary-foreground" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-xs text-muted-foreground">{t('navigatingTo')}</p>
-                <p className="font-medium text-sm text-foreground truncate">{destinationName}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-1">
+      <div className="bg-card/95 backdrop-blur-sm rounded-xl shadow-lg border border-border p-2">
+        {/* Single row header */}
+        <div className="flex items-center gap-2">
+          <Navigation className="w-4 h-4 text-primary flex-shrink-0" />
+          <span className="text-xs font-medium text-foreground truncate flex-1">{destinationName}</span>
+          
+          {/* Transport mode */}
+          <div className="flex bg-muted/50 rounded-md p-0.5">
+            {transportModes.map(({ mode, icon: Icon }) => (
               <button
-                onClick={() => setIsMinimized(true)}
-                className="w-7 h-7 bg-muted/50 hover:bg-muted rounded-full flex items-center justify-center"
-              >
-                <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" />
-              </button>
-              <button
-                onClick={onClose}
-                className="w-7 h-7 bg-muted/50 hover:bg-destructive/20 rounded-full flex items-center justify-center"
-              >
-                <X className="w-3.5 h-3.5 text-muted-foreground" />
-              </button>
-            </div>
-          </div>
-
-          {/* Compact transport mode + route summary */}
-          <div className="flex items-center gap-2 mb-2">
-            {/* Transport icons only */}
-            <div className="flex bg-muted/50 rounded-lg p-0.5">
-              {transportModes.map(({ mode, icon: Icon }) => (
-                <button
-                  key={mode}
-                  onClick={() => onChangeTransportMode(mode)}
-                  className={cn(
-                    "p-1.5 rounded-md transition-all",
-                    transportMode === mode
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  <Icon className="w-3.5 h-3.5" />
-                </button>
-              ))}
-            </div>
-            
-            {/* Route info */}
-            <div className="flex items-center gap-2 flex-1 justify-end">
-              <div className="flex items-center gap-1 bg-primary/10 px-2 py-1 rounded-lg">
-                <Route className="w-3 h-3 text-primary" />
-                <span className="text-xs font-bold text-primary">{formatDistance(routeInfo.distance)}</span>
-              </div>
-              <div className="flex items-center gap-1 bg-muted/50 px-2 py-1 rounded-lg">
-                <Clock className="w-3 h-3 text-muted-foreground" />
-                <span className="text-xs font-medium text-foreground">{formatDuration(routeInfo.duration, language)}</span>
-              </div>
-            </div>
-          </div>
-
-          {isLoading ? (
-            <div className="flex items-center justify-center py-4">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
-              <span className="ml-3 text-muted-foreground">{t('calculatingRoute')}</span>
-            </div>
-          ) : (
-            <>
-              {/* Current step - realtime navigation */}
-              {isTracking && currentStep && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="bg-primary text-primary-foreground p-4 rounded-xl mb-3"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-primary-foreground/20 rounded-full flex items-center justify-center">
-                      {getManeuverIcon(currentStep.maneuver.type, currentStep.maneuver.modifier)}
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-lg font-semibold leading-tight">
-                        {getTranslatedInstruction(currentStep.instruction)}
-                      </p>
-                      {distanceToNextStep > 0 && (
-                        <p className="text-primary-foreground/80 text-sm mt-1">
-                          {t('remaining')} {formatDistance(distanceToNextStep)}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  {nextStep && (
-                    <div className="mt-3 pt-3 border-t border-primary-foreground/20 flex items-center gap-2 text-sm text-primary-foreground/70">
-                      <span>{t('next')}</span>
-                      <span className="font-medium">{getTranslatedInstruction(nextStep.instruction)}</span>
-                    </div>
-                  )}
-                  {userAccuracy && (
-                    <div className="mt-2 text-xs text-primary-foreground/60">
-                      📍 {t('accuracy')}: ±{Math.round(userAccuracy)}m
-                    </div>
-                  )}
-                </motion.div>
-              )}
-
-              <div className="flex items-center gap-4 mb-3">
-                <div className="flex items-center gap-2 bg-primary/10 px-3 py-2 rounded-xl">
-                  <Route className="w-4 h-4 text-primary" />
-                  <span className="font-medium text-primary">{formatDistance(routeInfo.distance)}</span>
-                </div>
-                <div className="flex items-center gap-2 bg-muted px-3 py-2 rounded-xl">
-                  <Clock className="w-4 h-4 text-muted-foreground" />
-                  <span className="font-medium text-foreground">{formatDuration(routeInfo.duration, language)}</span>
-                </div>
-                {isTracking && (
-                  <div className="flex items-center gap-1 text-xs text-green-600">
-                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                    <span>Live</span>
-                  </div>
+                key={mode}
+                onClick={() => onChangeTransportMode(mode)}
+                className={cn(
+                  "p-1 rounded transition-all",
+                  transportMode === mode
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground"
                 )}
-              </div>
-
-              {/* Toggle steps button */}
-              {routeInfo.steps && routeInfo.steps.length > 0 && (
-                <button
-                  onClick={() => setIsExpanded(!isExpanded)}
-                  className="w-full flex items-center justify-center gap-2 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  {isExpanded ? (
-                    <>
-                      <ChevronUp className="w-4 h-4" />
-                      {t('hideInstructions')}
-                    </>
-                  ) : (
-                    <>
-                      <ChevronDown className="w-4 h-4" />
-                      {t('viewSteps', { count: routeInfo.steps.length })}
-                    </>
-                  )}
-                </button>
-              )}
-            </>
-          )}
+              >
+                <Icon className="w-3 h-3" />
+              </button>
+            ))}
+          </div>
+          
+          {/* Route info */}
+          <span className="text-xs font-bold text-primary">{formatDistance(routeInfo.distance)}</span>
+          <span className="text-xs text-muted-foreground">{formatDuration(routeInfo.duration, language)}</span>
+          
+          <button onClick={() => setIsMinimized(true)} className="p-1 hover:bg-muted rounded">
+            <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" />
+          </button>
+          <button onClick={onClose} className="p-1 hover:bg-destructive/20 rounded">
+            <X className="w-3.5 h-3.5 text-muted-foreground" />
+          </button>
         </div>
 
-        {/* Steps list */}
-        <AnimatePresence>
-          {isExpanded && routeInfo.steps && routeInfo.steps.length > 0 && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.2 }}
-            >
-              <ScrollArea className="max-h-64 border-t border-border">
-                <div className="p-3 space-y-2">
-                  {routeInfo.steps.map((step, index) => {
-                    const isCurrentStep = isTracking && index === currentStepIndex;
-                    const isCompleted = isTracking && index < currentStepIndex;
-                    
-                    return (
-                      <div
-                        key={index}
-                        className={cn(
-                          "flex items-start gap-3 p-3 rounded-xl transition-all",
-                          isCurrentStep ? "bg-primary/20 ring-2 ring-primary" :
-                          isCompleted ? "bg-muted/30 opacity-60" :
-                          index === 0 ? "bg-primary/10" : 
-                          index === routeInfo.steps.length - 1 ? "bg-destructive/10" : "bg-muted/50"
-                        )}
-                      >
-                        <div className={cn(
-                          "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0",
-                          isCurrentStep ? "bg-primary text-primary-foreground" :
-                          isCompleted ? "bg-muted text-muted-foreground" :
-                          index === 0 ? "bg-primary text-primary-foreground" :
-                          index === routeInfo.steps.length - 1 ? "bg-destructive text-destructive-foreground" : "bg-muted text-muted-foreground"
-                        )}>
-                          {isCompleted ? (
-                            <span className="text-xs">✓</span>
-                          ) : (
-                            getManeuverIcon(step.maneuver.type, step.maneuver.modifier)
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className={cn(
-                            "text-sm leading-tight",
-                            isCurrentStep ? "text-foreground font-medium" : "text-foreground"
-                          )}>
-                            {getTranslatedInstruction(step.instruction)}
-                          </p>
-                          <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-                            <span>{formatDistance(step.distance)}</span>
-                            <span>•</span>
-                            <span>{formatDuration(step.duration, language)}</span>
-                            {isCurrentStep && (
-                              <span className="text-primary font-medium ml-2">{t('youAreHere')}</span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </ScrollArea>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {isLoading && (
+          <div className="flex items-center justify-center py-2">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+          </div>
+        )}
+
+        {/* Realtime tracking info - only show when active */}
+        {isTracking && currentStep && (
+          <div className="mt-2 p-2 bg-primary/10 rounded-lg flex items-center gap-2">
+            <div className="w-6 h-6 bg-primary rounded-full flex items-center justify-center flex-shrink-0">
+              {getManeuverIcon(currentStep.maneuver.type, currentStep.maneuver.modifier)}
+            </div>
+            <p className="text-xs text-foreground flex-1 truncate">
+              {getTranslatedInstruction(currentStep.instruction)}
+            </p>
+            {distanceToNextStep > 0 && (
+              <span className="text-xs text-primary font-medium">{formatDistance(distanceToNextStep)}</span>
+            )}
+          </div>
+        )}
       </div>
     </motion.div>
   );
