@@ -18,8 +18,13 @@ export const BottomSheet = ({ location, department, onClose, onNavigate }: Botto
 
   if (!location) return null;
   
-  // Get localized name
+  // Get localized content
   const locationName = language === 'en' && location.name ? location.name : location.nameVi;
+  const locationDescription = language === 'en' && location.descriptionEn ? location.descriptionEn : location.description;
+  const locationAddress = language === 'en' && location.addressEn ? location.addressEn : location.address;
+  const locationOpenHours = language === 'en' && location.openHoursEn ? location.openHoursEn : location.openHours;
+  const locationTags = language === 'en' && location.tagsEn ? location.tagsEn : location.tags;
+  const voucherText = location.voucherTextKey ? t(location.voucherTextKey as any) : location.voucherText;
 
   const handleDragEnd = (_: any, info: PanInfo) => {
     if (info.velocity.y > 500 || info.offset.y > 150) {
@@ -69,10 +74,10 @@ export const BottomSheet = ({ location, department, onClose, onNavigate }: Botto
             </button>
 
             {/* Voucher badge */}
-            {location.hasVoucher && (
+            {location.hasVoucher && voucherText && (
               <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-accent text-accent-foreground px-3 py-1.5 rounded-full text-sm font-semibold shadow-lg">
                 <Sparkles className="w-4 h-4" />
-                {location.voucherText}
+                {voucherText}
               </div>
             )}
 
@@ -117,12 +122,12 @@ export const BottomSheet = ({ location, department, onClose, onNavigate }: Botto
           <div className="space-y-3 mb-5">
             <div className="flex items-center gap-3 text-muted-foreground">
               <MapPin className="w-5 h-5 flex-shrink-0" />
-              <span className="text-sm">{location.address}</span>
+              <span className="text-sm">{locationAddress}</span>
             </div>
-            {location.openHours && (
+            {locationOpenHours && (
               <div className="flex items-center gap-3 text-muted-foreground">
                 <Clock className="w-5 h-5 flex-shrink-0" />
-                <span className="text-sm">{location.openHours}</span>
+                <span className="text-sm">{locationOpenHours}</span>
               </div>
             )}
             {location.phone && (
@@ -134,12 +139,12 @@ export const BottomSheet = ({ location, department, onClose, onNavigate }: Botto
           </div>
 
           {/* Description */}
-          <p className="text-foreground mb-5">{location.description}</p>
+          <p className="text-foreground mb-5">{locationDescription}</p>
 
           {/* Tags */}
-          {location.tags && (
+          {locationTags && (
             <div className="flex flex-wrap gap-2 mb-5">
-              {location.tags.map((tag) => (
+              {locationTags.map((tag) => (
                 <span
                   key={tag}
                   className="px-3 py-1 bg-muted rounded-full text-sm text-muted-foreground"
@@ -176,26 +181,29 @@ export const BottomSheet = ({ location, department, onClose, onNavigate }: Botto
             <div className="mb-5">
               <h3 className="font-semibold text-foreground mb-3">{t('reviews')}</h3>
               <div className="space-y-3">
-                {location.reviews.map((review, index) => (
-                  <div key={index} className="p-4 bg-muted/50 rounded-2xl">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-medium text-foreground">{review.author}</span>
-                      <div className="flex items-center gap-1">
-                        {Array.from({ length: 5 }).map((_, i) => (
-                          <Star
-                            key={i}
-                            className={`w-4 h-4 ${
-                              i < review.rating
-                                ? 'text-yellow-400 fill-yellow-400'
-                                : 'text-muted-foreground/30'
-                            }`}
-                          />
-                        ))}
+                {location.reviews.map((review, index) => {
+                  const reviewComment = language === 'en' && review.commentEn ? review.commentEn : review.comment;
+                  return (
+                    <div key={index} className="p-4 bg-muted/50 rounded-2xl">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-medium text-foreground">{review.author}</span>
+                        <div className="flex items-center gap-1">
+                          {Array.from({ length: 5 }).map((_, i) => (
+                            <Star
+                              key={i}
+                              className={`w-4 h-4 ${
+                                i < review.rating
+                                  ? 'text-yellow-400 fill-yellow-400'
+                                  : 'text-muted-foreground/30'
+                              }`}
+                            />
+                          ))}
+                        </div>
                       </div>
+                      <p className="text-sm text-muted-foreground">{reviewComment}</p>
                     </div>
-                    <p className="text-sm text-muted-foreground">{review.comment}</p>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}

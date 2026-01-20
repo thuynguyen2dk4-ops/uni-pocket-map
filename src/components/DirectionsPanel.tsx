@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { TranslationKey } from '@/i18n/translations';
+import { translateInstruction } from '@/lib/translateDirections';
 
 interface DirectionsPanelProps {
   routeInfo: RouteInfo;
@@ -69,8 +70,13 @@ export const DirectionsPanel = ({
   onChangeTransportMode,
   onChangeRoutePreference,
 }: DirectionsPanelProps) => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [isExpanded, setIsExpanded] = useState(false);
+  
+  // Helper to translate instruction
+  const getTranslatedInstruction = (instruction: string) => {
+    return translateInstruction(instruction, language) || t('continueStright');
+  };
 
   // Get current step for prominent display
   const currentStep = routeInfo.steps[currentStepIndex];
@@ -155,7 +161,7 @@ export const DirectionsPanel = ({
           {isLoading ? (
             <div className="flex items-center justify-center py-4">
               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
-              <span className="ml-3 text-muted-foreground">Đang tính toán tuyến đường...</span>
+              <span className="ml-3 text-muted-foreground">{t('calculatingRoute')}</span>
             </div>
           ) : (
             <>
@@ -172,24 +178,24 @@ export const DirectionsPanel = ({
                     </div>
                     <div className="flex-1">
                       <p className="text-lg font-semibold leading-tight">
-                        {currentStep.instruction || 'Tiếp tục đi thẳng'}
+                        {getTranslatedInstruction(currentStep.instruction)}
                       </p>
                       {distanceToNextStep > 0 && (
                         <p className="text-primary-foreground/80 text-sm mt-1">
-                          Còn {formatDistance(distanceToNextStep)}
+                          {t('remaining')} {formatDistance(distanceToNextStep)}
                         </p>
                       )}
                     </div>
                   </div>
                   {nextStep && (
                     <div className="mt-3 pt-3 border-t border-primary-foreground/20 flex items-center gap-2 text-sm text-primary-foreground/70">
-                      <span>Tiếp theo:</span>
-                      <span className="font-medium">{nextStep.instruction || 'Tiếp tục'}</span>
+                      <span>{t('next')}</span>
+                      <span className="font-medium">{getTranslatedInstruction(nextStep.instruction)}</span>
                     </div>
                   )}
                   {userAccuracy && (
                     <div className="mt-2 text-xs text-primary-foreground/60">
-                      📍 Độ chính xác: ±{Math.round(userAccuracy)}m
+                      📍 {t('accuracy')}: ±{Math.round(userAccuracy)}m
                     </div>
                   )}
                 </motion.div>
@@ -202,7 +208,7 @@ export const DirectionsPanel = ({
                 </div>
                 <div className="flex items-center gap-2 bg-muted px-3 py-2 rounded-xl">
                   <Clock className="w-4 h-4 text-muted-foreground" />
-                  <span className="font-medium text-foreground">{formatDuration(routeInfo.duration)}</span>
+                  <span className="font-medium text-foreground">{formatDuration(routeInfo.duration, language)}</span>
                 </div>
                 {isTracking && (
                   <div className="flex items-center gap-1 text-xs text-green-600">
@@ -221,12 +227,12 @@ export const DirectionsPanel = ({
                   {isExpanded ? (
                     <>
                       <ChevronUp className="w-4 h-4" />
-                      Ẩn hướng dẫn
+                      {t('hideInstructions')}
                     </>
                   ) : (
                     <>
                       <ChevronDown className="w-4 h-4" />
-                      Xem {routeInfo.steps.length} bước hướng dẫn
+                      {t('viewSteps', { count: routeInfo.steps.length })}
                     </>
                   )}
                 </button>
@@ -279,14 +285,14 @@ export const DirectionsPanel = ({
                             "text-sm leading-tight",
                             isCurrentStep ? "text-foreground font-medium" : "text-foreground"
                           )}>
-                            {step.instruction || 'Tiếp tục đi thẳng'}
+                            {getTranslatedInstruction(step.instruction)}
                           </p>
                           <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
                             <span>{formatDistance(step.distance)}</span>
                             <span>•</span>
-                            <span>{formatDuration(step.duration)}</span>
+                            <span>{formatDuration(step.duration, language)}</span>
                             {isCurrentStep && (
-                              <span className="text-primary font-medium ml-2">← Bạn đang ở đây</span>
+                              <span className="text-primary font-medium ml-2">{t('youAreHere')}</span>
                             )}
                           </div>
                         </div>

@@ -54,6 +54,28 @@ export const translations = {
     meters: 'm',
     kilometers: 'km',
     
+    // Direction instructions (for translating Mapbox)
+    turnLeft: 'Rẽ trái',
+    turnRight: 'Rẽ phải',
+    turnSlightLeft: 'Rẽ nhẹ sang trái',
+    turnSlightRight: 'Rẽ nhẹ sang phải',
+    turnSharpLeft: 'Rẽ gấp sang trái',
+    turnSharpRight: 'Rẽ gấp sang phải',
+    continueOn: 'Tiếp tục đi',
+    arrive: 'Đến nơi',
+    arriveDestination: 'Bạn đã đến điểm đích',
+    depart: 'Bắt đầu',
+    straight: 'Đi thẳng',
+    uturn: 'Quay đầu',
+    roundabout: 'Đi vòng xuyến',
+    merge: 'Nhập làn',
+    fork: 'Rẽ ngã ba',
+    endOfRoad: 'Cuối đường',
+    newName: 'Tiếp tục theo',
+    onThe: 'ở phía',
+    left: 'trái',
+    right: 'phải',
+    
     // Errors
     locationError: 'Không thể lấy vị trí của bạn. Vui lòng cho phép truy cập vị trí.',
     browserNoLocation: 'Trình duyệt không hỗ trợ định vị',
@@ -73,6 +95,54 @@ export const translations = {
     language: 'Ngôn ngữ',
     vietnamese: 'Tiếng Việt',
     english: 'English',
+    
+    // Voucher texts
+    voucherDiscount20Student: 'Giảm 20% cho sinh viên',
+    voucherBuy2Get1: 'Mua 2 tặng 1',
+    voucherDiscount500kFirstMonth: 'Giảm 500k tháng đầu',
+    
+    // Location descriptions
+    lectureHall: 'Giảng đường',
+    dormitory: 'Ký túc xá',
+    student: 'Sinh viên',
+    parking: 'Nhà xe',
+    gate: 'Cổng',
+    entrance: 'Lối vào',
+    security: 'Bảo vệ',
+    safetyGuard: 'An ninh',
+    sports: 'Thể thao',
+    health: 'Sức khỏe',
+    medical: 'Y tế',
+    administration: 'Hành chính',
+    innovation: 'Đổi mới',
+    startup: 'Khởi nghiệp',
+    bank: 'Ngân hàng',
+    atm: 'ATM',
+    lake: 'Hồ',
+    relaxation: 'Thư giãn',
+    landscape: 'Cảnh quan',
+    sportsField: 'Sân bóng',
+    carParking: 'Đỗ xe ô tô',
+    
+    // Food related
+    coffee: 'Cà phê',
+    studySpace: 'Không gian học tập',
+    wifi: 'Wifi',
+    pastry: 'Bánh ngọt',
+    group: 'Nhóm',
+    milkTea: 'Trà sữa',
+    cheap: 'Giá rẻ',
+    nearSchool: 'Gần trường',
+    aesthetic: 'Sống ảo',
+    
+    // Housing
+    housing: 'Nhà trọ',
+    safe: 'An ninh',
+    
+    // Jobs
+    partTime: 'Part-time',
+    sales: 'Bán hàng',
+    evening: 'Tối',
   },
   en: {
     // App header
@@ -127,6 +197,28 @@ export const translations = {
     meters: 'm',
     kilometers: 'km',
     
+    // Direction instructions
+    turnLeft: 'Turn left',
+    turnRight: 'Turn right',
+    turnSlightLeft: 'Turn slight left',
+    turnSlightRight: 'Turn slight right',
+    turnSharpLeft: 'Turn sharp left',
+    turnSharpRight: 'Turn sharp right',
+    continueOn: 'Continue on',
+    arrive: 'Arrive',
+    arriveDestination: 'You have arrived at your destination',
+    depart: 'Depart',
+    straight: 'Go straight',
+    uturn: 'Make a U-turn',
+    roundabout: 'Enter roundabout',
+    merge: 'Merge',
+    fork: 'Take fork',
+    endOfRoad: 'End of road',
+    newName: 'Continue onto',
+    onThe: 'on the',
+    left: 'left',
+    right: 'right',
+    
     // Errors
     locationError: 'Unable to get your location. Please allow location access.',
     browserNoLocation: 'Browser does not support geolocation',
@@ -146,6 +238,54 @@ export const translations = {
     language: 'Language',
     vietnamese: 'Tiếng Việt',
     english: 'English',
+    
+    // Voucher texts
+    voucherDiscount20Student: '20% off for students',
+    voucherBuy2Get1: 'Buy 2 get 1 free',
+    voucherDiscount500kFirstMonth: '500k off first month',
+    
+    // Location descriptions
+    lectureHall: 'Lecture Hall',
+    dormitory: 'Dormitory',
+    student: 'Student',
+    parking: 'Parking',
+    gate: 'Gate',
+    entrance: 'Entrance',
+    security: 'Security',
+    safetyGuard: 'Safety Guard',
+    sports: 'Sports',
+    health: 'Health',
+    medical: 'Medical',
+    administration: 'Administration',
+    innovation: 'Innovation',
+    startup: 'Startup',
+    bank: 'Bank',
+    atm: 'ATM',
+    lake: 'Lake',
+    relaxation: 'Relaxation',
+    landscape: 'Landscape',
+    sportsField: 'Sports Field',
+    carParking: 'Car Parking',
+    
+    // Food related
+    coffee: 'Coffee',
+    studySpace: 'Study Space',
+    wifi: 'WiFi',
+    pastry: 'Pastry',
+    group: 'Group',
+    milkTea: 'Milk Tea',
+    cheap: 'Budget-friendly',
+    nearSchool: 'Near Campus',
+    aesthetic: 'Aesthetic',
+    
+    // Housing
+    housing: 'Housing',
+    safe: 'Safe',
+    
+    // Jobs
+    partTime: 'Part-time',
+    sales: 'Sales',
+    evening: 'Evening',
   },
 } as const;
 
