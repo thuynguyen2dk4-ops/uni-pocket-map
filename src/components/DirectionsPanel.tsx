@@ -3,9 +3,9 @@ import { useState } from 'react';
 import { 
   X, Navigation, Clock, Route, Footprints, Bike, Car, 
   ChevronDown, ChevronUp, ArrowUp, ArrowLeft, ArrowRight, 
-  CornerUpLeft, CornerUpRight, MapPin, Flag
+  CornerUpLeft, CornerUpRight, MapPin, Flag, Gauge, Ruler
 } from 'lucide-react';
-import { formatDistance, formatDuration, RouteInfo, TransportMode, RouteStep } from '@/hooks/useDirections';
+import { formatDistance, formatDuration, RouteInfo, TransportMode, RouteStep, RoutePreference } from '@/hooks/useDirections';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
@@ -14,14 +14,21 @@ interface DirectionsPanelProps {
   destinationName: string;
   isLoading: boolean;
   transportMode: TransportMode;
+  routePreference: RoutePreference;
   onClose: () => void;
   onChangeTransportMode: (mode: TransportMode) => void;
+  onChangeRoutePreference: (preference: RoutePreference) => void;
 }
 
 const transportModes: { mode: TransportMode; icon: typeof Footprints; label: string }[] = [
   { mode: 'walking', icon: Footprints, label: 'Đi bộ' },
   { mode: 'cycling', icon: Bike, label: 'Xe máy' },
   { mode: 'driving', icon: Car, label: 'Ô tô' },
+];
+
+const routePreferences: { preference: RoutePreference; icon: typeof Ruler; label: string }[] = [
+  { preference: 'shortest', icon: Ruler, label: 'Ngắn nhất' },
+  { preference: 'fastest', icon: Gauge, label: 'Nhanh nhất' },
 ];
 
 const getManeuverIcon = (type: string, modifier?: string) => {
@@ -58,8 +65,10 @@ export const DirectionsPanel = ({
   destinationName,
   isLoading,
   transportMode,
+  routePreference,
   onClose,
   onChangeTransportMode,
+  onChangeRoutePreference,
 }: DirectionsPanelProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -91,7 +100,7 @@ export const DirectionsPanel = ({
           </div>
 
           {/* Transport mode selector */}
-          <div className="flex gap-2 mb-3">
+          <div className="flex gap-2 mb-2">
             {transportModes.map(({ mode, icon: Icon, label }) => (
               <button
                 key={mode}
@@ -105,6 +114,25 @@ export const DirectionsPanel = ({
               >
                 <Icon className="w-4 h-4" />
                 <span className="text-sm font-medium">{label}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Route preference selector */}
+          <div className="flex gap-2 mb-3">
+            {routePreferences.map(({ preference, icon: Icon, label }) => (
+              <button
+                key={preference}
+                onClick={() => onChangeRoutePreference(preference)}
+                className={cn(
+                  "flex-1 flex items-center justify-center gap-2 py-1.5 px-3 rounded-lg transition-all text-xs",
+                  routePreference === preference
+                    ? "bg-secondary text-secondary-foreground border-2 border-primary"
+                    : "bg-muted/50 text-muted-foreground hover:bg-muted/80 border-2 border-transparent"
+                )}
+              >
+                <Icon className="w-3 h-3" />
+                <span className="font-medium">{label}</span>
               </button>
             ))}
           </div>

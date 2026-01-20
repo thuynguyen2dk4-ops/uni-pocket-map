@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { getMapboxToken } from '@/lib/mapboxToken';
 
 export type TransportMode = 'walking' | 'driving' | 'cycling';
+export type RoutePreference = 'shortest' | 'fastest';
 
 export interface RouteStep {
   instruction: string;
@@ -27,6 +28,7 @@ export interface DirectionsState {
   isLoading: boolean;
   error: string | null;
   transportMode: TransportMode;
+  routePreference: RoutePreference;
 }
 
 export const useDirections = () => {
@@ -37,22 +39,29 @@ export const useDirections = () => {
     isLoading: false,
     error: null,
     transportMode: 'walking',
+    routePreference: 'shortest',
   });
 
   const setTransportMode = useCallback((mode: TransportMode) => {
     setState(prev => ({ ...prev, transportMode: mode }));
   }, []);
 
+  const setRoutePreference = useCallback((preference: RoutePreference) => {
+    setState(prev => ({ ...prev, routePreference: preference }));
+  }, []);
+
   const getDirections = useCallback(async (
     origin: [number, number],
     destination: [number, number],
-    mode: TransportMode = 'walking'
+    mode: TransportMode = 'walking',
+    preference: RoutePreference = 'shortest'
   ) => {
     setState(prev => ({ 
       ...prev, 
       origin, 
       destination, 
       transportMode: mode,
+      routePreference: preference,
       isLoading: true, 
       error: null 
     }));
@@ -84,8 +93,10 @@ export const useDirections = () => {
       const data = await response.json();
 
       if (data.routes && data.routes.length > 0) {
-        // Sort routes by distance and pick the shortest one
-        const sortedRoutes = [...data.routes].sort((a: any, b: any) => a.distance - b.distance);
+        // Sort routes based on preference: shortest by distance, fastest by duration
+        const sortedRoutes = [...data.routes].sort((a: any, b: any) => 
+          preference === 'shortest' ? a.distance - b.distance : a.duration - b.duration
+        );
         const route = sortedRoutes[0];
         
         // Extract steps from legs
@@ -138,6 +149,7 @@ export const useDirections = () => {
       isLoading: false,
       error: null,
       transportMode: prev.transportMode,
+      routePreference: prev.routePreference,
     }));
   }, []);
 
@@ -146,6 +158,7 @@ export const useDirections = () => {
     getDirections,
     clearDirections,
     setTransportMode,
+    setRoutePreference,
   };
 };
 
