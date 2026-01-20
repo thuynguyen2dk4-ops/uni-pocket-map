@@ -3,10 +3,21 @@ import { getMapboxToken } from '@/lib/mapboxToken';
 
 export type TransportMode = 'walking' | 'driving' | 'cycling';
 
+export interface RouteStep {
+  instruction: string;
+  distance: number; // in meters
+  duration: number; // in seconds
+  maneuver: {
+    type: string;
+    modifier?: string;
+  };
+}
+
 export interface RouteInfo {
   distance: number; // in meters
   duration: number; // in seconds
   geometry: GeoJSON.LineString;
+  steps: RouteStep[];
 }
 
 export interface DirectionsState {
@@ -74,12 +85,34 @@ export const useDirections = () => {
 
       if (data.routes && data.routes.length > 0) {
         const route = data.routes[0];
+        
+        // Extract steps from legs
+        const steps: RouteStep[] = [];
+        if (route.legs && route.legs.length > 0) {
+          route.legs.forEach((leg: any) => {
+            if (leg.steps) {
+              leg.steps.forEach((step: any) => {
+                steps.push({
+                  instruction: step.maneuver?.instruction || '',
+                  distance: step.distance,
+                  duration: step.duration,
+                  maneuver: {
+                    type: step.maneuver?.type || '',
+                    modifier: step.maneuver?.modifier,
+                  },
+                });
+              });
+            }
+          });
+        }
+
         setState(prev => ({
           ...prev,
           route: {
             distance: route.distance,
             duration: route.duration,
             geometry: route.geometry,
+            steps,
           },
           isLoading: false,
         }));
