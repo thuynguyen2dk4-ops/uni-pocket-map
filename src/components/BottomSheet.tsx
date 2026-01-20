@@ -1,9 +1,10 @@
 import { motion, AnimatePresence, PanInfo } from 'framer-motion';
-import { X, Navigation, Star, Clock, Phone, MapPin, Sparkles, ChevronUp } from 'lucide-react';
+import { X, Navigation, Star, Clock, Phone, MapPin, Sparkles, ChevronUp, Globe } from 'lucide-react';
 import { Location, Department } from '@/data/locations';
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
 import { useLanguage } from '@/i18n/LanguageContext';
+import { LanguageIndicator } from '@/components/LanguageSwitcher';
 
 interface BottomSheetProps {
   location: Location | null;
@@ -83,7 +84,10 @@ export const BottomSheet = ({ location, department, onClose, onNavigate }: Botto
 
             {/* Title overlay */}
             <div className="absolute bottom-4 left-5 right-5">
-              <h2 className="text-2xl font-bold text-white mb-1">{locationName}</h2>
+              <div className="flex items-center gap-2 mb-1">
+                <h2 className="text-2xl font-bold text-white">{locationName}</h2>
+                <LanguageIndicator className="bg-white/20 text-white border-0" />
+              </div>
               {location.rating && (
                 <div className="flex items-center gap-2">
                   <div className="flex items-center gap-1 bg-white/20 backdrop-blur px-2 py-1 rounded-full">
