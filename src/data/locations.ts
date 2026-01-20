@@ -2,7 +2,9 @@ export type LocationType = 'building' | 'food' | 'housing' | 'job';
 
 export interface Department {
   name: string;
+  nameEn?: string;
   floor: string;
+  floorEn?: string;
   room?: string;
 }
 
@@ -10,6 +12,7 @@ export interface Review {
   author: string;
   rating: number;
   comment: string;
+  commentEn?: string;
   date: string;
 }
 
@@ -21,18 +24,23 @@ export interface Location {
   lat: number;
   lng: number;
   description: string;
+  descriptionEn?: string;
   address: string;
+  addressEn?: string;
   image: string;
   isSponsored?: boolean;
   hasVoucher?: boolean;
   voucherText?: string;
+  voucherTextKey?: string; // Translation key for voucher
   rating?: number;
   reviewCount?: number;
   openHours?: string;
+  openHoursEn?: string;
   phone?: string;
   departments?: Department[];
   reviews?: Review[];
   tags?: string[];
+  tagsEn?: string[];
 }
 
 // VNU Xuân Thủy Campus - Coordinates: 21.0380, 105.7820
@@ -705,20 +713,24 @@ export const locations: Location[] = [
     lat: 21.0365,
     lng: 105.7805,
     description: 'Chuỗi cà phê nổi tiếng với không gian rộng rãi, phù hợp học nhóm',
+    descriptionEn: 'Famous coffee chain with spacious environment, perfect for group study',
     address: '130 Xuân Thủy, Cầu Giấy',
+    addressEn: '130 Xuan Thuy, Cau Giay',
     image: 'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=800',
     isSponsored: true,
     hasVoucher: true,
     voucherText: 'Giảm 20% cho sinh viên',
+    voucherTextKey: 'voucherDiscount20Student',
     rating: 4.3,
     reviewCount: 256,
     openHours: '07:00 - 22:30',
     phone: '024 3456 7890',
     reviews: [
-      { author: 'Minh Anh', rating: 5, comment: 'Không gian đẹp, wifi mạnh!', date: '2024-01-15' },
-      { author: 'Hoàng Nam', rating: 4, comment: 'Cà phê ngon, giá hơi cao', date: '2024-01-10' },
+      { author: 'Minh Anh', rating: 5, comment: 'Không gian đẹp, wifi mạnh!', commentEn: 'Beautiful space, strong wifi!', date: '2024-01-15' },
+      { author: 'Hoàng Nam', rating: 4, comment: 'Cà phê ngon, giá hơi cao', commentEn: 'Good coffee, a bit pricey', date: '2024-01-10' },
     ],
     tags: ['Cà phê', 'Study space', 'Wifi'],
+    tagsEn: ['Coffee', 'Study Space', 'WiFi'],
   },
   {
     id: 'the-coffee-house',
@@ -728,20 +740,24 @@ export const locations: Location[] = [
     lat: 21.0395,
     lng: 105.7835,
     description: 'Quán cà phê yên tĩnh với menu đa dạng, có phòng riêng cho nhóm',
+    descriptionEn: 'Quiet coffee shop with diverse menu, private rooms available for groups',
     address: '158 Xuân Thủy, Cầu Giấy',
+    addressEn: '158 Xuan Thuy, Cau Giay',
     image: 'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=800',
     isSponsored: true,
     hasVoucher: true,
     voucherText: 'Mua 2 tặng 1',
+    voucherTextKey: 'voucherBuy2Get1',
     rating: 4.5,
     reviewCount: 189,
     openHours: '07:30 - 23:00',
     phone: '024 3456 7891',
     reviews: [
-      { author: 'Thu Hà', rating: 5, comment: 'Bánh ngọt rất ngon!', date: '2024-01-18' },
-      { author: 'Văn Đức', rating: 4, comment: 'Phục vụ tốt, không gian ổn', date: '2024-01-12' },
+      { author: 'Thu Hà', rating: 5, comment: 'Bánh ngọt rất ngon!', commentEn: 'The pastries are delicious!', date: '2024-01-18' },
+      { author: 'Văn Đức', rating: 4, comment: 'Phục vụ tốt, không gian ổn', commentEn: 'Good service, nice atmosphere', date: '2024-01-12' },
     ],
     tags: ['Cà phê', 'Bánh ngọt', 'Nhóm'],
+    tagsEn: ['Coffee', 'Pastry', 'Group'],
   },
   {
     id: 'phuc-long',
@@ -804,37 +820,45 @@ export const locations: Location[] = [
   // ========== NHÀ TRỌ ==========
   {
     id: 'nha-tro-1',
-    name: 'Nhà trọ Sinh Viên',
+    name: 'Student Housing',
     nameVi: 'Nhà trọ Sinh Viên Xuân Thủy',
     type: 'housing',
     lat: 21.0355,
     lng: 105.7850,
     description: 'Nhà trọ sạch sẽ, an ninh tốt, gần trường. Giá từ 1.5tr/tháng',
+    descriptionEn: 'Clean housing with good security, near campus. From 1.5M VND/month',
     address: '170 Xuân Thủy, Cầu Giấy',
+    addressEn: '170 Xuan Thuy, Cau Giay',
     image: 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=800',
     isSponsored: true,
     hasVoucher: true,
     voucherText: 'Giảm 500k tháng đầu',
+    voucherTextKey: 'voucherDiscount500kFirstMonth',
     rating: 4.1,
     reviewCount: 45,
     phone: '0912 345 678',
     tags: ['Nhà trọ', 'An ninh', 'Giá rẻ'],
+    tagsEn: ['Housing', 'Safe', 'Budget-friendly'],
   },
 
   // ========== VIỆC LÀM ==========
   {
     id: 'job-1',
-    name: 'Tuyển Part-time',
+    name: 'Part-time Job',
     nameVi: 'Circle K - Tuyển Part-time',
     type: 'job',
     lat: 21.0372,
     lng: 105.7795,
     description: 'Circle K tuyển nhân viên part-time ca tối. Lương 25k/h + tips',
+    descriptionEn: 'Circle K hiring part-time evening staff. 25k/h + tips',
     address: '120 Xuân Thủy, Cầu Giấy',
+    addressEn: '120 Xuan Thuy, Cau Giay',
     image: 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=800',
     openHours: 'Ca 18:00 - 23:00',
+    openHoursEn: 'Shift 18:00 - 23:00',
     phone: '0987 654 321',
     tags: ['Part-time', 'Bán hàng', 'Tối'],
+    tagsEn: ['Part-time', 'Sales', 'Evening'],
   },
 ];
 

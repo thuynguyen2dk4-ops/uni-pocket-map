@@ -169,12 +169,15 @@ export const formatDistance = (meters: number): string => {
   return `${(meters / 1000).toFixed(1)} km`;
 };
 
-export const formatDuration = (seconds: number): string => {
+export const formatDuration = (seconds: number, language: 'vi' | 'en' = 'vi'): string => {
   const minutes = Math.round(seconds / 60);
+  const minLabel = language === 'vi' ? 'phút' : 'min';
+  const hrLabel = language === 'vi' ? 'giờ' : 'hr';
+  
   if (minutes < 60) {
-    return `${minutes} phút`;
+    return `${minutes} ${minLabel}`;
   }
   const hours = Math.floor(minutes / 60);
   const remainingMinutes = minutes % 60;
-  return `${hours} giờ ${remainingMinutes} phút`;
+  return `${hours} ${hrLabel} ${remainingMinutes} ${minLabel}`;
 };
