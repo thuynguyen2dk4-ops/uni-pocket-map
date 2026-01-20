@@ -100,6 +100,8 @@ export const translations = {
     voucherDiscount20Student: 'Giảm 20% cho sinh viên',
     voucherBuy2Get1: 'Mua 2 tặng 1',
     voucherDiscount500kFirstMonth: 'Giảm 500k tháng đầu',
+    voucherFreeDrink: 'Tặng nước uống',
+    voucherBogo: 'Mua 1 tặng 1 (T2-T4)',
     
     // Location descriptions
     lectureHall: 'Giảng đường',
@@ -243,6 +245,8 @@ export const translations = {
     voucherDiscount20Student: '20% off for students',
     voucherBuy2Get1: 'Buy 2 get 1 free',
     voucherDiscount500kFirstMonth: '500k off first month',
+    voucherFreeDrink: 'Free drink included',
+    voucherBogo: 'Buy 1 get 1 free (Mon-Wed)',
     
     // Location descriptions
     lectureHall: 'Lecture Hall',
