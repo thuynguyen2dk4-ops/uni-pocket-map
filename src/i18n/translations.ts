@@ -50,7 +50,6 @@ export const translations = {
     // Transport modes
     walking: 'Đi bộ',
     cycling: 'Xe máy',
-    bus: 'Xe buýt',
     driving: 'Ô tô',
     
     // Route preferences
@@ -204,7 +203,6 @@ export const translations = {
     // Transport modes
     walking: 'Walk',
     cycling: 'Bike',
-    bus: 'Bus',
     driving: 'Drive',
     
     // Route preferences

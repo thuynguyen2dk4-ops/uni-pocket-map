@@ -1,7 +1,7 @@
 import { motion, AnimatePresence, Reorder } from 'framer-motion';
 import { useState } from 'react';
 import { 
-  X, Navigation, Clock, Route, Footprints, Bike, Car, Bus,
+  X, Navigation, Clock, Route, Footprints, Bike, Car,
   ChevronDown, ChevronUp, Plus, Trash2, GripVertical, MapPin, Flag, Circle
 } from 'lucide-react';
 import { MultiStopRouteInfo, TransportMode, formatDistance, formatDuration, RouteLeg, Waypoint } from '@/hooks/useMultiStopDirections';
@@ -53,7 +53,6 @@ export const MultiStopPanel = ({
   const transportModes: { mode: TransportMode; icon: typeof Footprints; labelKey: TranslationKey }[] = [
     { mode: 'walking', icon: Footprints, labelKey: 'walking' },
     { mode: 'cycling', icon: Bike, labelKey: 'cycling' },
-    { mode: 'bus', icon: Bus, labelKey: 'bus' },
     { mode: 'driving', icon: Car, labelKey: 'driving' },
   ];
 

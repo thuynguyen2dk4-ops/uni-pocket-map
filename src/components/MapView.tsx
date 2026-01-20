@@ -4,7 +4,6 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 import { Location, VNU_CENTER, locations, LocationType } from '@/data/locations';
 import { RouteInfo } from '@/hooks/useDirections';
 import { MultiStopRouteInfo, Waypoint } from '@/hooks/useMultiStopDirections';
-import { BusRoute } from '@/data/busRoutes';
 import { getMapboxToken } from '@/lib/mapboxToken';
 import { MapboxTokenPrompt } from '@/components/map/MapboxTokenPrompt';
 import { useLanguage } from '@/i18n/LanguageContext';
@@ -21,8 +20,6 @@ interface MapViewProps {
   // Multi-stop support
   multiStopRoute?: MultiStopRouteInfo | null;
   isMultiStopMode?: boolean;
-  // Bus routes support
-  selectedBusRoute?: BusRoute | null;
 }
 
 // Mapbox token is resolved at runtime (env or localStorage)
@@ -38,7 +35,6 @@ export const MapView = ({
   onClearRoute,
   multiStopRoute,
   isMultiStopMode = false,
-  selectedBusRoute,
 }: MapViewProps) => {
   const { language } = useLanguage();
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -47,15 +43,12 @@ export const MapView = ({
   const originMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const destinationMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const waypointMarkersRef = useRef<mapboxgl.Marker[]>([]);
-  const busStopMarkersRef = useRef<mapboxgl.Marker[]>([]);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [mapboxToken, setMapboxTokenState] = useState<string | null>(null);
   const [isTokenChecked, setIsTokenChecked] = useState(false);
   const routeLayerId = 'route-line';
   const routeArrowLayerId = 'route-arrows';
   const routeSourceId = 'route-source';
-  const busRouteLayerId = 'bus-route-line';
-  const busRouteSourceId = 'bus-route-source';
 
   // Load token from localStorage after mount (ensures window is available)
   useEffect(() => {
@@ -560,70 +553,6 @@ export const MapView = ({
       });
     }
   }, [multiStopRoute, isMultiStopMode, mapLoaded]);
-
-  // Display selected bus route on map
-  useEffect(() => {
-    if (!map.current || !mapLoaded) return;
-
-    // Clear previous bus route
-    busStopMarkersRef.current.forEach(m => m.remove());
-    busStopMarkersRef.current = [];
-    if (map.current.getLayer(busRouteLayerId)) map.current.removeLayer(busRouteLayerId);
-    if (map.current.getSource(busRouteSourceId)) map.current.removeSource(busRouteSourceId);
-
-    if (!selectedBusRoute) return;
-
-    // Create line from stops
-    const coordinates = selectedBusRoute.stops.map(s => s.coordinates);
-    
-    map.current.addSource(busRouteSourceId, {
-      type: 'geojson',
-      data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates } }
-    });
-
-    map.current.addLayer({
-      id: busRouteLayerId,
-      type: 'line',
-      source: busRouteSourceId,
-      layout: { 'line-join': 'round', 'line-cap': 'round' },
-      paint: {
-        'line-color': selectedBusRoute.color,
-        'line-width': 5,
-        'line-opacity': 0.8,
-        'line-dasharray': [2, 1]
-      }
-    });
-
-    // Add bus stop markers
-    selectedBusRoute.stops.forEach((stop, idx) => {
-      const el = document.createElement('div');
-      el.className = 'bus-stop-marker';
-      const isTerminal = idx === 0 || idx === selectedBusRoute.stops.length - 1;
-      el.innerHTML = `
-        <div style="
-          width: ${isTerminal ? '24px' : '18px'}; height: ${isTerminal ? '24px' : '18px'};
-          background: ${isTerminal ? selectedBusRoute.color : 'white'};
-          border: 3px solid ${selectedBusRoute.color};
-          border-radius: 50%; display: flex; align-items: center; justify-content: center;
-          font-size: 10px; font-weight: bold; color: ${isTerminal ? 'white' : selectedBusRoute.color};
-          box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-        ">${isTerminal ? (idx === 0 ? '●' : '◆') : idx}</div>
-      `;
-      
-      const marker = new mapboxgl.Marker({ element: el })
-        .setLngLat(stop.coordinates)
-        .setPopup(new mapboxgl.Popup({ offset: 15 }).setHTML(`
-          <div style="padding:4px;font-size:12px;"><strong>${language === 'vi' ? stop.name : stop.nameEn}</strong></div>
-        `))
-        .addTo(map.current!);
-      busStopMarkersRef.current.push(marker);
-    });
-
-    // Fit bounds to show all stops
-    const bounds = new mapboxgl.LngLatBounds();
-    coordinates.forEach(c => bounds.extend(c as [number, number]));
-    map.current.fitBounds(bounds, { padding: 80 });
-  }, [selectedBusRoute, mapLoaded, language]);
 
   // Add pulse animation style
   useEffect(() => {
