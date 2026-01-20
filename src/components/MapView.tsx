@@ -1,13 +1,16 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { Location, VNU_CENTER, locations, LocationType } from '@/data/locations';
+import { RouteInfo } from '@/hooks/useDirections';
 
 interface MapViewProps {
   selectedLocation: Location | null;
   onSelectLocation: (location: Location) => void;
   activeCategories: LocationType[];
   flyToLocation?: Location | null;
+  routeInfo?: RouteInfo | null;
+  onClearRoute?: () => void;
 }
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
@@ -17,11 +20,15 @@ export const MapView = ({
   onSelectLocation, 
   activeCategories,
   flyToLocation,
+  routeInfo,
+  onClearRoute,
 }: MapViewProps) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
   const [mapLoaded, setMapLoaded] = useState(false);
+  const routeLayerId = 'route-line';
+  const routeSourceId = 'route-source';
 
   const getTypeEmoji = (type: LocationType) => {
     switch (type) {
@@ -151,6 +158,59 @@ export const MapView = ({
       duration: 1500,
     });
   }, [flyToLocation]);
+
+  // Draw route on map
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+
+    // Remove existing route
+    if (map.current.getLayer(routeLayerId)) {
+      map.current.removeLayer(routeLayerId);
+    }
+    if (map.current.getSource(routeSourceId)) {
+      map.current.removeSource(routeSourceId);
+    }
+
+    if (!routeInfo?.geometry) return;
+
+    // Add route source
+    map.current.addSource(routeSourceId, {
+      type: 'geojson',
+      data: {
+        type: 'Feature',
+        properties: {},
+        geometry: routeInfo.geometry,
+      },
+    });
+
+    // Add route layer
+    map.current.addLayer({
+      id: routeLayerId,
+      type: 'line',
+      source: routeSourceId,
+      layout: {
+        'line-join': 'round',
+        'line-cap': 'round',
+      },
+      paint: {
+        'line-color': '#3b82f6',
+        'line-width': 6,
+        'line-opacity': 0.8,
+      },
+    });
+
+    // Fit map to route bounds
+    const coordinates = routeInfo.geometry.coordinates as [number, number][];
+    const bounds = coordinates.reduce(
+      (bounds, coord) => bounds.extend(coord as [number, number]),
+      new mapboxgl.LngLatBounds(coordinates[0], coordinates[0])
+    );
+
+    map.current.fitBounds(bounds, {
+      padding: { top: 150, bottom: 300, left: 50, right: 50 },
+      duration: 1000,
+    });
+  }, [routeInfo, mapLoaded]);
 
   // Add pulse animation style
   useEffect(() => {
