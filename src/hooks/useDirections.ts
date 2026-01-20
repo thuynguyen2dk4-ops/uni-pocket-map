@@ -1,9 +1,5 @@
 import { useState, useCallback } from 'react';
-
-const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
-
-// Debug log
-console.log('Directions API - Token available:', !!MAPBOX_TOKEN);
+import { getMapboxToken } from '@/lib/mapboxToken';
 
 export interface RouteInfo {
   distance: number; // in meters
@@ -41,8 +37,18 @@ export const useDirections = () => {
     }));
 
     try {
+      const token = getMapboxToken();
+      if (!token) {
+        setState(prev => ({
+          ...prev,
+          isLoading: false,
+          error: 'Mapbox Token chưa được cấu hình',
+        }));
+        return;
+      }
+
       const response = await fetch(
-        `https://api.mapbox.com/directions/v5/mapbox/walking/${origin[0]},${origin[1]};${destination[0]},${destination[1]}?geometries=geojson&access_token=${MAPBOX_TOKEN}`
+        `https://api.mapbox.com/directions/v5/mapbox/walking/${origin[0]},${origin[1]};${destination[0]},${destination[1]}?geometries=geojson&access_token=${token}`
       );
 
       if (!response.ok) {
