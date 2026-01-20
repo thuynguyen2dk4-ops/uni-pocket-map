@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import { getMapboxToken } from '@/lib/mapboxToken';
 import { Location } from '@/data/locations';
 
-export type TransportMode = 'walking' | 'driving' | 'cycling';
+export type TransportMode = 'walking' | 'driving' | 'cycling' | 'bus';
 
 export interface RouteStep {
   instruction: string;

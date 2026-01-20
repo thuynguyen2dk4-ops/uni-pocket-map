@@ -1,7 +1,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
 import { 
-  X, Navigation, Clock, Route, Footprints, Bike, Car, 
+  X, Navigation, Clock, Route, Footprints, Bike, Car, Bus,
   ChevronDown, ChevronUp, ArrowUp, ArrowLeft, ArrowRight, 
   CornerUpLeft, CornerUpRight, MapPin, Flag, Gauge, Ruler
 } from 'lucide-react';
@@ -86,6 +86,7 @@ export const DirectionsPanel = ({
   const transportModes: { mode: TransportMode; icon: typeof Footprints; labelKey: TranslationKey }[] = [
     { mode: 'walking', icon: Footprints, labelKey: 'walking' },
     { mode: 'cycling', icon: Bike, labelKey: 'cycling' },
+    { mode: 'bus', icon: Bus, labelKey: 'bus' },
     { mode: 'driving', icon: Car, labelKey: 'driving' },
   ];
 

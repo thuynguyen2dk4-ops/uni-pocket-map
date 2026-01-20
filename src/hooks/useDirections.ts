@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { getMapboxToken } from '@/lib/mapboxToken';
 
-export type TransportMode = 'walking' | 'driving' | 'cycling';
+export type TransportMode = 'walking' | 'driving' | 'cycling' | 'bus';
 export type RoutePreference = 'shortest' | 'fastest';
 
 export interface RouteStep {
@@ -78,7 +78,7 @@ export const useDirections = () => {
       }
 
       // Map transport mode to Mapbox profile
-      // Note: Mapbox doesn't have a motorcycle profile, use driving for both motorcycle and car
+      // Note: Mapbox doesn't have bus/motorcycle profiles, use driving as fallback
       const profile = mode === 'walking' ? 'walking' : mode === 'cycling' ? 'cycling' : 'driving';
 
       // Request alternatives and pick shortest route
