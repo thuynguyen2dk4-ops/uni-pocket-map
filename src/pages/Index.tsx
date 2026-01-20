@@ -7,7 +7,7 @@ import { BottomSheet } from '@/components/BottomSheet';
 import { DirectionsPanel } from '@/components/DirectionsPanel';
 import { Location, LocationType, Department } from '@/data/locations';
 import { Compass, Menu } from 'lucide-react';
-import { useDirections, TransportMode } from '@/hooks/useDirections';
+import { useDirections, TransportMode, RoutePreference } from '@/hooks/useDirections';
 import { toast } from 'sonner';
 
 const Index = () => {
@@ -22,7 +22,7 @@ const Index = () => {
   const [routeOrigin, setRouteOrigin] = useState<[number, number] | null>(null);
   const [routeDestination, setRouteDestination] = useState<[number, number] | null>(null);
   
-  const { route, isLoading, getDirections, clearDirections, transportMode, setTransportMode, origin, destination } = useDirections();
+  const { route, isLoading, getDirections, clearDirections, transportMode, setTransportMode, routePreference, setRoutePreference, origin, destination } = useDirections();
 
   const handleSelectLocation = useCallback((location: Location, department?: Department) => {
     setSelectedLocation(location);
@@ -64,9 +64,17 @@ const Index = () => {
     setTransportMode(mode);
     // Re-fetch directions with new mode if we have origin and destination
     if (origin && destination) {
-      getDirections(origin, destination, mode);
+      getDirections(origin, destination, mode, routePreference);
     }
-  }, [getDirections, origin, destination, setTransportMode]);
+  }, [getDirections, origin, destination, setTransportMode, routePreference]);
+
+  const handleChangeRoutePreference = useCallback((preference: RoutePreference) => {
+    setRoutePreference(preference);
+    // Re-fetch directions with new preference if we have origin and destination
+    if (origin && destination) {
+      getDirections(origin, destination, transportMode, preference);
+    }
+  }, [getDirections, origin, destination, setRoutePreference, transportMode]);
 
   const handleClearRoute = useCallback(() => {
     clearDirections();
@@ -178,8 +186,10 @@ const Index = () => {
             destinationName={navigationDestination}
             isLoading={isLoading}
             transportMode={transportMode}
+            routePreference={routePreference}
             onClose={handleClearRoute}
             onChangeTransportMode={handleChangeTransportMode}
+            onChangeRoutePreference={handleChangeRoutePreference}
           />
         )}
       </AnimatePresence>
