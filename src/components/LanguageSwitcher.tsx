@@ -2,7 +2,7 @@ import { Globe } from 'lucide-react';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { Language } from '@/i18n/translations';
 import { cn } from '@/lib/utils';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export const LanguageSwitcher = () => {
   const { language, setLanguage } = useLanguage();
@@ -15,59 +15,93 @@ export const LanguageSwitcher = () => {
   return (
     <div className="flex items-center bg-card rounded-2xl shadow-lg border-2 border-border overflow-hidden">
       {languages.map(({ code, label, labelFull, flag }) => (
-        <button
+        <motion.button
           key={code}
           onClick={() => setLanguage(code)}
           className={cn(
-            "relative flex items-center gap-2 px-4 py-2.5 text-sm font-semibold transition-all duration-300",
+            "relative flex items-center gap-2 px-4 py-2.5 text-sm font-semibold transition-colors duration-200",
             language === code
-              ? "bg-primary text-primary-foreground"
-              : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+              ? "text-primary-foreground"
+              : "text-muted-foreground hover:text-foreground"
           )}
           title={labelFull}
+          whileTap={{ scale: 0.95 }}
         >
-          <span className="text-lg">{flag}</span>
-          <span className="font-bold">{label}</span>
+          {/* Active background */}
           {language === code && (
             <motion.div
-              layoutId="language-indicator"
-              className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-foreground"
+              layoutId="language-active-bg"
+              className="absolute inset-0 bg-primary"
               initial={false}
-              transition={{ type: "spring", stiffness: 500, damping: 30 }}
+              transition={{ type: "spring", stiffness: 400, damping: 30 }}
             />
           )}
-        </button>
+          
+          {/* Content */}
+          <motion.span 
+            className="relative z-10 text-lg"
+            animate={{ 
+              scale: language === code ? 1.1 : 1,
+              rotate: language === code ? [0, -10, 10, 0] : 0
+            }}
+            transition={{ duration: 0.3 }}
+          >
+            {flag}
+          </motion.span>
+          <span className="relative z-10 font-bold">{label}</span>
+        </motion.button>
       ))}
     </div>
   );
 };
 
-// Compact indicator for use in other parts of the app
+// Compact indicator with animation
 export const LanguageIndicator = ({ className }: { className?: string }) => {
   const { language } = useLanguage();
   
   return (
     <div className={cn(
-      "inline-flex items-center gap-1 px-2 py-1 bg-muted/80 backdrop-blur-sm rounded-full text-xs font-medium text-muted-foreground",
+      "inline-flex items-center gap-1 px-2 py-1 bg-muted/80 backdrop-blur-sm rounded-full text-xs font-medium text-muted-foreground overflow-hidden",
       className
     )}>
       <Globe className="w-3 h-3" />
-      <span>{language === 'vi' ? '🇻🇳 VI' : '🇺🇸 EN'}</span>
+      <AnimatePresence mode="wait">
+        <motion.span
+          key={language}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          transition={{ duration: 0.2, ease: "easeOut" }}
+        >
+          {language === 'vi' ? '🇻🇳 VI' : '🇺🇸 EN'}
+        </motion.span>
+      </AnimatePresence>
     </div>
   );
 };
 
-// Badge showing current language - more prominent
+// Badge showing current language - more prominent with animation
 export const LanguageBadge = ({ className }: { className?: string }) => {
   const { language } = useLanguage();
   
   return (
     <div className={cn(
-      "inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 border border-primary/20 rounded-full text-sm font-medium text-primary",
+      "inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 border border-primary/20 rounded-full text-sm font-medium text-primary overflow-hidden",
       className
     )}>
-      <span className="text-base">{language === 'vi' ? '🇻🇳' : '🇺🇸'}</span>
-      <span>{language === 'vi' ? 'Tiếng Việt' : 'English'}</span>
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={language}
+          initial={{ opacity: 0, x: -10, rotate: -20 }}
+          animate={{ opacity: 1, x: 0, rotate: 0 }}
+          exit={{ opacity: 0, x: 10, rotate: 20 }}
+          transition={{ duration: 0.25, ease: "easeOut" }}
+          className="flex items-center gap-1.5"
+        >
+          <span className="text-base">{language === 'vi' ? '🇻🇳' : '🇺🇸'}</span>
+          <span>{language === 'vi' ? 'Tiếng Việt' : 'English'}</span>
+        </motion.div>
+      </AnimatePresence>
     </div>
   );
 };
