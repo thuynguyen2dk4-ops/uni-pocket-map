@@ -23,14 +23,11 @@ const MainSidebar: React.FC<MainSidebarProps> = ({
   const [query, setQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("all");
 
-  // Logic tìm kiếm thông minh & lọc
   const filteredLocations = useMemo(() => {
     let result = locations;
-    
     if (activeCategory !== 'all') {
       result = result.filter(l => l.category === activeCategory);
     }
-
     if (query.trim()) {
       const lowerQuery = query.toLowerCase();
       result = result.filter(l => 
@@ -42,15 +39,12 @@ const MainSidebar: React.FC<MainSidebarProps> = ({
     return result;
   }, [locations, query, activeCategory]);
 
-  // Logic Top Lists
   const topLocations = useMemo(() => {
-    // Giả lập sort nếu chưa có dữ liệu thật
     return [...locations]
       .sort((a, b) => (b.rating || 0) - (a.rating || 0))
       .slice(0, 5);
   }, [locations]);
 
-  // Helper render icon dynamic
   const getCategoryIcon = (iconName: string) => {
     switch(iconName) {
         case 'Utensils': return <Utensils size={14} />;
@@ -63,21 +57,15 @@ const MainSidebar: React.FC<MainSidebarProps> = ({
 
   return (
     <div className="absolute left-0 top-0 h-full w-full md:w-96 bg-white shadow-2xl z-[50] flex flex-col transition-transform duration-300 transform">
-      {/* Header */}
       <div className="p-4 bg-indigo-600 text-white flex justify-between items-center shadow-md shrink-0">
         <div className="flex items-center gap-2 font-bold text-xl">
           <Map className="w-6 h-6" /> UniMap Pro
         </div>
-        <button 
-          onClick={onAddClick} 
-          className="bg-white/20 hover:bg-white/30 p-2 rounded-full transition" 
-          title="Thêm địa điểm"
-        >
+        <button onClick={onAddClick} className="bg-white/20 hover:bg-white/30 p-2 rounded-full transition" title="Thêm địa điểm">
           <Plus className="w-5 h-5" />
         </button>
       </div>
 
-      {/* Search & Filter */}
       <div className="p-4 space-y-3 border-b shrink-0">
         <div className="relative">
           <Search className="absolute left-3 top-3 text-gray-400 w-4 h-4" />
@@ -89,7 +77,6 @@ const MainSidebar: React.FC<MainSidebarProps> = ({
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
-        
         <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
           {CATEGORIES.map(cat => (
             <button 
@@ -103,7 +90,6 @@ const MainSidebar: React.FC<MainSidebarProps> = ({
         </div>
       </div>
 
-      {/* Tabs */}
       <div className="flex border-b text-sm font-medium shrink-0">
         <button 
           className={`flex-1 py-3 text-center transition-colors ${!showTopLists ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
@@ -119,7 +105,6 @@ const MainSidebar: React.FC<MainSidebarProps> = ({
         </button>
       </div>
 
-      {/* List Content */}
       <div className="flex-1 overflow-y-auto bg-slate-50 p-2">
         {showTopLists ? (
           <div className="space-y-3">
