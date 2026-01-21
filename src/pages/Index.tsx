@@ -9,6 +9,7 @@ import { MultiStopPanel } from '@/components/MultiStopPanel';
 import { AuthModal } from '@/components/AuthModal';
 import { FavoritesPanel } from '@/components/FavoritesPanel';
 import { SponsoredListingModal } from '@/components/SponsoredListingModal';
+import { StoreManagementPanel } from '@/components/store/StoreManagementPanel';
 import { UserMenu } from '@/components/UserMenu';
 import { Location, LocationType, Department } from '@/data/locations';
 import { Compass, Heart } from 'lucide-react';
@@ -39,6 +40,7 @@ const Index = () => {
   const [showFavoritesPanel, setShowFavoritesPanel] = useState(false);
   const [showSponsoredModal, setShowSponsoredModal] = useState(false);
   const [promotingLocation, setPromotingLocation] = useState<Location | null>(null);
+  const [showStorePanel, setShowStorePanel] = useState(false);
   
   const { favorites } = useFavorites();
   
@@ -349,6 +351,7 @@ const Index = () => {
             <UserMenu 
               onLoginClick={() => setShowAuthModal(true)} 
               onFavoritesClick={() => setShowFavoritesPanel(true)}
+              onStoresClick={() => setShowStorePanel(true)}
             />
             
             {/* Language switcher - compact */}
@@ -511,6 +514,16 @@ const Index = () => {
           setPromotingLocation(null);
         }}
         location={promotingLocation}
+      />
+
+      {/* Store Management Panel */}
+      <StoreManagementPanel
+        isOpen={showStorePanel}
+        onClose={() => setShowStorePanel(false)}
+        onLoginClick={() => {
+          setShowStorePanel(false);
+          setShowAuthModal(true);
+        }}
       />
     </div>
   );
