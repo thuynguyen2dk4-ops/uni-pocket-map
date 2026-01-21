@@ -1,101 +1,45 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import PayOS from 'npm:@payos/node';
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+// Khởi tạo Client PayOS (cần để xác thực webhook)
+const payOS = new PayOS(
+  Deno.env.get('PAYOS_CLIENT_ID') ?? '',
+  Deno.env.get('PAYOS_API_KEY') ?? '',
+  Deno.env.get('PAYOS_CHECKSUM_KEY') ?? ''
+);
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
-
   try {
-    const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
-    if (!stripeKey) {
-      throw new Error("STRIPE_SECRET_KEY not configured");
-    }
-
-    const stripe = new Stripe(stripeKey, {
-      apiVersion: "2023-10-16",
-      httpClient: Stripe.createFetchHttpClient(),
-    });
-
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const body = await req.json();
     
-    // Use service role for webhook (no user auth)
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    // 1. Xác thực Webhook (Đảm bảo tin nhắn này đến từ PayOS thật)
+    // PayOS cung cấp hàm verifyPaymentWebhookData
+    const webhookData = payOS.verifyPaymentWebhookData(body);
 
-    const body = await req.text();
-    const signature = req.headers.get("stripe-signature");
+    console.log("Nhận thanh toán thành công:", webhookData);
+    
+    // webhookData chứa: { orderCode, amount, ... }
 
-    // For now, we'll parse the event without signature verification
-    // In production, you should set up STRIPE_WEBHOOK_SECRET
-    const event = JSON.parse(body);
-
-    console.log("Received Stripe event:", event.type);
-
-    if (event.type === "checkout.session.completed") {
-      const session = event.data.object as Stripe.Checkout.Session;
-      const metadata = session.metadata;
-
-      if (!metadata?.user_id || !metadata?.location_id) {
-        console.error("Missing metadata in session:", session.id);
-        throw new Error("Missing metadata");
-      }
-
-      const durationDays = parseInt(metadata.duration_days || "30");
-      const startDate = new Date();
-      const endDate = new Date();
-      endDate.setDate(endDate.getDate() + durationDays);
-
-      // Create sponsored listing record
-      const { data, error } = await supabase
-        .from("sponsored_listings")
-        .insert({
-          user_id: metadata.user_id,
-          location_id: metadata.location_id,
-          location_name: metadata.location_name,
-          location_type: metadata.location_type,
-          stripe_payment_id: session.payment_intent as string,
-          stripe_customer_id: session.customer as string,
-          amount_paid: session.amount_total || 0,
-          currency: session.currency || "vnd",
-          status: "active",
-          voucher_text: metadata.voucher_text || null,
-          start_date: startDate.toISOString(),
-          end_date: endDate.toISOString(),
-        })
-        .select()
-        .single();
-
-      if (error) {
-        console.error("Error creating sponsored listing:", error);
-        throw error;
-      }
-
-      console.log("Sponsored listing created:", data.id);
-    }
+    // 2. TODO: Cập nhật Database Supabase
+    // Tại đây bạn sẽ viết code cập nhật trạng thái user thành "Premium"
+    // Ví dụ: Tìm trong bảng 'orders' xem orderCode này của user nào.
+    
+    /* const { error } = await supabase
+      .from('profiles')
+      .update({ is_premium: true })
+      .eq('id', userId); 
+    */
 
     return new Response(
-      JSON.stringify({ received: true }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
-      }
+      JSON.stringify({ success: true }),
+      { headers: { "Content-Type": "application/json" } }
     );
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    console.error("Webhook error:", error);
+
+  } catch (error) {
+    console.error("Lỗi Webhook:", error);
     return new Response(
-      JSON.stringify({ error: errorMessage }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 400,
-      }
+      JSON.stringify({ error: "Invalid Webhook Data" }),
+      { status: 400, headers: { "Content-Type": "application/json" } }
     );
   }
 });
