@@ -1,352 +1,164 @@
-import { useState, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { X, MapPin, Store, Clock, Phone, Image as ImageIcon, Navigation } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useLanguage } from '@/i18n/LanguageContext';
-import { UserStore, useUserStores } from '@/hooks/useUserStores';
-import { LocationPickerModal } from './LocationPickerModal';
+import React, { useState } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Crown, Image as ImageIcon, Zap, CheckCircle2 } from "lucide-react";
+import { CATEGORIES } from "@/types/extended";
 
 interface StoreFormModalProps {
   isOpen: boolean;
   onClose: () => void;
-  store?: UserStore | null;
-  onSuccess?: () => void;
+  onSubmit: (data: any) => void;
+  initialData?: any;
 }
 
-const CATEGORIES = [
-  { value: 'food', labelVi: 'Ăn uống', labelEn: 'Food & Drink' },
-  { value: 'cafe', labelVi: 'Cà phê', labelEn: 'Café' },
-  { value: 'service', labelVi: 'Dịch vụ', labelEn: 'Service' },
-  { value: 'shop', labelVi: 'Cửa hàng', labelEn: 'Shop' },
-  { value: 'other', labelVi: 'Khác', labelEn: 'Other' },
-];
+const StoreFormModal = ({ isOpen, onClose, onSubmit, initialData }: StoreFormModalProps) => {
+  const [plan, setPlan] = useState<'free' | 'premium'>('free');
 
-export const StoreFormModal = ({ isOpen, onClose, store, onSuccess }: StoreFormModalProps) => {
-  const { language } = useLanguage();
-  const { createStore, updateStore, uploadImage } = useUserStores();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showLocationPicker, setShowLocationPicker] = useState(false);
-  const [imagePreview, setImagePreview] = useState<string | null>(store?.image_url || null);
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  
   const [formData, setFormData] = useState({
-    name_vi: store?.name_vi || '',
-    name_en: store?.name_en || '',
-    description_vi: store?.description_vi || '',
-    description_en: store?.description_en || '',
-    address_vi: store?.address_vi || '',
-    address_en: store?.address_en || '',
-    phone: store?.phone || '',
-    category: store?.category || 'food',
-    lat: store?.lat || 21.0380,
-    lng: store?.lng || 105.7828,
-    open_hours_vi: store?.open_hours_vi || '',
-    open_hours_en: store?.open_hours_en || '',
+    name: '',
+    category: 'food',
+    description: '',
+    image: '',
+    menuItem: '',
+    menuPrice: ''
   });
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setImageFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-
-    try {
-      let imageUrl = store?.image_url || null;
-      
-      if (imageFile) {
-        const uploadedUrl = await uploadImage(imageFile, 'stores');
-        if (uploadedUrl) {
-          imageUrl = uploadedUrl;
-        }
-      }
-
-      const storeData = {
+  const handleSubmit = () => {
+    const finalData = {
         ...formData,
-        image_url: imageUrl,
-      };
-
-      if (store) {
-        await updateStore(store.id, storeData);
-      } else {
-        await createStore(storeData);
-      }
-
-      onSuccess?.();
-      onClose();
-    } catch (err) {
-      console.error('Error saving store:', err);
-    } finally {
-      setIsSubmitting(false);
-    }
+        type: plan,
+        menu: plan === 'premium' && formData.menuItem ? [{name: formData.menuItem, price: parseInt(formData.menuPrice) || 0}] : [],
+        lat: 10.762622, 
+        lng: 106.660172
+    };
+    onSubmit(finalData);
+    onClose();
   };
-
-  if (!isOpen) return null;
 
   return (
-    <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
-        onClick={onClose}
-      >
-        <motion.div
-          initial={{ scale: 0.95, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0.95, opacity: 0 }}
-          className="bg-background rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
-          onClick={e => e.stopPropagation()}
-        >
-          {/* Header */}
-          <div className="sticky top-0 bg-background border-b px-4 py-3 flex items-center justify-between">
-            <h2 className="text-lg font-semibold flex items-center gap-2">
-              <Store className="w-5 h-5 text-primary" />
-              {store ? (language === 'vi' ? 'Chỉnh sửa cửa hàng' : 'Edit Store') : (language === 'vi' ? 'Thêm cửa hàng' : 'Add Store')}
-            </h2>
-            <button onClick={onClose} className="p-2 hover:bg-muted rounded-full">
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-
-          <form onSubmit={handleSubmit} className="p-4 space-y-4">
-            {/* Image upload */}
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Tạo địa điểm mới</DialogTitle>
+        </DialogHeader>
+        
+        <div className="py-4 space-y-6">
             <div>
-              <Label>{language === 'vi' ? 'Ảnh cửa hàng' : 'Store Image'}</Label>
-              <div 
-                onClick={() => fileInputRef.current?.click()}
-                className="mt-2 border-2 border-dashed rounded-xl p-4 text-center cursor-pointer hover:border-primary transition-colors"
-              >
-                {imagePreview ? (
-                  <img src={imagePreview} alt="Preview" className="w-full h-40 object-cover rounded-lg" />
-                ) : (
-                  <div className="py-8 text-muted-foreground">
-                    <ImageIcon className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                    <p className="text-sm">{language === 'vi' ? 'Nhấn để tải ảnh lên' : 'Click to upload image'}</p>
-                  </div>
-                )}
-              </div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleImageChange}
-                className="hidden"
-              />
-            </div>
-
-            {/* Name */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label htmlFor="name_vi">Tên (Tiếng Việt) *</Label>
-                <Input
-                  id="name_vi"
-                  value={formData.name_vi}
-                  onChange={e => setFormData(prev => ({ ...prev, name_vi: e.target.value }))}
-                  placeholder="Tên cửa hàng"
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor="name_en">Name (English)</Label>
-                <Input
-                  id="name_en"
-                  value={formData.name_en}
-                  onChange={e => setFormData(prev => ({ ...prev, name_en: e.target.value }))}
-                  placeholder="Store name"
-                />
-              </div>
-            </div>
-
-            {/* Category */}
-            <div>
-              <Label>{language === 'vi' ? 'Danh mục' : 'Category'}</Label>
-              <Select
-                value={formData.category}
-                onValueChange={value => setFormData(prev => ({ ...prev, category: value }))}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {CATEGORIES.map(cat => (
-                    <SelectItem key={cat.value} value={cat.value}>
-                      {language === 'vi' ? cat.labelVi : cat.labelEn}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Description */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label htmlFor="desc_vi">Mô tả (Tiếng Việt)</Label>
-                <Textarea
-                  id="desc_vi"
-                  value={formData.description_vi}
-                  onChange={e => setFormData(prev => ({ ...prev, description_vi: e.target.value }))}
-                  placeholder="Mô tả cửa hàng"
-                  rows={3}
-                />
-              </div>
-              <div>
-                <Label htmlFor="desc_en">Description (English)</Label>
-                <Textarea
-                  id="desc_en"
-                  value={formData.description_en}
-                  onChange={e => setFormData(prev => ({ ...prev, description_en: e.target.value }))}
-                  placeholder="Store description"
-                  rows={3}
-                />
-              </div>
-            </div>
-
-            {/* Address */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label htmlFor="addr_vi" className="flex items-center gap-1">
-                  <MapPin className="w-3 h-3" /> Địa chỉ (Tiếng Việt) *
-                </Label>
-                <Input
-                  id="addr_vi"
-                  value={formData.address_vi}
-                  onChange={e => setFormData(prev => ({ ...prev, address_vi: e.target.value }))}
-                  placeholder="Địa chỉ"
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor="addr_en" className="flex items-center gap-1">
-                  <MapPin className="w-3 h-3" /> Address (English)
-                </Label>
-                <Input
-                  id="addr_en"
-                  value={formData.address_en}
-                  onChange={e => setFormData(prev => ({ ...prev, address_en: e.target.value }))}
-                  placeholder="Address"
-                />
-              </div>
-            </div>
-
-            {/* Location picker */}
-            <div>
-              <Label className="flex items-center gap-1">
-                <Navigation className="w-3 h-3" /> {language === 'vi' ? 'Vị trí trên bản đồ' : 'Location on Map'} *
-              </Label>
-              <div className="mt-2 p-3 border rounded-xl bg-muted/30">
-                <div className="flex items-center justify-between">
-                  <div className="text-sm">
-                    <p className="font-medium">
-                      {formData.lat.toFixed(6)}, {formData.lng.toFixed(6)}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {language === 'vi' ? 'Nhấn để chọn vị trí trên bản đồ' : 'Click to select location on map'}
-                    </p>
-                  </div>
-                  <Button 
-                    type="button" 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => setShowLocationPicker(true)}
-                  >
-                    <MapPin className="w-4 h-4 mr-1" />
-                    {language === 'vi' ? 'Chọn vị trí' : 'Pick Location'}
-                  </Button>
+                <Label className="text-base font-semibold mb-3 block">Chọn loại cửa hàng:</Label>
+                <div className="grid grid-cols-2 gap-4">
+                    <div 
+                        onClick={() => setPlan('free')}
+                        className={`p-4 rounded-xl border-2 cursor-pointer transition relative ${plan === 'free' ? 'border-indigo-600 bg-indigo-50' : 'border-gray-200 hover:border-indigo-200'}`}
+                    >
+                        <div className="font-bold text-gray-800 flex items-center gap-2">Miễn phí <CheckCircle2 size={16} className={plan === 'free' ? 'text-indigo-600' : 'text-transparent'}/></div>
+                        <ul className="text-xs text-gray-500 mt-2 space-y-1">
+                            <li>✓ Tên & Địa chỉ</li>
+                            <li>✓ Mô tả cơ bản</li>
+                            <li className="text-gray-400">✗ Không ảnh</li>
+                            <li className="text-gray-400">✗ Không menu</li>
+                        </ul>
+                    </div>
+                    <div 
+                        onClick={() => setPlan('premium')}
+                        className={`p-4 rounded-xl border-2 cursor-pointer transition relative ${plan === 'premium' ? 'border-yellow-400 bg-yellow-50' : 'border-gray-200 hover:border-yellow-200'}`}
+                    >
+                        <div className="absolute top-[-10px] right-[-10px] bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">HOT</div>
+                        <div className="font-bold text-gray-800 flex items-center gap-1">Premium <Crown size={14} className="text-yellow-600"/></div>
+                        <ul className="text-xs text-gray-500 mt-2 space-y-1">
+                            <li>✓ Đăng tải ảnh</li>
+                            <li>✓ Tạo Menu & Giá</li>
+                            <li>✓ Tạo Voucher</li>
+                            <li>✓ Ưu tiên hiển thị</li>
+                        </ul>
+                    </div>
                 </div>
-              </div>
             </div>
 
-            {/* Phone */}
-            <div>
-              <Label htmlFor="phone" className="flex items-center gap-1">
-                <Phone className="w-3 h-3" /> {language === 'vi' ? 'Số điện thoại' : 'Phone'}
-              </Label>
-              <Input
-                id="phone"
-                value={formData.phone}
-                onChange={e => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-                placeholder="+84 xxx xxx xxx"
-              />
+            <div className="space-y-4">
+                <div className="grid gap-2">
+                    <Label htmlFor="name">Tên địa điểm</Label>
+                    <Input 
+                        id="name" 
+                        value={formData.name}
+                        onChange={(e) => setFormData({...formData, name: e.target.value})}
+                        placeholder="Ví dụ: Quán Cơm Ngon"
+                    />
+                </div>
+
+                <div className="grid gap-2">
+                    <Label>Danh mục</Label>
+                    <Select 
+                        value={formData.category} 
+                        onValueChange={(val) => setFormData({...formData, category: val})}
+                    >
+                        <SelectTrigger>
+                            <SelectValue placeholder="Chọn danh mục" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {CATEGORIES.filter(c => c.id !== 'all').map(c => (
+                                <SelectItem key={c.id} value={c.id}>{c.label}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+
+                <div className="grid gap-2">
+                    <Label htmlFor="description">Mô tả ngắn</Label>
+                    <Textarea 
+                        id="description" 
+                        value={formData.description}
+                        onChange={(e) => setFormData({...formData, description: e.target.value})}
+                    />
+                </div>
             </div>
 
-            {/* Open hours */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label htmlFor="hours_vi" className="flex items-center gap-1">
-                  <Clock className="w-3 h-3" /> Giờ mở cửa (Tiếng Việt)
-                </Label>
-                <Input
-                  id="hours_vi"
-                  value={formData.open_hours_vi}
-                  onChange={e => setFormData(prev => ({ ...prev, open_hours_vi: e.target.value }))}
-                  placeholder="7:00 - 22:00"
+            <div className={`border rounded-lg p-4 space-y-4 transition-all ${plan === 'free' ? 'opacity-50 pointer-events-none bg-gray-50 grayscale' : 'bg-yellow-50/30 border-yellow-200'}`}>
+                <div className="flex justify-between items-center">
+                    <span className="font-bold text-sm text-gray-800 flex items-center gap-1"><ImageIcon size={14}/> Ảnh bìa & Menu (Premium)</span>
+                    {plan === 'free' && <span className="text-[10px] font-bold text-gray-500 bg-gray-200 px-2 py-0.5 rounded">Khóa</span>}
+                </div>
+                
+                <Input 
+                    placeholder="URL hình ảnh..."
+                    value={formData.image}
+                    onChange={(e) => setFormData({...formData, image: e.target.value})}
+                    className="bg-white"
                 />
-              </div>
-              <div>
-                <Label htmlFor="hours_en" className="flex items-center gap-1">
-                  <Clock className="w-3 h-3" /> Open Hours (English)
-                </Label>
-                <Input
-                  id="hours_en"
-                  value={formData.open_hours_en}
-                  onChange={e => setFormData(prev => ({ ...prev, open_hours_en: e.target.value }))}
-                  placeholder="7:00 AM - 10:00 PM"
-                />
-              </div>
+                
+                <div className="grid grid-cols-3 gap-2">
+                    <Input 
+                        className="col-span-2 bg-white"
+                        placeholder="Tên món ăn nổi bật"
+                        value={formData.menuItem}
+                        onChange={(e) => setFormData({...formData, menuItem: e.target.value})}
+                    />
+                    <Input 
+                        className="bg-white"
+                        placeholder="Giá"
+                        type="number"
+                        value={formData.menuPrice}
+                        onChange={(e) => setFormData({...formData, menuPrice: e.target.value})}
+                    />
+                </div>
             </div>
+        </div>
 
-            {/* Submit */}
-            <div className="flex gap-3 pt-4">
-              <Button type="button" variant="outline" onClick={onClose} className="flex-1">
-                {language === 'vi' ? 'Hủy' : 'Cancel'}
-              </Button>
-              <Button type="submit" disabled={isSubmitting} className="flex-1">
-                {isSubmitting 
-                  ? (language === 'vi' ? 'Đang lưu...' : 'Saving...') 
-                  : (store 
-                    ? (language === 'vi' ? 'Cập nhật' : 'Update')
-                    : (language === 'vi' ? 'Tạo cửa hàng' : 'Create Store')
-                  )
-                }
-              </Button>
-            </div>
-          </form>
-        </motion.div>
-      </motion.div>
-
-      {/* Location Picker Modal */}
-      <LocationPickerModal
-        isOpen={showLocationPicker}
-        onClose={() => setShowLocationPicker(false)}
-        initialLat={formData.lat}
-        initialLng={formData.lng}
-        onSelect={(lat, lng, address) => {
-          setFormData(prev => ({ 
-            ...prev, 
-            lat, 
-            lng,
-            // Auto-fill address if empty
-            address_vi: prev.address_vi || address || '',
-          }));
-        }}
-      />
-    </AnimatePresence>
+        <DialogFooter>
+            <Button variant="outline" onClick={onClose}>Hủy</Button>
+            <Button 
+                onClick={handleSubmit}
+                className={plan === 'premium' ? 'bg-gradient-to-r from-yellow-500 to-orange-500 text-white hover:from-yellow-600 hover:to-orange-600' : 'bg-indigo-600 hover:bg-indigo-700'}
+            >
+                {plan === 'premium' ? <><Zap size={16} className="mr-2"/> Tạo Cửa Hàng VIP</> : 'Tạo Miễn Phí'}
+            </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };
+
+export default StoreFormModal;
