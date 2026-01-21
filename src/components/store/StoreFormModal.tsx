@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Upload, MapPin, Store, Clock, Phone, Image as ImageIcon } from 'lucide-react';
+import { X, MapPin, Store, Clock, Phone, Image as ImageIcon, Navigation } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { UserStore, useUserStores } from '@/hooks/useUserStores';
+import { LocationPickerModal } from './LocationPickerModal';
 
 interface StoreFormModalProps {
   isOpen: boolean;
@@ -30,6 +31,7 @@ export const StoreFormModal = ({ isOpen, onClose, store, onSuccess }: StoreFormM
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(store?.image_url || null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   
@@ -243,29 +245,31 @@ export const StoreFormModal = ({ isOpen, onClose, store, onSuccess }: StoreFormM
               </div>
             </div>
 
-            {/* Coordinates */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label htmlFor="lat">Latitude *</Label>
-                <Input
-                  id="lat"
-                  type="number"
-                  step="any"
-                  value={formData.lat}
-                  onChange={e => setFormData(prev => ({ ...prev, lat: parseFloat(e.target.value) }))}
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor="lng">Longitude *</Label>
-                <Input
-                  id="lng"
-                  type="number"
-                  step="any"
-                  value={formData.lng}
-                  onChange={e => setFormData(prev => ({ ...prev, lng: parseFloat(e.target.value) }))}
-                  required
-                />
+            {/* Location picker */}
+            <div>
+              <Label className="flex items-center gap-1">
+                <Navigation className="w-3 h-3" /> {language === 'vi' ? 'Vị trí trên bản đồ' : 'Location on Map'} *
+              </Label>
+              <div className="mt-2 p-3 border rounded-xl bg-muted/30">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm">
+                    <p className="font-medium">
+                      {formData.lat.toFixed(6)}, {formData.lng.toFixed(6)}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {language === 'vi' ? 'Nhấn để chọn vị trí trên bản đồ' : 'Click to select location on map'}
+                    </p>
+                  </div>
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setShowLocationPicker(true)}
+                  >
+                    <MapPin className="w-4 h-4 mr-1" />
+                    {language === 'vi' ? 'Chọn vị trí' : 'Pick Location'}
+                  </Button>
+                </div>
               </div>
             </div>
 
@@ -326,6 +330,23 @@ export const StoreFormModal = ({ isOpen, onClose, store, onSuccess }: StoreFormM
           </form>
         </motion.div>
       </motion.div>
+
+      {/* Location Picker Modal */}
+      <LocationPickerModal
+        isOpen={showLocationPicker}
+        onClose={() => setShowLocationPicker(false)}
+        initialLat={formData.lat}
+        initialLng={formData.lng}
+        onSelect={(lat, lng, address) => {
+          setFormData(prev => ({ 
+            ...prev, 
+            lat, 
+            lng,
+            // Auto-fill address if empty
+            address_vi: prev.address_vi || address || '',
+          }));
+        }}
+      />
     </AnimatePresence>
   );
 };
