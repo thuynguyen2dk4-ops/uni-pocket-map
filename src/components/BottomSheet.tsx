@@ -1,5 +1,5 @@
 import { motion, AnimatePresence, PanInfo } from 'framer-motion';
-import { X, Navigation, Star, Clock, Phone, MapPin, Sparkles, ChevronUp, Globe, Route, Heart } from 'lucide-react';
+import { X, Navigation, Star, Clock, Phone, MapPin, Sparkles, ChevronUp, Globe, Route, Heart, Megaphone } from 'lucide-react';
 import { Location, Department } from '@/data/locations';
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
@@ -15,9 +15,10 @@ interface BottomSheetProps {
   onNavigate: (location: Location) => void;
   onStartMultiStop?: (location: Location) => void;
   onLoginClick?: () => void;
+  onPromoteClick?: (location: Location) => void;
 }
 
-export const BottomSheet = ({ location, department, onClose, onNavigate, onStartMultiStop, onLoginClick }: BottomSheetProps) => {
+export const BottomSheet = ({ location, department, onClose, onNavigate, onStartMultiStop, onLoginClick, onPromoteClick }: BottomSheetProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const { t, language } = useLanguage();
   const { isFavorite, addFavorite, removeFavorite, isAuthenticated } = useFavorites();
@@ -268,6 +269,22 @@ export const BottomSheet = ({ location, department, onClose, onNavigate, onStart
                 className="h-14 px-4 rounded-2xl border-2"
               >
                 <Route className="w-5 h-5" />
+              </Button>
+            )}
+            {onPromoteClick && (
+              <Button
+                onClick={() => {
+                  if (!isAuthenticated && onLoginClick) {
+                    onLoginClick();
+                    return;
+                  }
+                  onPromoteClick(location);
+                }}
+                variant="outline"
+                className="h-14 px-4 rounded-2xl border-2 border-accent hover:bg-accent/10"
+                title={language === 'vi' ? 'Quảng cáo địa điểm này' : 'Promote this location'}
+              >
+                <Megaphone className="w-5 h-5 text-accent" />
               </Button>
             )}
           </div>

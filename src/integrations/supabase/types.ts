@@ -82,6 +82,68 @@ export type Database = {
         }
         Relationships: []
       }
+      sponsored_listings: {
+        Row: {
+          amount_paid: number
+          created_at: string
+          currency: string
+          end_date: string | null
+          id: string
+          location_id: string
+          location_name: string
+          location_type: string
+          start_date: string | null
+          status: string
+          stripe_customer_id: string | null
+          stripe_payment_id: string | null
+          updated_at: string
+          user_id: string
+          voucher_text: string | null
+        }
+        Insert: {
+          amount_paid?: number
+          created_at?: string
+          currency?: string
+          end_date?: string | null
+          id?: string
+          location_id: string
+          location_name: string
+          location_type: string
+          start_date?: string | null
+          status?: string
+          stripe_customer_id?: string | null
+          stripe_payment_id?: string | null
+          updated_at?: string
+          user_id: string
+          voucher_text?: string | null
+        }
+        Update: {
+          amount_paid?: number
+          created_at?: string
+          currency?: string
+          end_date?: string | null
+          id?: string
+          location_id?: string
+          location_name?: string
+          location_type?: string
+          start_date?: string | null
+          status?: string
+          stripe_customer_id?: string | null
+          stripe_payment_id?: string | null
+          updated_at?: string
+          user_id?: string
+          voucher_text?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sponsored_listings_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
