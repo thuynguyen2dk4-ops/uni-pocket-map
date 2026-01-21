@@ -1,153 +1,111 @@
-import { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { useSponsoredListing, sponsoredPackages, SponsoredPackage } from '@/hooks/useSponsoredListing';
-import { useLanguage } from '@/i18n/LanguageContext';
-import { Loader2, Zap, Star, Crown, Tag } from 'lucide-react';
+import { useState } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { useToast } from "@/hooks/use-toast";
+import { Check, Loader2 } from "lucide-react";
+// import { supabase } from "@/integrations/supabase/client"; // Tạm ẩn vì demo không cần gọi server
 
 interface SponsoredListingModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  location: {
-    id: string;
-    name: string;
-    nameVi: string;
-    type: string;
-  } | null;
+  storeId: string | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }
 
-export const SponsoredListingModal = ({ isOpen, onClose, location }: SponsoredListingModalProps) => {
-  const { language } = useLanguage();
-  const { createCheckout, isLoading } = useSponsoredListing();
-  const [selectedPackage, setSelectedPackage] = useState<string>('standard');
-  const [voucherText, setVoucherText] = useState('');
+export function SponsoredListingModal({ storeId, open, onOpenChange }: SponsoredListingModalProps) {
+  const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(false);
 
-  if (!location) return null;
+  const handleSubscribe = async (plan: 'month' | 'year') => {
+    setIsLoading(true);
+    
+    // --- DEMO MODE: BYPASS PAYMENT ---
+    // Giả lập quá trình xử lý thanh toán mà không cần gọi PayOS/Stripe
+    console.log(`[DEMO] Processing payment for store: ${storeId}, plan: ${plan}`);
 
-  const handlePayment = async () => {
-    const locationName = language === 'vi' ? location.nameVi : location.name;
-    await createCheckout(
-      location.id,
-      locationName,
-      location.type,
-      selectedPackage,
-      voucherText
-    );
-  };
+    // Giả lập độ trễ mạng (1.5 giây) cho giống thật
+    setTimeout(() => {
+      setIsLoading(false);
+      onOpenChange(false); // Đóng modal
+      
+      toast({
+        title: "Đăng ký thành công (Chế độ Demo)",
+        description: `Gói dịch vụ ${plan === 'month' ? 'Tháng' : 'Năm'} đã được kích hoạt cho cửa hàng!`,
+        duration: 3000,
+      });
 
-  const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('vi-VN', {
-      style: 'currency',
-      currency: 'VND',
-    }).format(price);
-  };
-
-  const getPackageIcon = (id: string) => {
-    switch (id) {
-      case 'basic':
-        return <Zap className="h-5 w-5" />;
-      case 'standard':
-        return <Star className="h-5 w-5" />;
-      case 'premium':
-        return <Crown className="h-5 w-5" />;
-      default:
-        return <Zap className="h-5 w-5" />;
-    }
+      // Ở đây bạn có thể thêm logic cập nhật state local để hiển thị icon Premium ngay lập tức nếu muốn
+    }, 1500);
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[800px]">
         <DialogHeader>
-          <DialogTitle className="text-xl">
-            {language === 'vi' ? 'Quảng cáo địa điểm' : 'Promote Location'}
-          </DialogTitle>
-          <DialogDescription>
-            {language === 'vi' 
-              ? `Tăng độ hiển thị cho "${location.nameVi}" trên bản đồ`
-              : `Increase visibility for "${location.name}" on the map`
-            }
+          <DialogTitle className="text-2xl text-center font-bold">Nâng cấp Cửa hàng (Demo)</DialogTitle>
+          <DialogDescription className="text-center text-lg">
+            Chế độ Demo: Bấm chọn gói để xem hiệu ứng thành công ngay lập tức.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
-          <div className="grid gap-3">
-            {sponsoredPackages.map((pkg: SponsoredPackage) => (
-              <Card 
-                key={pkg.id}
-                className={`cursor-pointer transition-all ${
-                  selectedPackage === pkg.id 
-                    ? 'ring-2 ring-primary border-primary' 
-                    : 'hover:border-primary/50'
-                }`}
-                onClick={() => setSelectedPackage(pkg.id)}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+          {/* Gói Tháng */}
+          <Card className="border-2 hover:border-primary/50 transition-colors relative cursor-pointer" onClick={() => handleSubscribe('month')}>
+            <CardHeader>
+              <CardTitle>Gói Tháng</CardTitle>
+              <CardDescription>Linh hoạt, ngắn hạn</CardDescription>
+              <div className="text-3xl font-bold mt-2">50.000đ<span className="text-sm font-normal text-muted-foreground">/tháng</span></div>
+            </CardHeader>
+            <CardContent>
+              <ul className="space-y-2 text-sm">
+                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-green-500" /> Vị trí ưu tiên trên bản đồ</li>
+                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-green-500" /> Icon cửa hàng nổi bật</li>
+                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-green-500" /> Hỗ trợ 24/7</li>
+              </ul>
+            </CardContent>
+            <CardFooter>
+              <Button 
+                className="w-full" 
+                onClick={(e) => { e.stopPropagation(); handleSubscribe('month'); }}
+                disabled={isLoading}
               >
-                <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      {getPackageIcon(pkg.id)}
-                      <CardTitle className="text-base">
-                        {language === 'vi' ? pkg.name : pkg.nameEn}
-                      </CardTitle>
-                    </div>
-                    <Badge variant={pkg.id === 'premium' ? 'default' : 'secondary'}>
-                      {formatPrice(pkg.price)}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <CardDescription>
-                    {language === 'vi' ? pkg.description : pkg.descriptionEn}
-                  </CardDescription>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Đăng ký ngay
+              </Button>
+            </CardFooter>
+          </Card>
 
-          {selectedPackage === 'premium' && (
-            <div className="space-y-2">
-              <Label htmlFor="voucher" className="flex items-center gap-2">
-                <Tag className="h-4 w-4" />
-                {language === 'vi' ? 'Nội dung voucher (tùy chọn)' : 'Voucher text (optional)'}
-              </Label>
-              <Input
-                id="voucher"
-                placeholder={language === 'vi' ? 'VD: Giảm 20% cho sinh viên' : 'E.g. 20% off for students'}
-                value={voucherText}
-                onChange={(e) => setVoucherText(e.target.value)}
-                maxLength={50}
-              />
+          {/* Gói Năm */}
+          <Card className="border-2 border-primary shadow-lg relative bg-primary/5 cursor-pointer" onClick={() => handleSubscribe('year')}>
+             <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground px-3 py-1 rounded-full text-xs font-bold">
+              Phổ biến nhất
             </div>
-          )}
-
-          <Button 
-            onClick={handlePayment} 
-            disabled={isLoading}
-            className="w-full"
-            size="lg"
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                {language === 'vi' ? 'Đang xử lý...' : 'Processing...'}
-              </>
-            ) : (
-              language === 'vi' ? 'Tiến hành thanh toán' : 'Proceed to payment'
-            )}
-          </Button>
-
-          <p className="text-xs text-muted-foreground text-center">
-            {language === 'vi' 
-              ? 'Thanh toán an toàn qua Stripe. Hỗ trợ Visa, Mastercard, và nhiều phương thức khác.'
-              : 'Secure payment via Stripe. Supports Visa, Mastercard, and more.'
-            }
-          </p>
+            <CardHeader>
+              <CardTitle>Gói Năm</CardTitle>
+              <CardDescription>Tiết kiệm 20%</CardDescription>
+              <div className="text-3xl font-bold mt-2">500.000đ<span className="text-sm font-normal text-muted-foreground">/năm</span></div>
+            </CardHeader>
+            <CardContent>
+              <ul className="space-y-2 text-sm">
+                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-green-500" /> Tất cả quyền lợi gói Tháng</li>
+                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-green-500" /> Tiết kiệm chi phí</li>
+                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-green-500" /> Huy hiệu "Đối tác uy tín"</li>
+              </ul>
+            </CardContent>
+            <CardFooter>
+              <Button 
+                className="w-full" 
+                variant="default"
+                onClick={(e) => { e.stopPropagation(); handleSubscribe('year'); }}
+                disabled={isLoading}
+              >
+                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Đăng ký ngay
+              </Button>
+            </CardFooter>
+          </Card>
         </div>
       </DialogContent>
     </Dialog>
   );
-};
+}
