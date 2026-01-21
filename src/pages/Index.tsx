@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MapView } from '@/components/MapView';
 import { SearchBar } from '@/components/SearchBar';
@@ -8,6 +8,7 @@ import { DirectionsPanel } from '@/components/DirectionsPanel';
 import { MultiStopPanel } from '@/components/MultiStopPanel';
 import { AuthModal } from '@/components/AuthModal';
 import { FavoritesPanel } from '@/components/FavoritesPanel';
+import { SponsoredListingModal } from '@/components/SponsoredListingModal';
 import { UserMenu } from '@/components/UserMenu';
 import { Location, LocationType, Department } from '@/data/locations';
 import { Compass, Heart } from 'lucide-react';
@@ -36,6 +37,8 @@ const Index = () => {
   const [routeDestination, setRouteDestination] = useState<[number, number] | null>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showFavoritesPanel, setShowFavoritesPanel] = useState(false);
+  const [showSponsoredModal, setShowSponsoredModal] = useState(false);
+  const [promotingLocation, setPromotingLocation] = useState<Location | null>(null);
   
   const { favorites } = useFavorites();
   
@@ -265,6 +268,25 @@ const Index = () => {
     }
   }, [language, getMultiStopDirections, multiStopTransportMode]);
 
+  const handlePromoteLocation = useCallback((location: Location) => {
+    setPromotingLocation(location);
+    setShowSponsoredModal(true);
+    setSelectedLocation(null);
+  }, []);
+
+  // Handle payment query params
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const payment = urlParams.get('payment');
+    if (payment === 'success') {
+      toast.success(language === 'vi' ? 'Thanh toán thành công! Địa điểm của bạn sẽ được quảng cáo.' : 'Payment successful! Your location will be promoted.');
+      window.history.replaceState({}, '', '/');
+    } else if (payment === 'cancelled') {
+      toast.info(language === 'vi' ? 'Thanh toán đã bị hủy.' : 'Payment was cancelled.');
+      window.history.replaceState({}, '', '/');
+    }
+  }, [language]);
+
   return (
     <div className="relative h-screen w-full overflow-hidden bg-background">
       {/* Full-screen map */}
@@ -445,6 +467,7 @@ const Index = () => {
             onNavigate={handleNavigateWithName}
             onStartMultiStop={handleStartMultiStop}
             onLoginClick={() => setShowAuthModal(true)}
+            onPromoteClick={handlePromoteLocation}
           />
         )}
       </AnimatePresence>
@@ -478,6 +501,16 @@ const Index = () => {
           setShowFavoritesPanel(false);
           setShowAuthModal(true);
         }}
+      />
+
+      {/* Sponsored Listing Modal */}
+      <SponsoredListingModal
+        isOpen={showSponsoredModal}
+        onClose={() => {
+          setShowSponsoredModal(false);
+          setPromotingLocation(null);
+        }}
+        location={promotingLocation}
       />
     </div>
   );
