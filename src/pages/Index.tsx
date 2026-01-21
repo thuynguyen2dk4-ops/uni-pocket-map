@@ -5,7 +5,8 @@ import LocationDetailModal from '@/components/LocationDetailModal';
 import StoreFormModal from '@/components/store/StoreFormModal';
 import { ExtendedLocation } from '@/types/extended';
 import { Toaster } from "@/components/ui/toaster";
-import { useToast } from "@/hooks/use-toast"; // Hoặc @/components/ui/use-toast nếu lỗi
+// SỬA: Đổi đường dẫn import để đồng bộ với Shadcn UI
+import { useToast } from "@/components/ui/use-toast"; 
 
 const INITIAL_LOCATIONS: ExtendedLocation[] = [
     { id: 1, name: "Thư viện Trung Tâm", lat: 10.762622, lng: 106.660172, category: "study", type: "free", rating: 4.8, reviews: 120, description: "Không gian yên tĩnh, wifi mạnh.", image: "https://images.unsplash.com/photo-1521587760476-6c12a4b040da?auto=format&fit=crop&q=80&w=300" },
@@ -43,6 +44,7 @@ const Index = () => {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-slate-100 font-sans relative">
+      {/* Sidebar - Đảm bảo file MainSidebar.tsx đã có nội dung code */}
       <MainSidebar 
         locations={locations}
         onSelectLocation={setSelectedLocation}
