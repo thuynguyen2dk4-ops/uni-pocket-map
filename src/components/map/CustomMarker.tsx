@@ -1,79 +1,56 @@
-import { Marker } from 'react-leaflet';
-import L from 'leaflet';
-import { Location } from '@/data/locations';
+import React from 'react';
+import { Marker } from 'react-map-gl';
+import { MapPin, Crown } from 'lucide-react';
 
 interface CustomMarkerProps {
-  location: Location;
-  onClick: (location: Location) => void;
-  isSelected?: boolean;
+  longitude: number;
+  latitude: number;
+  onClick?: () => void;
+  type?: 'free' | 'premium';
 }
 
-const getMarkerIcon = (location: Location, isSelected: boolean) => {
-  const isSponsored = location.isSponsored;
-  const size = isSponsored ? 40 : 32;
-  
-  let bgColor = '';
-  let emoji = '';
-  
-  switch (location.type) {
-    case 'building':
-      bgColor = '#2f855a'; // green
-      emoji = '🏢';
-      break;
-    case 'food':
-      bgColor = '#ed8936'; // orange
-      emoji = '☕';
-      break;
-    case 'housing':
-      bgColor = '#3182ce'; // blue
-      emoji = '🏠';
-      break;
-    case 'job':
-      bgColor = '#805ad5'; // purple
-      emoji = '💼';
-      break;
-  }
-  
-  const selectedStyle = isSelected ? 'transform: scale(1.2); box-shadow: 0 0 0 4px white;' : '';
-  const voucherBadge = location.hasVoucher 
-    ? `<div style="position: absolute; top: -4px; right: -4px; width: 16px; height: 16px; background: #ffd700; border-radius: 50%; border: 2px solid white; display: flex; align-items: center; justify-content: center; font-size: 8px;">✨</div>` 
-    : '';
-  
-  const html = `
-    <div style="
-      position: relative;
-      width: ${size}px;
-      height: ${size}px;
-      background: ${bgColor};
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: ${size * 0.5}px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-      ${selectedStyle}
-    ">
-      ${emoji}
-      ${voucherBadge}
-    </div>
-  `;
+const CustomMarker: React.FC<CustomMarkerProps> = ({ 
+  longitude, 
+  latitude, 
+  onClick,
+  type = 'free' 
+}) => {
+  const isPremium = type === 'premium';
 
-  return L.divIcon({
-    html: html,
-    className: 'custom-marker',
-    iconSize: [size, size],
-    iconAnchor: [size / 2, size / 2],
-  });
-};
-
-export const CustomMarker = ({ location, onClick, isSelected = false }: CustomMarkerProps) => {
   return (
-    <Marker
-      position={[location.lat, location.lng]}
-      icon={getMarkerIcon(location, isSelected)}
-      eventHandlers={{
-        click: () => onClick(location),
-      }}
-    />
+    <Marker longitude={longitude} latitude={latitude} anchor="bottom" onClick={(e) => {
+      e.originalEvent.stopPropagation();
+      onClick?.();
+    }}>
+      <div 
+        className={`
+            relative cursor-pointer transition-transform hover:scale-110
+            flex items-center justify-center
+            ${isPremium ? 'text-yellow-500' : 'text-indigo-600'}
+        `}
+      >
+        <div className={`
+            p-1.5 rounded-full shadow-lg border-2 border-white
+            ${isPremium ? 'bg-yellow-500' : 'bg-indigo-600'}
+        `}>
+           {isPremium ? (
+               <Crown size={16} className="text-white" />
+           ) : (
+               <MapPin size={16} className="text-white" />
+           )}
+        </div>
+        
+        <div className={`
+            absolute -bottom-1 left-1/2 transform -translate-x-1/2
+            w-0 h-0 
+            border-l-[4px] border-l-transparent
+            border-r-[4px] border-r-transparent
+            border-t-[6px] 
+            ${isPremium ? 'border-t-yellow-500' : 'border-t-indigo-600'}
+        `}></div>
+      </div>
+    </Marker>
   );
 };
+
+export default CustomMarker;
