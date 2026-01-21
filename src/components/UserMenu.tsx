@@ -1,15 +1,16 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { User, LogOut, Heart, LogIn } from 'lucide-react';
+import { User, LogOut, Heart, LogIn, Store } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useLanguage } from '@/i18n/LanguageContext';
 
 interface UserMenuProps {
   onLoginClick: () => void;
   onFavoritesClick: () => void;
+  onStoresClick?: () => void;
 }
 
-export const UserMenu = ({ onLoginClick, onFavoritesClick }: UserMenuProps) => {
+export const UserMenu = ({ onLoginClick, onFavoritesClick, onStoresClick }: UserMenuProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const { user, signOut, isAuthenticated } = useAuth();
   const { language } = useLanguage();
@@ -18,11 +19,13 @@ export const UserMenu = ({ onLoginClick, onFavoritesClick }: UserMenuProps) => {
     vi: {
       login: 'Đăng nhập',
       favorites: 'Yêu thích',
+      stores: 'Cửa hàng của tôi',
       logout: 'Đăng xuất',
     },
     en: {
       login: 'Login',
       favorites: 'Favorites',
+      stores: 'My Stores',
       logout: 'Logout',
     },
   };
@@ -84,6 +87,18 @@ export const UserMenu = ({ onLoginClick, onFavoritesClick }: UserMenuProps) => {
                   <Heart className="w-5 h-5 text-red-500" />
                   <span className="font-medium">{t.favorites}</span>
                 </button>
+                {onStoresClick && (
+                  <button
+                    onClick={() => {
+                      onStoresClick();
+                      setIsOpen(false);
+                    }}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-muted transition-colors"
+                  >
+                    <Store className="w-5 h-5 text-primary" />
+                    <span className="font-medium">{t.stores}</span>
+                  </button>
+                )}
                 <button
                   onClick={handleLogout}
                   className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-muted transition-colors text-destructive"

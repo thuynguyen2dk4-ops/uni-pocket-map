@@ -144,6 +144,192 @@ export type Database = {
           },
         ]
       }
+      store_menu_items: {
+        Row: {
+          created_at: string
+          description_en: string | null
+          description_vi: string | null
+          id: string
+          image_url: string | null
+          is_available: boolean
+          name_en: string | null
+          name_vi: string
+          price: number
+          sort_order: number
+          store_id: string
+        }
+        Insert: {
+          created_at?: string
+          description_en?: string | null
+          description_vi?: string | null
+          id?: string
+          image_url?: string | null
+          is_available?: boolean
+          name_en?: string | null
+          name_vi: string
+          price?: number
+          sort_order?: number
+          store_id: string
+        }
+        Update: {
+          created_at?: string
+          description_en?: string | null
+          description_vi?: string | null
+          id?: string
+          image_url?: string | null
+          is_available?: boolean
+          name_en?: string | null
+          name_vi?: string
+          price?: number
+          sort_order?: number
+          store_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "store_menu_items_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "user_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      store_vouchers: {
+        Row: {
+          code: string
+          created_at: string
+          description_en: string | null
+          description_vi: string | null
+          discount_type: string
+          discount_value: number
+          end_date: string | null
+          id: string
+          is_active: boolean
+          max_uses: number | null
+          min_order: number | null
+          start_date: string | null
+          store_id: string
+          title_en: string | null
+          title_vi: string
+          used_count: number
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          description_en?: string | null
+          description_vi?: string | null
+          discount_type?: string
+          discount_value?: number
+          end_date?: string | null
+          id?: string
+          is_active?: boolean
+          max_uses?: number | null
+          min_order?: number | null
+          start_date?: string | null
+          store_id: string
+          title_en?: string | null
+          title_vi: string
+          used_count?: number
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          description_en?: string | null
+          description_vi?: string | null
+          discount_type?: string
+          discount_value?: number
+          end_date?: string | null
+          id?: string
+          is_active?: boolean
+          max_uses?: number | null
+          min_order?: number | null
+          start_date?: string | null
+          store_id?: string
+          title_en?: string | null
+          title_vi?: string
+          used_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "store_vouchers_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "user_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_stores: {
+        Row: {
+          address_en: string | null
+          address_vi: string
+          category: string
+          created_at: string
+          description_en: string | null
+          description_vi: string | null
+          id: string
+          image_url: string | null
+          lat: number
+          lng: number
+          name_en: string | null
+          name_vi: string
+          open_hours_en: string | null
+          open_hours_vi: string | null
+          phone: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          address_en?: string | null
+          address_vi: string
+          category?: string
+          created_at?: string
+          description_en?: string | null
+          description_vi?: string | null
+          id?: string
+          image_url?: string | null
+          lat: number
+          lng: number
+          name_en?: string | null
+          name_vi: string
+          open_hours_en?: string | null
+          open_hours_vi?: string | null
+          phone?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          address_en?: string | null
+          address_vi?: string
+          category?: string
+          created_at?: string
+          description_en?: string | null
+          description_vi?: string | null
+          id?: string
+          image_url?: string | null
+          lat?: number
+          lng?: number
+          name_en?: string | null
+          name_vi?: string
+          open_hours_en?: string | null
+          open_hours_vi?: string | null
+          phone?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_stores_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
