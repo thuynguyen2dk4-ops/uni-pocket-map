@@ -1,25 +1,17 @@
-const STORAGE_KEY = 'unipocket_mapbox_token';
-
-export const getMapboxToken = (): string | null => {
-  const envToken = (import.meta.env.VITE_MAPBOX_TOKEN as string | undefined) ?? undefined;
-  if (envToken && envToken !== 'undefined' && envToken.trim().length > 0) return envToken.trim();
-
-  if (typeof window !== 'undefined') {
-    const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (stored && stored.trim().length > 0) return stored.trim();
-  }
-
-  return null;
+export const getMapboxToken = () => {
+  // --- CẤU HÌNH TOKEN MẶC ĐỊNH ---
+  // Bạn hãy dán Mapbox Public Token của bạn vào trong dấu ngoặc kép dưới đây.
+  // Ví dụ: "pk.eyJ1Ijo..."
+  const DEFAULT_TOKEN = "pk.eyJ1IjoiYW5odGh1eTA0IiwiYSI6ImNta2g1ZGxyOTBheHUzZXEwa2loY25jMWcifQ.tOQp9wrfN4WodT0iPlkaUg"; 
+  
+  // Logic hoạt động:
+  // 1. Kiểm tra xem người dùng có nhập tay token nào chưa (trong localStorage).
+  // 2. Nếu không, kiểm tra biến môi trường (VITE_MAPBOX_TOKEN).
+  // 3. Nếu không, sử dụng DEFAULT_TOKEN bạn vừa điền ở trên.
+  // 4. Nếu vẫn không có, trả về chuỗi rỗng "" (lúc này bảng nhập token mới hiện ra).
+  return localStorage.getItem("mapbox_token") || import.meta.env.VITE_MAPBOX_TOKEN || DEFAULT_TOKEN;
 };
 
 export const setMapboxToken = (token: string) => {
-  if (typeof window === 'undefined') return;
-  const t = token.trim();
-  if (!t) return;
-  window.localStorage.setItem(STORAGE_KEY, t);
-};
-
-export const clearMapboxToken = () => {
-  if (typeof window === 'undefined') return;
-  window.localStorage.removeItem(STORAGE_KEY);
+  localStorage.setItem("mapbox_token", token);
 };
