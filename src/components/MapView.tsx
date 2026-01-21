@@ -4,6 +4,7 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 import { Location, VNU_CENTER, locations, LocationType } from '@/data/locations';
 import { RouteInfo } from '@/hooks/useDirections';
 import { MultiStopRouteInfo, Waypoint } from '@/hooks/useMultiStopDirections';
+import { useApprovedStores } from '@/hooks/useApprovedStores';
 import { getMapboxToken } from '@/lib/mapboxToken';
 import { MapboxTokenPrompt } from '@/components/map/MapboxTokenPrompt';
 import { useLanguage } from '@/i18n/LanguageContext';
@@ -37,6 +38,7 @@ export const MapView = ({
   isMultiStopMode = false,
 }: MapViewProps) => {
   const { language } = useLanguage();
+  const { storesAsLocations } = useApprovedStores();
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
@@ -120,7 +122,10 @@ export const MapView = ({
     markersRef.current.forEach(marker => marker.remove());
     markersRef.current = [];
 
-    const filteredLocations = locations.filter(loc => 
+    // Combine static locations with approved user stores
+    const allLocations = [...locations, ...storesAsLocations];
+
+    const filteredLocations = allLocations.filter(loc => 
       activeCategories.includes(loc.type)
     );
 
@@ -181,7 +186,7 @@ export const MapView = ({
 
       markersRef.current.push(marker);
     });
-  }, [activeCategories, mapLoaded, selectedLocation, onSelectLocation, language]);
+  }, [activeCategories, mapLoaded, selectedLocation, onSelectLocation, language, storesAsLocations]);
 
   // Fly to location
   useEffect(() => {
