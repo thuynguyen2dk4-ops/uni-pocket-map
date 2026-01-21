@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Check, Loader2 } from "lucide-react";
-// import { supabase } from "@/integrations/supabase/client"; // Tạm ẩn vì demo không cần gọi server
+import { supabase } from "@/integrations/supabase/client";
 
 interface SponsoredListingModalProps {
   storeId: string | null;
@@ -18,49 +18,53 @@ export function SponsoredListingModal({ storeId, open, onOpenChange }: Sponsored
 
   const handleSubscribe = async (plan: 'month' | 'year') => {
     setIsLoading(true);
-    
-    // --- DEMO MODE: BYPASS PAYMENT ---
-    // Giả lập quá trình xử lý thanh toán mà không cần gọi PayOS/Stripe
-    console.log(`[DEMO] Processing payment for store: ${storeId}, plan: ${plan}`);
-
-    // Giả lập độ trễ mạng (1.5 giây) cho giống thật
-    setTimeout(() => {
-      setIsLoading(false);
-      onOpenChange(false); // Đóng modal
-      
-      toast({
-        title: "Đăng ký thành công (Chế độ Demo)",
-        description: `Gói dịch vụ ${plan === 'month' ? 'Tháng' : 'Năm'} đã được kích hoạt cho cửa hàng!`,
-        duration: 3000,
+    try {
+      const { data, error } = await supabase.functions.invoke('create-checkout', {
+        body: {
+          priceId: plan === 'month' ? 'price_premium_month' : 'price_premium_year',
+          storeId,
+          successUrl: window.location.href,
+          cancelUrl: window.location.href,
+        },
       });
 
-      // Ở đây bạn có thể thêm logic cập nhật state local để hiển thị icon Premium ngay lập tức nếu muốn
-    }, 1500);
+      if (error) throw error;
+      if (data?.url) {
+        window.location.href = data.url;
+      }
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "Failed to start checkout",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[800px]">
         <DialogHeader>
-          <DialogTitle className="text-2xl text-center font-bold">Nâng cấp Cửa hàng (Demo)</DialogTitle>
+          <DialogTitle className="text-2xl text-center font-bold">Upgrade Your Store</DialogTitle>
           <DialogDescription className="text-center text-lg">
-            Chế độ Demo: Bấm chọn gói để xem hiệu ứng thành công ngay lập tức.
+            Get more visibility and customers with our premium features
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
-          {/* Gói Tháng */}
           <Card className="border-2 hover:border-primary/50 transition-colors relative cursor-pointer" onClick={() => handleSubscribe('month')}>
             <CardHeader>
-              <CardTitle>Gói Tháng</CardTitle>
-              <CardDescription>Linh hoạt, ngắn hạn</CardDescription>
-              <div className="text-3xl font-bold mt-2">50.000đ<span className="text-sm font-normal text-muted-foreground">/tháng</span></div>
+              <CardTitle>Monthly Plan</CardTitle>
+              <CardDescription>Flexible commitment</CardDescription>
+              <div className="text-3xl font-bold mt-2">50.000đ<span className="text-sm font-normal text-muted-foreground">/month</span></div>
             </CardHeader>
             <CardContent>
               <ul className="space-y-2 text-sm">
-                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-green-500" /> Vị trí ưu tiên trên bản đồ</li>
-                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-green-500" /> Icon cửa hàng nổi bật</li>
-                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-green-500" /> Hỗ trợ 24/7</li>
+                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-green-500" /> Priority map placement</li>
+                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-green-500" /> Featured store icon</li>
+                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-green-500" /> 24/7 Support</li>
               </ul>
             </CardContent>
             <CardFooter>
@@ -70,26 +74,25 @@ export function SponsoredListingModal({ storeId, open, onOpenChange }: Sponsored
                 disabled={isLoading}
               >
                 {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Đăng ký ngay
+                Subscribe Monthly
               </Button>
             </CardFooter>
           </Card>
 
-          {/* Gói Năm */}
           <Card className="border-2 border-primary shadow-lg relative bg-primary/5 cursor-pointer" onClick={() => handleSubscribe('year')}>
              <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground px-3 py-1 rounded-full text-xs font-bold">
-              Phổ biến nhất
+              Best Value
             </div>
             <CardHeader>
-              <CardTitle>Gói Năm</CardTitle>
-              <CardDescription>Tiết kiệm 20%</CardDescription>
-              <div className="text-3xl font-bold mt-2">500.000đ<span className="text-sm font-normal text-muted-foreground">/năm</span></div>
+              <CardTitle>Annual Plan</CardTitle>
+              <CardDescription>Save 20%</CardDescription>
+              <div className="text-3xl font-bold mt-2">500.000đ<span className="text-sm font-normal text-muted-foreground">/year</span></div>
             </CardHeader>
             <CardContent>
               <ul className="space-y-2 text-sm">
-                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-green-500" /> Tất cả quyền lợi gói Tháng</li>
-                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-green-500" /> Tiết kiệm chi phí</li>
-                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-green-500" /> Huy hiệu "Đối tác uy tín"</li>
+                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-green-500" /> All Monthly features</li>
+                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-green-500" /> Save on billing</li>
+                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-green-500" /> "Trusted Partner" badge</li>
               </ul>
             </CardContent>
             <CardFooter>
@@ -100,7 +103,7 @@ export function SponsoredListingModal({ storeId, open, onOpenChange }: Sponsored
                 disabled={isLoading}
               >
                 {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Đăng ký ngay
+                Subscribe Yearly
               </Button>
             </CardFooter>
           </Card>
