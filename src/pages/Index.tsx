@@ -6,14 +6,18 @@ import { CategoryFilter } from '@/components/CategoryFilter';
 import { BottomSheet } from '@/components/BottomSheet';
 import { DirectionsPanel } from '@/components/DirectionsPanel';
 import { MultiStopPanel } from '@/components/MultiStopPanel';
+import { AuthModal } from '@/components/AuthModal';
+import { FavoritesPanel } from '@/components/FavoritesPanel';
+import { UserMenu } from '@/components/UserMenu';
 import { Location, LocationType, Department } from '@/data/locations';
-import { Compass, Menu } from 'lucide-react';
+import { Compass, Heart } from 'lucide-react';
 import { LanguageSwitcher, LanguageIndicator } from '@/components/LanguageSwitcher';
 import { AnimatedText } from '@/components/AnimatedText';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { useDirections, TransportMode, RoutePreference } from '@/hooks/useDirections';
 import { useMultiStopDirections, Waypoint } from '@/hooks/useMultiStopDirections';
 import { useRealtimeNavigation } from '@/hooks/useRealtimeNavigation';
+import { useFavorites } from '@/hooks/useFavorites';
 import { toast } from 'sonner';
 
 const Index = () => {
@@ -30,6 +34,10 @@ const Index = () => {
   const [isAddingStop, setIsAddingStop] = useState(false);
   const [routeOrigin, setRouteOrigin] = useState<[number, number] | null>(null);
   const [routeDestination, setRouteDestination] = useState<[number, number] | null>(null);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showFavoritesPanel, setShowFavoritesPanel] = useState(false);
+  
+  const { favorites } = useFavorites();
   
   const { route, isLoading, getDirections, clearDirections, transportMode, setTransportMode, routePreference, setRoutePreference, origin, destination } = useDirections();
   
@@ -302,6 +310,25 @@ const Index = () => {
               />
             </div>
             
+            {/* Favorites button */}
+            <button
+              onClick={() => setShowFavoritesPanel(true)}
+              className="relative w-9 h-9 rounded-xl bg-muted flex items-center justify-center hover:bg-muted/80 transition-colors"
+            >
+              <Heart className="w-5 h-5 text-muted-foreground" />
+              {favorites.length > 0 && (
+                <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
+                  {favorites.length > 9 ? '9+' : favorites.length}
+                </span>
+              )}
+            </button>
+            
+            {/* User menu */}
+            <UserMenu 
+              onLoginClick={() => setShowAuthModal(true)} 
+              onFavoritesClick={() => setShowFavoritesPanel(true)}
+            />
+            
             {/* Language switcher - compact */}
             <LanguageSwitcher compact />
           </motion.div>
@@ -417,6 +444,7 @@ const Index = () => {
             onClose={handleCloseSheet}
             onNavigate={handleNavigateWithName}
             onStartMultiStop={handleStartMultiStop}
+            onLoginClick={() => setShowAuthModal(true)}
           />
         )}
       </AnimatePresence>
@@ -433,6 +461,24 @@ const Index = () => {
           />
         )}
       </AnimatePresence>
+
+      {/* Auth Modal */}
+      <AuthModal 
+        isOpen={showAuthModal} 
+        onClose={() => setShowAuthModal(false)} 
+      />
+
+      {/* Favorites Panel */}
+      <FavoritesPanel
+        isOpen={showFavoritesPanel}
+        onClose={() => setShowFavoritesPanel(false)}
+        onSelectLocation={handleSelectLocation}
+        onNavigate={handleNavigateWithName}
+        onLoginClick={() => {
+          setShowFavoritesPanel(false);
+          setShowAuthModal(true);
+        }}
+      />
     </div>
   );
 };

@@ -1,11 +1,12 @@
 import { motion, AnimatePresence, PanInfo } from 'framer-motion';
-import { X, Navigation, Star, Clock, Phone, MapPin, Sparkles, ChevronUp, Globe, Route } from 'lucide-react';
+import { X, Navigation, Star, Clock, Phone, MapPin, Sparkles, ChevronUp, Globe, Route, Heart } from 'lucide-react';
 import { Location, Department } from '@/data/locations';
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { LanguageIndicator } from '@/components/LanguageSwitcher';
 import { AnimatedText, AnimatedBlock } from '@/components/AnimatedText';
+import { useFavorites } from '@/hooks/useFavorites';
 
 interface BottomSheetProps {
   location: Location | null;
@@ -13,13 +14,29 @@ interface BottomSheetProps {
   onClose: () => void;
   onNavigate: (location: Location) => void;
   onStartMultiStop?: (location: Location) => void;
+  onLoginClick?: () => void;
 }
 
-export const BottomSheet = ({ location, department, onClose, onNavigate, onStartMultiStop }: BottomSheetProps) => {
+export const BottomSheet = ({ location, department, onClose, onNavigate, onStartMultiStop, onLoginClick }: BottomSheetProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const { t, language } = useLanguage();
+  const { isFavorite, addFavorite, removeFavorite, isAuthenticated } = useFavorites();
 
   if (!location) return null;
+  
+  const isLocationFavorite = isFavorite(location.id);
+  
+  const handleFavoriteClick = () => {
+    if (!isAuthenticated && onLoginClick) {
+      onLoginClick();
+      return;
+    }
+    if (isLocationFavorite) {
+      removeFavorite(location.id);
+    } else {
+      addFavorite(location);
+    }
+  };
   
   // Get localized content
   const locationName = language === 'en' && location.name ? location.name : location.nameVi;
@@ -74,6 +91,16 @@ export const BottomSheet = ({ location, department, onClose, onNavigate, onStart
               className="absolute top-3 right-3 w-8 h-8 bg-white/90 backdrop-blur rounded-full flex items-center justify-center shadow-lg"
             >
               <X className="w-4 h-4 text-foreground" />
+            </button>
+            
+            {/* Favorite button */}
+            <button
+              onClick={handleFavoriteClick}
+              className={`absolute top-3 right-14 w-8 h-8 backdrop-blur rounded-full flex items-center justify-center shadow-lg transition-colors ${
+                isLocationFavorite ? 'bg-red-500' : 'bg-white/90'
+              }`}
+            >
+              <Heart className={`w-4 h-4 ${isLocationFavorite ? 'text-white fill-white' : 'text-foreground'}`} />
             </button>
 
             {/* Voucher badge */}
