@@ -72,7 +72,6 @@ const reducer = (state: any, action: any) => {
   }
 }
 
-// Named Export: toast
 export function toast({ ...props }: any) {
   const id = genId()
 
@@ -102,7 +101,6 @@ export function toast({ ...props }: any) {
   }
 }
 
-// Named Export: useToast
 export function useToast() {
   const [state, setState] = useState(memoryState)
 
