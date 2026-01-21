@@ -3,7 +3,7 @@ import { useEffect, useState } from "react"
 const TOAST_LIMIT = 1
 const TOAST_REMOVE_DELAY = 1000000
 
-type ToasterToast = any // Simplified for brevity, replace with actual type if needed
+type ToasterToast = any
 
 let count = 0
 
@@ -72,7 +72,8 @@ const reducer = (state: any, action: any) => {
   }
 }
 
-function toast({ ...props }: any) {
+// Named Export: toast
+export function toast({ ...props }: any) {
   const id = genId()
 
   const update = (props: any) =>
@@ -101,7 +102,8 @@ function toast({ ...props }: any) {
   }
 }
 
-function useToast() {
+// Named Export: useToast
+export function useToast() {
   const [state, setState] = useState(memoryState)
 
   useEffect(() => {
@@ -120,5 +122,3 @@ function useToast() {
     dismiss: (toastId?: string) => dispatch({ type: actionTypes.DISMISS_TOAST, toastId }),
   }
 }
-
-export { useToast, toast }
