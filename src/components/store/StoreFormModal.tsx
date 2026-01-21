@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { useForm } from "react-hook-form";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,7 +18,6 @@ interface StoreFormModalProps {
 const StoreFormModal = ({ isOpen, onClose, onSubmit, initialData }: StoreFormModalProps) => {
   const [plan, setPlan] = useState<'free' | 'premium'>('free');
 
-  // Form state
   const [formData, setFormData] = useState({
     name: '',
     category: 'food',
@@ -30,12 +28,10 @@ const StoreFormModal = ({ isOpen, onClose, onSubmit, initialData }: StoreFormMod
   });
 
   const handleSubmit = () => {
-    // Construct final data matching our schema
     const finalData = {
         ...formData,
         type: plan,
         menu: plan === 'premium' && formData.menuItem ? [{name: formData.menuItem, price: parseInt(formData.menuPrice) || 0}] : [],
-        // In real app, coordinate selection would happen here
         lat: 10.762622, 
         lng: 106.660172
     };
@@ -51,7 +47,6 @@ const StoreFormModal = ({ isOpen, onClose, onSubmit, initialData }: StoreFormMod
         </DialogHeader>
         
         <div className="py-4 space-y-6">
-            {/* Plan Selection */}
             <div>
                 <Label className="text-base font-semibold mb-3 block">Chọn loại cửa hàng:</Label>
                 <div className="grid grid-cols-2 gap-4">
@@ -83,7 +78,6 @@ const StoreFormModal = ({ isOpen, onClose, onSubmit, initialData }: StoreFormMod
                 </div>
             </div>
 
-            {/* General Info */}
             <div className="space-y-4">
                 <div className="grid gap-2">
                     <Label htmlFor="name">Tên địa điểm</Label>
@@ -122,7 +116,6 @@ const StoreFormModal = ({ isOpen, onClose, onSubmit, initialData }: StoreFormMod
                 </div>
             </div>
 
-            {/* Premium Fields */}
             <div className={`border rounded-lg p-4 space-y-4 transition-all ${plan === 'free' ? 'opacity-50 pointer-events-none bg-gray-50 grayscale' : 'bg-yellow-50/30 border-yellow-200'}`}>
                 <div className="flex justify-between items-center">
                     <span className="font-bold text-sm text-gray-800 flex items-center gap-1"><ImageIcon size={14}/> Ảnh bìa & Menu (Premium)</span>
