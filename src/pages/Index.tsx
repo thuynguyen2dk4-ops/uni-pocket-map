@@ -5,7 +5,7 @@ import LocationDetailModal from '@/components/LocationDetailModal';
 import StoreFormModal from '@/components/store/StoreFormModal';
 import { ExtendedLocation } from '@/types/extended';
 import { Toaster } from "@/components/ui/toaster";
-// Import đúng từ file trung gian
+// CHÚ Ý: Dùng ngoặc nhọn { useToast }
 import { useToast } from "@/components/ui/use-toast";
 
 const INITIAL_LOCATIONS: ExtendedLocation[] = [
