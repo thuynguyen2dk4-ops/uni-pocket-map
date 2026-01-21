@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { User, LogOut, Heart, LogIn, Store } from 'lucide-react';
+import { User, LogOut, Heart, LogIn, Store, Shield } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useLanguage } from '@/i18n/LanguageContext';
+import { supabase } from '@/integrations/supabase/client';
 
 interface UserMenuProps {
   onLoginClick: () => void;
@@ -12,25 +14,50 @@ interface UserMenuProps {
 
 export const UserMenu = ({ onLoginClick, onFavoritesClick, onStoresClick }: UserMenuProps) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const { user, signOut, isAuthenticated } = useAuth();
   const { language } = useLanguage();
+  const navigate = useNavigate();
 
   const texts = {
     vi: {
       login: 'Đăng nhập',
       favorites: 'Yêu thích',
       stores: 'Cửa hàng của tôi',
+      admin: 'Quản trị',
       logout: 'Đăng xuất',
     },
     en: {
       login: 'Login',
       favorites: 'Favorites',
       stores: 'My Stores',
+      admin: 'Admin',
       logout: 'Logout',
     },
   };
 
   const t = texts[language];
+
+  // Check admin status
+  useEffect(() => {
+    const checkAdmin = async () => {
+      if (!user) {
+        setIsAdmin(false);
+        return;
+      }
+      
+      const { data } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', user.id)
+        .eq('role', 'admin')
+        .maybeSingle();
+      
+      setIsAdmin(!!data);
+    };
+    
+    checkAdmin();
+  }, [user]);
 
   const handleLogout = async () => {
     await signOut();
@@ -84,7 +111,7 @@ export const UserMenu = ({ onLoginClick, onFavoritesClick, onStoresClick }: User
                   }}
                   className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-muted transition-colors"
                 >
-                  <Heart className="w-5 h-5 text-red-500" />
+                  <Heart className="w-5 h-5 text-destructive" />
                   <span className="font-medium">{t.favorites}</span>
                 </button>
                 {onStoresClick && (
@@ -97,6 +124,18 @@ export const UserMenu = ({ onLoginClick, onFavoritesClick, onStoresClick }: User
                   >
                     <Store className="w-5 h-5 text-primary" />
                     <span className="font-medium">{t.stores}</span>
+                  </button>
+                )}
+                {isAdmin && (
+                  <button
+                    onClick={() => {
+                      navigate('/admin');
+                      setIsOpen(false);
+                    }}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-muted transition-colors"
+                  >
+                    <Shield className="w-5 h-5 text-primary" />
+                    <span className="font-medium">{t.admin}</span>
                   </button>
                 )}
                 <button
