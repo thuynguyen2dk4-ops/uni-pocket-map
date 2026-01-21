@@ -5,7 +5,7 @@ import LocationDetailModal from '@/components/LocationDetailModal';
 import StoreFormModal from '@/components/store/StoreFormModal';
 import { ExtendedLocation } from '@/types/extended';
 import { Toaster } from "@/components/ui/toaster";
-import { useToast } from "@/components/hooks/use-toast";
+import { useToast } from "@/hooks/use-toast"; // Đã sửa đường dẫn đúng
 
 // Dữ liệu mẫu ban đầu (Mock) - Trong thực tế bạn sẽ fetch từ Supabase
 const INITIAL_LOCATIONS: ExtendedLocation[] = [
