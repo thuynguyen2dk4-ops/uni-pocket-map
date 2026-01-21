@@ -5,9 +5,8 @@ import LocationDetailModal from '@/components/LocationDetailModal';
 import StoreFormModal from '@/components/store/StoreFormModal';
 import { ExtendedLocation } from '@/types/extended';
 import { Toaster } from "@/components/ui/toaster";
-import { useToast } from "@/hooks/use-toast"; // Đã sửa đường dẫn đúng
+import { useToast } from "@/hooks/use-toast";
 
-// Dữ liệu mẫu ban đầu (Mock) - Trong thực tế bạn sẽ fetch từ Supabase
 const INITIAL_LOCATIONS: ExtendedLocation[] = [
     { id: 1, name: "Thư viện Trung Tâm", lat: 10.762622, lng: 106.660172, category: "study", type: "free", rating: 4.8, reviews: 120, description: "Không gian yên tĩnh, wifi mạnh.", image: "https://images.unsplash.com/photo-1521587760476-6c12a4b040da?auto=format&fit=crop&q=80&w=300" },
     { id: 2, name: "Cà phê Sách Nhã Nam", lat: 10.763000, lng: 106.661000, category: "coffee", type: "premium", rating: 4.5, reviews: 85, description: "Nhiều sách hay, đồ uống ngon.", image: "https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&q=80&w=300", 
@@ -28,10 +27,9 @@ const Index = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showTopLists, setShowTopLists] = useState(false);
 
-  // Handle adding new store
   const handleAddStore = (newStoreData: any) => {
     const newLocation: ExtendedLocation = {
-        id: Date.now(), // Mock ID
+        id: Date.now(),
         ...newStoreData,
         rating: 0,
         reviews: 0
@@ -45,7 +43,6 @@ const Index = () => {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-slate-100 font-sans relative">
-      {/* Sidebar mới tích hợp Search + List + Filter */}
       <MainSidebar 
         locations={locations}
         onSelectLocation={setSelectedLocation}
@@ -54,24 +51,18 @@ const Index = () => {
         setShowTopLists={setShowTopLists}
       />
 
-      {/* Map Area */}
       <div className="flex-1 relative md:ml-96 h-full transition-all duration-300">
         <MapView 
-            // Truyền locations đã được format
             locations={locations as any} 
             onMarkerClick={(loc) => setSelectedLocation(loc as ExtendedLocation)}
         />
-        
-        {/* Overlay Controls */}
       </div>
 
-      {/* Modal Chi Tiết */}
       <LocationDetailModal 
         location={selectedLocation} 
         onClose={() => setSelectedLocation(null)} 
       />
 
-      {/* Modal Tạo Store */}
       <StoreFormModal 
         isOpen={showAddModal}
         onClose={() => setShowAddModal(false)}
