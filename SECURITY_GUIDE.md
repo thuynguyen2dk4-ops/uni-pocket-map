@@ -27,44 +27,82 @@ VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsIn...
 
 # --- 3. URL Ứng dụng ---
 # Dùng để chuyển hướng sau khi thanh toán hoặc đăng nhập.
-VITE_APP_URL=http://localhost:8080 (hoặc domain thật của bạn)
+# Khi chạy local dùng: http://localhost:8080
+# Khi chạy thật dùng: [https://your-domain.com](https://your-domain.com)
+VITE_APP_URL=http://localhost:8080
 
 
-3. Bảo mật Thanh toán (Stripe)
+3. Bảo mật Thanh toán (Stripe & Supabase)
 
-LƯU Ý: Các cấu hình này KHÔNG để trong file .env ở Client. Bạn phải cài đặt chúng trong Supabase Dashboard (mục Edge Functions Secrets).
+Đây là phần quan trọng nhất để đảm bảo tiền về tài khoản và dữ liệu an toàn.
 
-Truy cập: Supabase Dashboard -> Edge Functions -> Secrets (hoặc dùng CLI).
+Bước 1: Lấy API Key từ Stripe Dashboard
 
-Thêm các secret sau:
+Truy cập Stripe Dashboard.
 
-Tên Secret
+Bật công tắc Test Mode (góc trên bên phải) nếu bạn đang chạy thử nghiệm.
 
-Giá trị lấy từ đâu?
+Vào menu Developers -> API keys.
 
-Mục đích
+Tại phần Secret keys, bấm "Reveal test key".
 
-STRIPE_SECRET_KEY
+Copy đoạn mã bắt đầu bằng sk_test_... (hoặc sk_live_... nếu chạy thật).
 
-Stripe Dashboard -> Developers -> API Keys (sk_live_...)
+Đây là chìa khóa két sắt, tuyệt đối không gửi qua chat hay để lộ.
 
-Để tạo link thanh toán an toàn.
+Bước 2: Nhập Key vào Supabase
 
-STRIPE_WEBHOOK_SIGNING_SECRET
+Truy cập Supabase Dashboard.
 
-Stripe Dashboard -> Developers -> Webhooks (whsec_...)
+Chọn dự án của bạn.
 
-Để xác minh tiền đã thực sự về chưa.
+Vào mục Edge Functions (biểu tượng tia sét ⚡ bên trái) -> Secrets (hoặc gõ lệnh CLI nếu bạn dùng terminal).
 
-Tại sao an toàn?
+Bấm Add new secret và tạo:
 
-Hacker có thể xem code React, nhưng họ chỉ thấy create-checkout.
+Name: STRIPE_SECRET_KEY
 
-Code này gọi lên Server (Supabase Edge Function).
+Value: (Dán đoạn mã sk_... bạn vừa copy ở Bước 1).
 
-Chỉ có Server mới nắm STRIPE_SECRET_KEY để nói chuyện với Stripe.
+Bước 3: Thiết lập Webhook (Để tự động xác nhận thanh toán)
 
-Kết luận: Tiền và thông tin thẻ không bao giờ đi qua code React của bạn trực tiếp, đảm bảo chuẩn PCI-DSS.
+Quay lại Stripe Dashboard -> Developers -> Webhooks.
+
+Bấm Add endpoint.
+
+Endpoint URL: Nhập đường dẫn Edge Function của bạn.
+
+Công thức: https://<PROJECT_REF>.supabase.co/functions/v1/stripe-webhook
+
+(Thay <PROJECT_REF> bằng mã dự án Supabase của bạn).
+
+Select events: Bấm nút này và tìm chọn sự kiện: checkout.session.completed.
+
+Bấm Add endpoint.
+
+Sau khi tạo xong, ở góc trên bên phải màn hình Webhook, tìm phần Signing secret, bấm "Reveal".
+
+Copy đoạn mã bắt đầu bằng whsec_....
+
+Bước 4: Nhập Webhook Secret vào Supabase
+
+Quay lại Supabase Dashboard -> Edge Functions -> Secrets.
+
+Bấm Add new secret và tạo:
+
+Name: STRIPE_WEBHOOK_SIGNING_SECRET
+
+Value: (Dán đoạn mã whsec_... bạn vừa copy ở Bước 3).
+
+Tại sao quy trình này an toàn?
+
+Client (React): Khi người dùng bấm "Thanh toán", nó chỉ gửi yêu cầu "Tôi muốn mua gói A" lên Server. Nó không hề chạm vào thông tin thẻ hay tài khoản Stripe.
+
+Server (Supabase): Dùng STRIPE_SECRET_KEY (đã giấu kín ở Bước 2) để nói chuyện với Stripe và tạo ra một Link thanh toán an toàn.
+
+Stripe: Xử lý toàn bộ việc nhập thẻ, xác thực ngân hàng (chuẩn PCI-DSS).
+
+Xác nhận: Khi tiền đã trừ, Stripe dùng whsec_... (Bước 3) để gọi ngược lại Supabase báo tin, đảm bảo không ai giả mạo được kết quả thanh toán.
 
 4. Bảo mật Dữ liệu (Row Level Security - RLS)
 
