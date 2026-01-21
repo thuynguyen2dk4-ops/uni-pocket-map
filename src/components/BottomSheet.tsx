@@ -1,5 +1,5 @@
 import { motion, AnimatePresence, PanInfo } from 'framer-motion';
-import { X, Navigation, Star, Clock, Phone, MapPin, Sparkles, ChevronUp, Globe, Route, Heart, Megaphone } from 'lucide-react';
+import { X, Navigation, Star, Clock, Phone, MapPin, Sparkles, ChevronUp, Route, Heart, Megaphone, UtensilsCrossed, Tag, Copy, Check } from 'lucide-react';
 import { Location, Department } from '@/data/locations';
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
@@ -7,6 +7,8 @@ import { useLanguage } from '@/i18n/LanguageContext';
 import { LanguageIndicator } from '@/components/LanguageSwitcher';
 import { AnimatedText, AnimatedBlock } from '@/components/AnimatedText';
 import { useFavorites } from '@/hooks/useFavorites';
+import { useStoreDetails } from '@/hooks/useStoreDetails';
+import { toast } from 'sonner';
 
 interface BottomSheetProps {
   location: Location | null;
@@ -20,8 +22,10 @@ interface BottomSheetProps {
 
 export const BottomSheet = ({ location, department, onClose, onNavigate, onStartMultiStop, onLoginClick, onPromoteClick }: BottomSheetProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const { t, language } = useLanguage();
   const { isFavorite, addFavorite, removeFavorite, isAuthenticated } = useFavorites();
+  const { menuItems, vouchers, isUserStore } = useStoreDetails(location?.id || null);
 
   if (!location) return null;
   
@@ -217,6 +221,111 @@ export const BottomSheet = ({ location, department, onClose, onNavigate, onStart
                     </span>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* Store Menu - for user stores */}
+          {isUserStore && menuItems.length > 0 && (
+            <div className="mb-5">
+              <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
+                <UtensilsCrossed className="w-4 h-4 text-primary" />
+                Menu
+              </h3>
+              <div className="space-y-2">
+                {menuItems.slice(0, isExpanded ? undefined : 4).map((item) => {
+                  const itemName = language === 'en' && item.name_en ? item.name_en : item.name_vi;
+                  const itemDesc = language === 'en' && item.description_en ? item.description_en : item.description_vi;
+                  return (
+                    <div key={item.id} className="flex items-center gap-3 p-3 bg-muted/50 rounded-xl">
+                      {item.image_url ? (
+                        <img src={item.image_url} alt={itemName} className="w-14 h-14 rounded-lg object-cover" />
+                      ) : (
+                        <div className="w-14 h-14 rounded-lg bg-muted flex items-center justify-center">
+                          <UtensilsCrossed className="w-6 h-6 text-muted-foreground" />
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-foreground truncate">{itemName}</p>
+                        {itemDesc && (
+                          <p className="text-xs text-muted-foreground line-clamp-1">{itemDesc}</p>
+                        )}
+                        <p className="text-sm font-semibold text-primary mt-0.5">
+                          {new Intl.NumberFormat('vi-VN').format(item.price)}đ
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+                {!isExpanded && menuItems.length > 4 && (
+                  <p className="text-xs text-muted-foreground text-center">
+                    +{menuItems.length - 4} {language === 'vi' ? 'món khác' : 'more items'}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Store Vouchers - for user stores */}
+          {isUserStore && vouchers.length > 0 && (
+            <div className="mb-5">
+              <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
+                <Tag className="w-4 h-4 text-accent" />
+                Vouchers
+              </h3>
+              <div className="space-y-2">
+                {vouchers.map((voucher) => {
+                  const vTitle = language === 'en' && voucher.title_en ? voucher.title_en : voucher.title_vi;
+                  const vDesc = language === 'en' && voucher.description_en ? voucher.description_en : voucher.description_vi;
+                  const isCopied = copiedCode === voucher.code;
+                  
+                  const handleCopyCode = () => {
+                    navigator.clipboard.writeText(voucher.code);
+                    setCopiedCode(voucher.code);
+                    toast.success(language === 'vi' ? 'Đã sao chép mã!' : 'Code copied!');
+                    setTimeout(() => setCopiedCode(null), 2000);
+                  };
+                  
+                  return (
+                    <div key={voucher.id} className="p-3 bg-gradient-to-r from-accent/10 to-accent/5 rounded-xl border border-accent/20">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-mono text-xs bg-accent/20 text-accent px-2 py-0.5 rounded font-semibold">
+                              {voucher.code}
+                            </span>
+                            <button 
+                              onClick={handleCopyCode}
+                              className="p-1 hover:bg-muted rounded"
+                            >
+                              {isCopied ? (
+                                <Check className="w-3 h-3 text-green-500" />
+                              ) : (
+                                <Copy className="w-3 h-3 text-muted-foreground" />
+                              )}
+                            </button>
+                          </div>
+                          <p className="text-sm font-medium text-foreground">{vTitle}</p>
+                          {vDesc && (
+                            <p className="text-xs text-muted-foreground mt-0.5">{vDesc}</p>
+                          )}
+                          <p className="text-xs text-accent font-medium mt-1">
+                            {voucher.discount_type === 'percent' 
+                              ? `${language === 'vi' ? 'Giảm' : 'Discount'} ${voucher.discount_value}%` 
+                              : `${language === 'vi' ? 'Giảm' : 'Discount'} ${new Intl.NumberFormat('vi-VN').format(voucher.discount_value)}đ`
+                            }
+                            {voucher.min_order && voucher.min_order > 0 && (
+                              <span className="text-muted-foreground">
+                                {' '}• Min {new Intl.NumberFormat('vi-VN').format(voucher.min_order)}đ
+                              </span>
+                            )}
+                          </p>
+                        </div>
+                        <Sparkles className="w-5 h-5 text-accent flex-shrink-0" />
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
