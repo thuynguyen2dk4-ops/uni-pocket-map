@@ -73,13 +73,12 @@ export const useMultiStopDirections = () => {
     }));
   }, []);
 
-  const reorderWaypoints = useCallback((fromIndex: number, toIndex: number) => {
-    setState(prev => {
-      const newWaypoints = [...prev.waypoints];
-      const [removed] = newWaypoints.splice(fromIndex, 1);
-      newWaypoints.splice(toIndex, 0, removed);
-      return { ...prev, waypoints: newWaypoints };
-    });
+  // --- FIX: Nhận mảng mới thay vì index ---
+  const reorderWaypoints = useCallback((newWaypoints: Waypoint[]) => {
+    setState(prev => ({
+      ...prev,
+      waypoints: newWaypoints,
+    }));
   }, []);
 
   const clearWaypoints = useCallback(() => {

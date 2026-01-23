@@ -1,13 +1,11 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+// src/hooks/useRealtimeNavigation.ts
+import { useState, useEffect, useCallback } from 'react';
 import { RouteStep } from './useDirections';
 
 interface RealtimeNavigationState {
-  userPosition: [number, number] | null;
   currentStepIndex: number;
   distanceToNextStep: number;
   isOffRoute: boolean;
-  heading: number | null;
-  accuracy: number | null;
   isTracking: boolean;
 }
 
@@ -15,6 +13,7 @@ interface UseRealtimeNavigationProps {
   steps: RouteStep[];
   routeGeometry: GeoJSON.LineString | null;
   isNavigating: boolean;
+  userLocation: { lat: number; lng: number } | null; // Nhận vị trí từ cha
   onOffRoute?: () => void;
 }
 
@@ -23,7 +22,7 @@ const calculateDistance = (
   lat1: number, lon1: number,
   lat2: number, lon2: number
 ): number => {
-  const R = 6371000; // Earth's radius in meters
+  const R = 6371000;
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLon = (lon2 - lon1) * Math.PI / 180;
   const a = 
@@ -53,7 +52,6 @@ const findClosestPointOnRoute = (
       closestSegmentIndex = i;
     }
   }
-
   return { distance: minDistance, segmentIndex: closestSegmentIndex };
 };
 
@@ -61,22 +59,19 @@ export const useRealtimeNavigation = ({
   steps,
   routeGeometry,
   isNavigating,
+  userLocation,
   onOffRoute,
 }: UseRealtimeNavigationProps) => {
   const [state, setState] = useState<RealtimeNavigationState>({
-    userPosition: null,
     currentStepIndex: 0,
     distanceToNextStep: 0,
     isOffRoute: false,
-    heading: null,
-    accuracy: null,
     isTracking: false,
   });
 
-  const watchIdRef = useRef<number | null>(null);
   const offRouteThreshold = 50; // meters
 
-  // Calculate current step based on user position and route progress
+  // Logic tính toán bước đi
   const updateCurrentStep = useCallback((
     userPos: [number, number],
     routeCoords: [number, number][]
@@ -86,7 +81,6 @@ export const useRealtimeNavigation = ({
     // Check if user is off route
     const isOffRoute = distance > offRouteThreshold;
     
-    // Estimate current step based on progress along route
     let accumulatedDistance = 0;
     let estimatedStep = 0;
     
@@ -102,10 +96,8 @@ export const useRealtimeNavigation = ({
       estimatedStep = i;
     }
 
-    // Calculate distance to next step waypoint
     let distanceToNext = 0;
     if (estimatedStep < steps.length) {
-      // Rough estimate: remaining distance in current step
       let distanceCovered = 0;
       for (let i = 0; i < estimatedStep; i++) {
         distanceCovered += steps[i].distance;
@@ -124,97 +116,30 @@ export const useRealtimeNavigation = ({
     };
   }, [steps, offRouteThreshold]);
 
-  // Start tracking user position
-  const startTracking = useCallback(() => {
-    if (!navigator.geolocation) {
-      console.error('Geolocation not supported');
+  // Effect chạy mỗi khi userLocation thay đổi
+  useEffect(() => {
+    if (!isNavigating || !userLocation || !routeGeometry) {
+      setState(prev => ({ ...prev, isTracking: false }));
       return;
     }
 
-    if (watchIdRef.current !== null) {
-      navigator.geolocation.clearWatch(watchIdRef.current);
-    }
+    const userPos: [number, number] = [userLocation.lng, userLocation.lat];
+    const stepUpdate = updateCurrentStep(userPos, routeGeometry.coordinates as [number, number][]);
 
-    watchIdRef.current = navigator.geolocation.watchPosition(
-      (position) => {
-        const userPos: [number, number] = [
-          position.coords.longitude,
-          position.coords.latitude
-        ];
-
-        let stepUpdate = {
-          currentStepIndex: 0,
-          distanceToNextStep: 0,
-          isOffRoute: false,
-        };
-
-        if (routeGeometry && routeGeometry.coordinates.length > 0) {
-          stepUpdate = updateCurrentStep(
-            userPos,
-            routeGeometry.coordinates as [number, number][]
-          );
-        }
-
-        setState(prev => {
-          const newState = {
+    setState(prev => {
+        const newState = {
             ...prev,
-            userPosition: userPos,
-            heading: position.coords.heading,
-            accuracy: position.coords.accuracy,
             isTracking: true,
             ...stepUpdate,
-          };
-
-          // Trigger off-route callback if needed
-          if (stepUpdate.isOffRoute && !prev.isOffRoute && onOffRoute) {
+        };
+        // Trigger off-route callback
+        if (stepUpdate.isOffRoute && !prev.isOffRoute && onOffRoute) {
             onOffRoute();
-          }
+        }
+        return newState;
+    });
 
-          return newState;
-        });
-      },
-      (error) => {
-        console.error('Geolocation error:', error);
-        setState(prev => ({ ...prev, isTracking: false }));
-      },
-      {
-        enableHighAccuracy: true,
-        maximumAge: 1000,
-        timeout: 10000,
-      }
-    );
+  }, [isNavigating, userLocation, routeGeometry, updateCurrentStep, onOffRoute]);
 
-    setState(prev => ({ ...prev, isTracking: true }));
-  }, [routeGeometry, updateCurrentStep, onOffRoute]);
-
-  // Stop tracking
-  const stopTracking = useCallback(() => {
-    if (watchIdRef.current !== null) {
-      navigator.geolocation.clearWatch(watchIdRef.current);
-      watchIdRef.current = null;
-    }
-    setState(prev => ({ ...prev, isTracking: false }));
-  }, []);
-
-  // Auto start/stop tracking based on navigation state
-  useEffect(() => {
-    if (isNavigating && routeGeometry) {
-      startTracking();
-    } else if (!isNavigating) {
-      stopTracking();
-    }
-
-    return () => {
-      if (watchIdRef.current !== null) {
-        navigator.geolocation.clearWatch(watchIdRef.current);
-      }
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isNavigating]);
-
-  return {
-    ...state,
-    startTracking,
-    stopTracking,
-  };
+  return state;
 };

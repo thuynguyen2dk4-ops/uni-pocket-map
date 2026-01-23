@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from './useAuth';
-import { toast } from 'sonner';
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "./useAuth";
+import { toast } from "sonner";
 
+// Định nghĩa lại Type cho khớp với DB
 export interface UserStore {
   id: string;
   user_id: string;
@@ -24,286 +25,102 @@ export interface UserStore {
   updated_at: string;
 }
 
-export interface StoreMenuItem {
-  id: string;
-  store_id: string;
-  name_vi: string;
-  name_en: string | null;
-  description_vi: string | null;
-  description_en: string | null;
-  price: number;
-  image_url: string | null;
-  is_available: boolean;
-  sort_order: number;
-  created_at: string;
-}
-
-export interface StoreVoucher {
-  id: string;
-  store_id: string;
-  code: string;
-  title_vi: string;
-  title_en: string | null;
-  description_vi: string | null;
-  description_en: string | null;
-  discount_type: string;
-  discount_value: number;
-  min_order: number | null;
-  max_uses: number | null;
-  used_count: number;
-  is_active: boolean;
-  start_date: string | null;
-  end_date: string | null;
-  created_at: string;
-}
-
 export const useUserStores = () => {
-  const { user } = useAuth();
-  const [stores, setStores] = useState<UserStore[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { session } = useAuth();
+  const queryClient = useQueryClient();
+  const user = session?.user;
 
-  const fetchStores = useCallback(async () => {
-    if (!user) {
-      setStores([]);
-      setIsLoading(false);
-      return;
-    }
-
-    try {
+  // 1. Lấy danh sách cửa hàng (Query)
+  const { data: stores = [], isLoading } = useQuery({
+    queryKey: ['user_stores', user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+      
       const { data, error } = await supabase
-        .from('user_stores')
+        .from('user_stores') // <--- ĐÃ SỬA: Dùng đúng tên bảng
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setStores(data || []);
-    } catch (err) {
-      console.error('Error fetching stores:', err);
-      toast.error('Không thể tải danh sách cửa hàng');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [user]);
+      return data as UserStore[];
+    },
+    enabled: !!user,
+  });
 
-  useEffect(() => {
-    fetchStores();
-  }, [fetchStores]);
+  // 2. Tạo cửa hàng (Mutation)
+  const createStoreMutation = useMutation({
+    mutationFn: async (storeData: Omit<UserStore, 'id' | 'user_id' | 'status' | 'created_at' | 'updated_at'>) => {
+      if (!user) throw new Error("Vui lòng đăng nhập");
 
-  const createStore = async (storeData: Omit<UserStore, 'id' | 'user_id' | 'status' | 'created_at' | 'updated_at'>) => {
-    if (!user) return null;
-
-    try {
       const { data, error } = await supabase
-        .from('user_stores')
+        .from('user_stores') // <--- ĐÃ SỬA
         .insert({
           ...storeData,
-          user_id: user.id,
+          user_id: user.id, // <--- ĐÃ SỬA: Dùng user_id thay vì owner_id
+          status: 'pending' // Mặc định chờ duyệt
         })
         .select()
         .single();
 
       if (error) throw error;
-      setStores(prev => [data, ...prev]);
-      toast.success('Đã tạo cửa hàng thành công!');
       return data;
-    } catch (err) {
-      console.error('Error creating store:', err);
-      toast.error('Không thể tạo cửa hàng');
-      return null;
-    }
-  };
+    },
+    onSuccess: () => {
+      // Tự động refresh lại list ngay lập tức
+      queryClient.invalidateQueries({ queryKey: ['user_stores'] });
+      toast.success('Đã tạo cửa hàng thành công!');
+    },
+    onError: (err) => {
+      console.error(err);
+      toast.error('Lỗi khi tạo cửa hàng: ' + err.message);
+    },
+  });
 
-  const updateStore = async (storeId: string, updates: Partial<UserStore>) => {
-    try {
-      const { data, error } = await supabase
-        .from('user_stores')
+  // 3. Cập nhật cửa hàng
+  const updateStoreMutation = useMutation({
+    mutationFn: async ({ id, ...updates }: Partial<UserStore> & { id: string }) => {
+      // Lọc bỏ các trường undefined/null không cần thiết nếu muốn
+      const { error } = await supabase
+        .from('user_stores') // <--- ĐÃ SỬA
         .update(updates)
-        .eq('id', storeId)
-        .select()
-        .single();
+        .eq('id', id);
 
       if (error) throw error;
-      setStores(prev => prev.map(s => s.id === storeId ? data : s));
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['user_stores'] });
       toast.success('Đã cập nhật cửa hàng!');
-      return data;
-    } catch (err) {
-      console.error('Error updating store:', err);
-      toast.error('Không thể cập nhật cửa hàng');
-      return null;
-    }
-  };
+    },
+    onError: (err) => toast.error('Lỗi cập nhật: ' + err.message),
+  });
 
-  const deleteStore = async (storeId: string) => {
-    try {
+  // 4. Xóa cửa hàng
+  const deleteStoreMutation = useMutation({
+    mutationFn: async (storeId: string) => {
       const { error } = await supabase
-        .from('user_stores')
+        .from('user_stores') // <--- ĐÃ SỬA
         .delete()
         .eq('id', storeId);
 
       if (error) throw error;
-      setStores(prev => prev.filter(s => s.id !== storeId));
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['user_stores'] });
       toast.success('Đã xóa cửa hàng!');
-      return true;
-    } catch (err) {
-      console.error('Error deleting store:', err);
-      toast.error('Không thể xóa cửa hàng');
-      return false;
-    }
-  };
+    },
+    onError: (err) => toast.error('Lỗi xóa: ' + err.message),
+  });
 
-  // Menu items
-  const fetchMenuItems = async (storeId: string): Promise<StoreMenuItem[]> => {
-    try {
-      const { data, error } = await supabase
-        .from('store_menu_items')
-        .select('*')
-        .eq('store_id', storeId)
-        .order('sort_order', { ascending: true });
-
-      if (error) throw error;
-      return data || [];
-    } catch (err) {
-      console.error('Error fetching menu items:', err);
-      return [];
-    }
-  };
-
-  const createMenuItem = async (item: Omit<StoreMenuItem, 'id' | 'created_at'>) => {
-    try {
-      const { data, error } = await supabase
-        .from('store_menu_items')
-        .insert(item)
-        .select()
-        .single();
-
-      if (error) throw error;
-      toast.success('Đã thêm món!');
-      return data;
-    } catch (err) {
-      console.error('Error creating menu item:', err);
-      toast.error('Không thể thêm món');
-      return null;
-    }
-  };
-
-  const updateMenuItem = async (itemId: string, updates: Partial<StoreMenuItem>) => {
-    try {
-      const { data, error } = await supabase
-        .from('store_menu_items')
-        .update(updates)
-        .eq('id', itemId)
-        .select()
-        .single();
-
-      if (error) throw error;
-      toast.success('Đã cập nhật món!');
-      return data;
-    } catch (err) {
-      console.error('Error updating menu item:', err);
-      toast.error('Không thể cập nhật món');
-      return null;
-    }
-  };
-
-  const deleteMenuItem = async (itemId: string) => {
-    try {
-      const { error } = await supabase
-        .from('store_menu_items')
-        .delete()
-        .eq('id', itemId);
-
-      if (error) throw error;
-      toast.success('Đã xóa món!');
-      return true;
-    } catch (err) {
-      console.error('Error deleting menu item:', err);
-      toast.error('Không thể xóa món');
-      return false;
-    }
-  };
-
-  // Vouchers
-  const fetchVouchers = async (storeId: string): Promise<StoreVoucher[]> => {
-    try {
-      const { data, error } = await supabase
-        .from('store_vouchers')
-        .select('*')
-        .eq('store_id', storeId)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      return data || [];
-    } catch (err) {
-      console.error('Error fetching vouchers:', err);
-      return [];
-    }
-  };
-
-  const createVoucher = async (voucher: Omit<StoreVoucher, 'id' | 'used_count' | 'created_at'>) => {
-    try {
-      const { data, error } = await supabase
-        .from('store_vouchers')
-        .insert(voucher)
-        .select()
-        .single();
-
-      if (error) throw error;
-      toast.success('Đã tạo voucher!');
-      return data;
-    } catch (err) {
-      console.error('Error creating voucher:', err);
-      toast.error('Không thể tạo voucher');
-      return null;
-    }
-  };
-
-  const updateVoucher = async (voucherId: string, updates: Partial<StoreVoucher>) => {
-    try {
-      const { data, error } = await supabase
-        .from('store_vouchers')
-        .update(updates)
-        .eq('id', voucherId)
-        .select()
-        .single();
-
-      if (error) throw error;
-      toast.success('Đã cập nhật voucher!');
-      return data;
-    } catch (err) {
-      console.error('Error updating voucher:', err);
-      toast.error('Không thể cập nhật voucher');
-      return null;
-    }
-  };
-
-  const deleteVoucher = async (voucherId: string) => {
-    try {
-      const { error } = await supabase
-        .from('store_vouchers')
-        .delete()
-        .eq('id', voucherId);
-
-      if (error) throw error;
-      toast.success('Đã xóa voucher!');
-      return true;
-    } catch (err) {
-      console.error('Error deleting voucher:', err);
-      toast.error('Không thể xóa voucher');
-      return false;
-    }
-  };
-
-  // Image upload
+  // Helper upload ảnh (Giữ nguyên logic cũ nhưng bọc lại gọn hơn)
   const uploadImage = async (file: File, folder: string = 'stores'): Promise<string | null> => {
     if (!user) return null;
-
     const fileExt = file.name.split('.').pop();
     const fileName = `${user.id}/${folder}/${Date.now()}.${fileExt}`;
 
     try {
       const { error: uploadError } = await supabase.storage
-        .from('store-images')
+        .from('store-images') // Đảm bảo bucket này tồn tại
         .upload(fileName, file);
 
       if (uploadError) throw uploadError;
@@ -323,18 +140,13 @@ export const useUserStores = () => {
   return {
     stores,
     isLoading,
-    fetchStores,
-    createStore,
-    updateStore,
-    deleteStore,
-    fetchMenuItems,
-    createMenuItem,
-    updateMenuItem,
-    deleteMenuItem,
-    fetchVouchers,
-    createVoucher,
-    updateVoucher,
-    deleteVoucher,
+    createStore: createStoreMutation.mutate,
+    updateStore: (id: string, updates: Partial<UserStore>) => updateStoreMutation.mutate({ id, ...updates }),
+    deleteStore: deleteStoreMutation.mutate,
     uploadImage,
+    // Trả về trạng thái loading của mutation để UI hiển thị spinner
+    isCreating: createStoreMutation.isPending,
+    isUpdating: updateStoreMutation.isPending,
+    isDeleting: deleteStoreMutation.isPending,
   };
 };

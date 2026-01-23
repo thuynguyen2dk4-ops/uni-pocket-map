@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { useAuth } from '@/hooks/useAuth';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { z } from 'zod';
+import { useNavigate } from 'react-router-dom';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -23,12 +24,13 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
   const [loading, setLoading] = useState(false);
   const { signIn, signUp } = useAuth();
   const { language } = useLanguage();
+  const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    // Validate
+    // 1. Kiểm tra Email và Mật khẩu (Validate) - Giữ nguyên phần của bạn
     try {
       emailSchema.parse(email);
       passwordSchema.parse(password);
@@ -40,31 +42,51 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
     }
 
     setLoading(true);
+
     try {
+      let result;
+
+      // 2. Gọi hàm Login hoặc Signup tùy theo chế độ (Mode)
       if (mode === 'login') {
-        const { error } = await signIn(email, password);
-        if (error) {
-          if (error.message.includes('Invalid login credentials')) {
-            setError(language === 'vi' ? 'Email hoặc mật khẩu không đúng' : 'Invalid email or password');
-          } else {
-            setError(error.message);
-          }
-          return;
-        }
+        console.log("Đang thử đăng nhập với:", email); // <-- Log kiểm tra
+        result = await signIn(email, password);
       } else {
-        const { error } = await signUp(email, password);
-        if (error) {
-          if (error.message.includes('User already registered')) {
-            setError(language === 'vi' ? 'Email này đã được đăng ký' : 'This email is already registered');
-          } else {
-            setError(error.message);
-          }
-          return;
-        }
+        console.log("Đang thử đăng ký với:", email); // <-- Log kiểm tra
+        result = await signUp(email, password);
       }
-      onClose();
-      setEmail('');
-      setPassword('');
+
+      // 3. In lỗi ra màn hình Console để xem (QUAN TRỌNG)
+      console.log("Kết quả từ Supabase:", result);
+
+      // 4. Xử lý kết quả
+      if (result.error) {
+        // Nếu có lỗi thì hiện thông báo đỏ
+        if (result.error.message.includes('Invalid login credentials')) {
+          setError(language === 'vi' ? 'Sai email hoặc mật khẩu' : 'Invalid email or password');
+        } else if (result.error.message.includes('User already registered')) {
+          setError(language === 'vi' ? 'Email này đã được đăng ký' : 'Email already registered');
+        } else {
+          // Hiện lỗi gốc nếu là lỗi lạ
+          setError(result.error.message);
+        }
+      // Trong AuthModal.tsx, phần else của handleSubmit
+} else {
+  // Nếu KHÔNG có lỗi -> Thành công
+  console.log("Đăng nhập thành công!"); 
+  // Thêm dòng này nếu bạn muốn hiện thông báo xanh lá trên màn hình:
+  // toast({ title: "Thành công", description: "Đăng nhập thành công!" }); (Cần import toast trước)
+  
+  onClose(); 
+  setEmail('');
+  setPassword('');
+  if (email === 'admin@gmail.com') {
+           // Nếu là admin thì bay thẳng vào trang quản lý
+           navigate('/admin');
+        }
+}
+    } catch (err) {
+      console.error("Lỗi không mong muốn:", err);
+      setError("Có lỗi xảy ra, vui lòng thử lại.");
     } finally {
       setLoading(false);
     }

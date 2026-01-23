@@ -3,9 +3,11 @@ import { useState } from 'react';
 import { 
   X, Navigation, Clock, Route, Footprints, Bike, Car,
   ChevronDown, ChevronUp, ArrowUp, ArrowLeft, ArrowRight, 
-  CornerUpLeft, CornerUpRight, MapPin, Flag, Gauge, Ruler
+  CornerUpLeft, CornerUpRight, MapPin, Flag, Gauge, Ruler,
+  Plus // 1. Thêm icon Plus
 } from 'lucide-react';
-import { formatDistance, formatDuration, RouteInfo, TransportMode, RouteStep, RoutePreference } from '@/hooks/useDirections';
+// 2. Bỏ formatDuration ở import để tránh xung đột với hàm bên dưới
+import { formatDistance, RouteInfo, TransportMode, RoutePreference } from '@/hooks/useDirections';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useLanguage } from '@/i18n/LanguageContext';
@@ -25,6 +27,7 @@ interface DirectionsPanelProps {
   onClose: () => void;
   onChangeTransportMode: (mode: TransportMode) => void;
   onChangeRoutePreference: (preference: RoutePreference) => void;
+  onAddStop?: () => void; // Prop này đã có sẵn
 }
 
 const getManeuverIcon = (type: string, modifier?: string) => {
@@ -69,19 +72,24 @@ export const DirectionsPanel = ({
   onClose,
   onChangeTransportMode,
   onChangeRoutePreference,
+  onAddStop
 }: DirectionsPanelProps) => {
   const { t, language } = useLanguage();
   const [isExpanded, setIsExpanded] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   
-  // Helper to translate instruction
   const getTranslatedInstruction = (instruction: string) => {
     return translateInstruction(instruction, language) || t('continueStright');
   };
 
-  // Get current step for prominent display
+  // Hàm này giữ nguyên logic hiển thị tiếng Việt của bạn
+  const formatDuration = (seconds: number) => {
+    const minutes = Math.round(seconds / 60);
+    return minutes >= 60 ? `${Math.floor(minutes / 60)}g ${minutes % 60}p` : `${minutes} phút`;
+  };
+  
   const currentStep = routeInfo.steps[currentStepIndex];
-  const nextStep = routeInfo.steps[currentStepIndex + 1];
+  // const nextStep = routeInfo.steps[currentStepIndex + 1]; // Biến này chưa dùng
 
   const transportModes: { mode: TransportMode; icon: typeof Footprints; labelKey: TranslationKey }[] = [
     { mode: 'walking', icon: Footprints, labelKey: 'walking' },
@@ -89,12 +97,7 @@ export const DirectionsPanel = ({
     { mode: 'driving', icon: Car, labelKey: 'driving' },
   ];
 
-  const routePreferences: { preference: RoutePreference; icon: typeof Ruler; labelKey: TranslationKey }[] = [
-    { preference: 'shortest', icon: Ruler, labelKey: 'shortest' },
-    { preference: 'fastest', icon: Gauge, labelKey: 'fastest' },
-  ];
-
-  // Minimized view - just a small floating pill
+  // Minimized view
   if (isMinimized) {
     return (
       <motion.div
@@ -110,7 +113,7 @@ export const DirectionsPanel = ({
           <Navigation className="w-4 h-4 text-primary" />
           <span className="text-xs font-medium text-foreground truncate flex-1 text-left">{destinationName}</span>
           <span className="text-xs font-bold text-primary">{formatDistance(routeInfo.distance)}</span>
-          <span className="text-xs text-muted-foreground">{formatDuration(routeInfo.duration, language)}</span>
+          <span className="text-xs text-muted-foreground">{formatDuration(routeInfo.duration)}</span>
           <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
         </button>
       </motion.div>
@@ -150,8 +153,18 @@ export const DirectionsPanel = ({
           
           {/* Route info */}
           <span className="text-xs font-bold text-primary">{formatDistance(routeInfo.distance)}</span>
-          <span className="text-xs text-muted-foreground">{formatDuration(routeInfo.duration, language)}</span>
+          <span className="text-xs text-muted-foreground">{formatDuration(routeInfo.duration)}</span>
           
+          {/* 3. NÚT THÊM ĐIỂM DỪNG (Nằm gọn ở đây) */}
+          {onAddStop && (
+            <button 
+              onClick={onAddStop} 
+              className="p-1 hover:bg-blue-100 text-blue-600 rounded transition-colors"
+              title="Thêm điểm dừng"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+          )}
           
           {/* Expand steps button */}
           {routeInfo.steps?.length > 0 && (

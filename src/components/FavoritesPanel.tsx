@@ -1,184 +1,253 @@
-import { motion, AnimatePresence } from 'framer-motion';
-import { Heart, X, MapPin, Navigation, Trash2, LogIn } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
+import { Location } from '@/data/locations';
 import { Button } from '@/components/ui/button';
-import { useFavorites, Favorite } from '@/hooks/useFavorites';
-import { useLanguage } from '@/i18n/LanguageContext';
-import { locations, Location } from '@/data/locations';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { X, Heart, Ticket, Trash2, ExternalLink } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface FavoritesPanelProps {
   isOpen: boolean;
   onClose: () => void;
-  onSelectLocation: (location: Location) => void;
+  onSelectLocation: (location: Location, department?: any) => void;
   onNavigate: (location: Location) => void;
   onLoginClick: () => void;
 }
 
-export const FavoritesPanel = ({
-  isOpen,
-  onClose,
-  onSelectLocation,
-  onNavigate,
-  onLoginClick,
+export const FavoritesPanel = ({ 
+  isOpen, 
+  onClose, 
+  onSelectLocation, 
+  onNavigate, 
+  onLoginClick 
 }: FavoritesPanelProps) => {
-  const { favorites, loading, removeFavorite, isAuthenticated } = useFavorites();
-  const { language } = useLanguage();
+  
+  const { session } = useAuth();
+  const [favorites, setFavorites] = useState<any[]>([]);
+  const [savedVouchers, setSavedVouchers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState("locations");
 
-  const texts = {
-    vi: {
-      title: 'Địa điểm yêu thích',
-      empty: 'Chưa có địa điểm yêu thích',
-      emptyDesc: 'Nhấn vào biểu tượng ❤️ để lưu địa điểm',
-      loginRequired: 'Đăng nhập để lưu',
-      loginDesc: 'Đăng nhập để lưu địa điểm yêu thích và truy cập trên mọi thiết bị',
-      login: 'Đăng nhập',
-      navigate: 'Chỉ đường',
-    },
-    en: {
-      title: 'Favorite Locations',
-      empty: 'No favorite locations yet',
-      emptyDesc: 'Tap the ❤️ icon to save a location',
-      loginRequired: 'Login to save',
-      loginDesc: 'Login to save favorite locations and access them on all devices',
-      login: 'Login',
-      navigate: 'Navigate',
-    },
-  };
+  const fetchData = async () => {
+    if (!session?.user) return;
+    setLoading(true);
 
-  const t = texts[language];
+    try {
+      // 1. Tải địa điểm yêu thích
+      const { data: favData } = await supabase
+        .from('favorites')
+        .select('*')
+        .eq('user_id', session.user.id);
+      
+      if (favData) {
+        const mappedFavs = favData.map((f: any) => ({
+          id: f.location_id,
+          name: f.location_name_en || f.location_name,
+          nameVi: f.location_name,
+          lat: f.location_lat,
+          lng: f.location_lng,
+          type: f.location_type,
+          address: 'Đã lưu',
+          description: '', 
+          image: '',
+        }));
+        setFavorites(mappedFavs);
+      }
 
-  const getLocationFromFavorite = (fav: Favorite): Location | undefined => {
-    return locations.find((loc) => loc.id === fav.location_id);
-  };
-
-  const handleLocationClick = (fav: Favorite) => {
-    const location = getLocationFromFavorite(fav);
-    if (location) {
-      onSelectLocation(location);
-      onClose();
+      // 2. Tải Voucher đã lưu
+      const { data: voucherData } = await supabase
+        .from('user_saved_vouchers' as any)
+        .select(`
+          id,
+          voucher:store_vouchers (
+            id, code, title_vi, discount_value, discount_type,
+            store:user_stores (
+              id, name_vi, lat, lng, address_vi, image_url
+            )
+          )
+        `)
+        .eq('user_id', session.user.id);
+console.log("🔥 Dữ liệu Voucher tải về:", voucherData);
+      console.log("🔥 Lỗi nếu có:", Error);
+      if (voucherData) {
+        setSavedVouchers(voucherData);
+      }
+    } catch (error) {
+      console.error("Lỗi:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleNavigateClick = (e: React.MouseEvent, fav: Favorite) => {
-    e.stopPropagation();
-    const location = getLocationFromFavorite(fav);
-    if (location) {
+  useEffect(() => {
+    if (isOpen) {
+      fetchData();
+    }
+  }, [session, isOpen]);
+
+  const removeFavorite = async (id: string) => {
+    setFavorites(prev => prev.filter(f => f.id !== id));
+    await supabase.from('favorites').delete().eq('location_id', id);
+    toast.success("Đã xóa khỏi yêu thích");
+  };
+
+  const removeVoucher = async (e: React.MouseEvent, savedId: string) => {
+    e.stopPropagation(); // QUAN TRỌNG: Chặn sự kiện click xuyên qua (để không bị mở cửa hàng khi đang xóa)
+    const { error } = await supabase
+      .from('user_saved_vouchers' as any)
+      .delete()
+      .eq('id', savedId);
+
+    if (!error) {
+      toast.success("Đã xóa voucher");
+      setSavedVouchers(prev => prev.filter(v => v.id !== savedId));
+    }
+  };
+
+  // Hàm điều hướng chung
+  const handleLocationClick = (location: Location) => {
+    if (onNavigate) {
       onNavigate(location);
-      onClose();
+    } else if (onSelectLocation) {
+      onSelectLocation(location);
     }
+    onClose();
+  };
+
+  const handleUseVoucher = (v: any) => {
+    // Tạo object Location giả để map bay tới đó
+    const locationData: Location = {
+      id: v.voucher.store.id,
+      nameVi: v.voucher.store.name_vi,
+      name: v.voucher.store.name_vi,
+      lat: v.voucher.store.lat,
+      lng: v.voucher.store.lng,
+      type: 'food',
+      address: v.voucher.store.address_vi,
+      description: `Mã giảm giá: ${v.voucher.code} - ${v.voucher.title_vi}`,
+      image: v.voucher.store.image_url || 'https://placehold.co/600x400?text=Store',
+    };
+    
+    handleLocationClick(locationData);
+    toast.success(`Đang di chuyển đến: ${locationData.nameVi}`);
   };
 
   if (!isOpen) return null;
 
   return (
-    <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[90] bg-black/40 backdrop-blur-sm"
-        onClick={onClose}
-      >
-        <motion.div
-          initial={{ x: '100%' }}
-          animate={{ x: 0 }}
-          exit={{ x: '100%' }}
-          transition={{ type: 'spring', damping: 30, stiffness: 400 }}
-          className="absolute right-0 top-0 bottom-0 w-full max-w-sm bg-background shadow-2xl"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center">
-                <Heart className="w-5 h-5 text-red-500 fill-red-500" />
-              </div>
-              <h2 className="text-lg font-bold">{t.title}</h2>
-            </div>
-            <button
-              onClick={onClose}
-              className="w-10 h-10 rounded-full bg-muted flex items-center justify-center"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
+    <div className="fixed inset-y-0 left-0 z-50 w-full md:w-[400px] bg-white shadow-2xl transform transition-transform duration-300 ease-in-out flex flex-col border-r">
+      {/* Header */}
+      <div className="flex items-center justify-between p-4 border-b bg-gray-50">
+        <h2 className="text-lg font-bold flex items-center gap-2">
+          <Heart className="w-5 h-5 text-red-500" /> Đã lưu
+        </h2>
+        <Button variant="ghost" size="icon" onClick={onClose}>
+          <X className="w-5 h-5" />
+        </Button>
+      </div>
 
-          {/* Content */}
-          <div className="p-4 overflow-y-auto" style={{ height: 'calc(100vh - 80px)' }}>
-            {!isAuthenticated ? (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="flex flex-col items-center justify-center text-center py-12"
-              >
-                <div className="w-20 h-20 rounded-full bg-muted flex items-center justify-center mb-4">
-                  <LogIn className="w-10 h-10 text-muted-foreground" />
-                </div>
-                <h3 className="font-semibold text-lg mb-2">{t.loginRequired}</h3>
-                <p className="text-muted-foreground text-sm mb-6 px-4">{t.loginDesc}</p>
-                <Button onClick={onLoginClick} className="rounded-2xl px-8">
-                  {t.login}
-                </Button>
-              </motion.div>
-            ) : favorites.length === 0 ? (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="flex flex-col items-center justify-center text-center py-12"
-              >
-                <div className="w-20 h-20 rounded-full bg-muted flex items-center justify-center mb-4">
-                  <Heart className="w-10 h-10 text-muted-foreground" />
-                </div>
-                <h3 className="font-semibold text-lg mb-2">{t.empty}</h3>
-                <p className="text-muted-foreground text-sm">{t.emptyDesc}</p>
-              </motion.div>
-            ) : (
-              <div className="space-y-3">
-                {favorites.map((fav, index) => (
-                  <motion.div
-                    key={fav.id}
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                    onClick={() => handleLocationClick(fav)}
-                    className="flex items-center gap-3 p-4 bg-muted/50 rounded-2xl cursor-pointer hover:bg-muted transition-colors group"
+      {/* Content */}
+      <div className="flex-1 overflow-hidden p-4 bg-white">
+        {!session ? (
+          <div className="h-full flex flex-col items-center justify-center text-center space-y-4">
+            <Heart className="w-12 h-12 text-gray-200" />
+            <p className="text-gray-500">Vui lòng đăng nhập để xem danh sách đã lưu.</p>
+            <Button onClick={onLoginClick}>Đăng nhập ngay</Button>
+          </div>
+        ) : (
+          <Tabs defaultValue="locations" className="w-full h-full flex flex-col" onValueChange={setActiveTab}>
+            
+            <TabsList className="grid w-full grid-cols-2 mb-4 bg-gray-100 p-1">
+              <TabsTrigger value="locations" className="flex items-center gap-2">
+                <Heart className="w-4 h-4" /> Địa điểm
+              </TabsTrigger>
+              <TabsTrigger value="vouchers" className="flex items-center gap-2">
+                <Ticket className="w-4 h-4" /> Voucher ({savedVouchers.length})
+              </TabsTrigger>
+            </TabsList>
+
+            {/* TAB 1: ĐỊA ĐIỂM */}
+            <TabsContent value="locations" className="flex-1 overflow-y-auto pr-2 space-y-3">
+              {loading ? <div className="text-center py-4 text-gray-400">Đang tải...</div> : 
+               favorites.length === 0 ? <p className="text-center text-gray-400 py-10">Chưa lưu địa điểm nào.</p> : (
+                favorites.map((loc) => (
+                  <div 
+                    key={loc.id} 
+                    className="flex items-center gap-3 p-3 bg-white border rounded-xl hover:shadow-md hover:border-primary cursor-pointer transition-all group" 
+                    onClick={() => handleLocationClick(loc)}
                   >
-                    <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-                      <MapPin className="w-6 h-6 text-primary" />
+                    <div className="bg-red-50 p-2.5 rounded-full text-red-500 flex-shrink-0 group-hover:scale-110 transition-transform">
+                      <Heart className="w-5 h-5 fill-current" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-semibold truncate">
-                        {language === 'en' && fav.location_name_en
-                          ? fav.location_name_en
-                          : fav.location_name}
-                      </p>
-                      <p className="text-sm text-muted-foreground capitalize">
-                        {fav.location_type}
-                      </p>
+                      <h4 className="font-semibold text-sm truncate text-gray-900">{loc.nameVi}</h4>
+                      <p className="text-xs text-gray-500 truncate">{loc.address}</p>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={(e) => handleNavigateClick(e, fav)}
-                        className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center hover:bg-primary hover:text-primary-foreground transition-colors"
-                      >
-                        <Navigation className="w-5 h-5" />
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeFavorite(fav.location_id);
-                        }}
-                        className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-red-500 hover:bg-red-500 hover:text-white transition-colors opacity-0 group-hover:opacity-100"
-                      >
-                        <Trash2 className="w-5 h-5" />
-                      </button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-300 hover:text-red-600 hover:bg-red-50" onClick={(e) => { e.stopPropagation(); removeFavorite(loc.id); }}>
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ))
+              )}
+            </TabsContent>
+
+            {/* TAB 2: VOUCHER */}
+            <TabsContent value="vouchers" className="flex-1 overflow-y-auto pr-2 space-y-3">
+               {loading ? <div className="text-center py-4 text-gray-400">Đang tải...</div> : 
+                savedVouchers.length === 0 ? (
+                  <div className="text-center py-10 space-y-2">
+                    <Ticket className="w-12 h-12 text-gray-200 mx-auto" />
+                    <p className="text-gray-400">Ví voucher trống.</p>
+                  </div>
+                ) : (
+                savedVouchers.map((item) => (
+                  <div 
+                    key={item.id} 
+                    // --- ĐÂY LÀ CHỖ SỬA QUAN TRỌNG ---
+                    className="relative bg-white border border-dashed border-primary/40 rounded-xl overflow-hidden hover:shadow-lg transition-all group cursor-pointer hover:bg-primary/5"
+                    onClick={() => handleUseVoucher(item)} // Ấn vào thẻ -> Mở quán
+                    // ---------------------------------
+                  >
+                    <div className="flex items-stretch">
+                      {/* Cột trái: Giá trị voucher */}
+                      <div className="bg-primary/10 w-24 flex flex-col items-center justify-center p-2 border-r border-dashed border-primary/40">
+                        <span className="text-2xl font-black text-primary leading-none">
+                          {item.voucher.discount_value}<span className="text-sm font-bold">{item.voucher.discount_type === 'percent' ? '%' : 'k'}</span>
+                        </span>
+                        <span className="text-[10px] text-primary/70 font-bold uppercase mt-1">Giảm giá</span>
+                      </div>
+                      
+                      {/* Cột phải: Thông tin quán */}
+                      <div className="flex-1 p-3 min-w-0 flex flex-col justify-center">
+                        <h4 className="font-bold text-sm truncate text-gray-900 mb-1">{item.voucher.store.name_vi}</h4>
+                        <div className="flex items-center justify-between">
+                          <code className="bg-white border px-2 py-0.5 rounded text-xs font-mono font-bold text-gray-600 shadow-sm">
+                            {item.voucher.code}
+                          </code>
+                          <span className="text-xs text-primary font-medium flex items-center group-hover:translate-x-1 transition-transform">
+                            Dùng ngay <ExternalLink className="w-3 h-3 ml-1" />
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                  </motion.div>
-                ))}
-              </div>
-            )}
-          </div>
-        </motion.div>
-      </motion.div>
-    </AnimatePresence>
+                    
+                    {/* Nút xóa (chặn click xuyên qua) */}
+                    <button 
+                      onClick={(e) => removeVoucher(e, item.id)} 
+                      className="absolute top-1 right-1 p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                      title="Xóa voucher"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))
+              )}
+            </TabsContent>
+
+          </Tabs>
+        )}
+      </div>
+    </div>
   );
 };

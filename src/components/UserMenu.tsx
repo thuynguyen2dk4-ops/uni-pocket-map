@@ -1,155 +1,106 @@
-import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { User, LogOut, Heart, LogIn, Store, Shield } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/hooks/useAuth';
-import { useLanguage } from '@/i18n/LanguageContext';
-import { supabase } from '@/integrations/supabase/client';
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { User, LogOut, MapPin, Store, ShieldCheck } from "lucide-react"; // Đã thêm icon ShieldCheck cho Admin
+import { useAuth } from "@/hooks/useAuth";
+import { useLanguage } from "@/i18n/LanguageContext";
+import { useNavigate } from "react-router-dom"; // <--- 1. Import cái này
 
 interface UserMenuProps {
   onLoginClick: () => void;
   onFavoritesClick: () => void;
-  onStoresClick?: () => void;
+  onStoresClick: () => void;
 }
 
 export const UserMenu = ({ onLoginClick, onFavoritesClick, onStoresClick }: UserMenuProps) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const { user, signOut, isAuthenticated } = useAuth();
+  const { session, signOut } = useAuth();
   const { language } = useLanguage();
-  const navigate = useNavigate();
+  const navigate = useNavigate(); // <--- 2. Khai báo hook chuyển trang
 
-  const texts = {
-    vi: {
-      login: 'Đăng nhập',
-      favorites: 'Yêu thích',
-      stores: 'Cửa hàng của tôi',
-      admin: 'Quản trị',
-      logout: 'Đăng xuất',
-    },
-    en: {
-      login: 'Login',
-      favorites: 'Favorites',
-      stores: 'My Stores',
-      admin: 'Admin',
-      logout: 'Logout',
-    },
-  };
-
-  const t = texts[language];
-
-  // Check admin status
-  useEffect(() => {
-    const checkAdmin = async () => {
-      if (!user) {
-        setIsAdmin(false);
-        return;
-      }
-      
-      const { data } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', user.id)
-        .eq('role', 'admin')
-        .maybeSingle();
-      
-      setIsAdmin(!!data);
-    };
-    
-    checkAdmin();
-  }, [user]);
-
-  const handleLogout = async () => {
-    await signOut();
-    setIsOpen(false);
-  };
-
-  if (!isAuthenticated) {
+  // Nếu chưa đăng nhập
+  if (!session) {
     return (
-      <button
+      <Button 
         onClick={onLoginClick}
-        className="w-9 h-9 rounded-xl bg-muted flex items-center justify-center hover:bg-muted/80 transition-colors"
+        variant="default" 
+        className="gap-2 shadow-lg rounded-xl font-semibold bg-white text-black hover:bg-gray-100"
       >
-        <LogIn className="w-5 h-5 text-muted-foreground" />
-      </button>
+        <User className="w-4 h-4" />
+        {language === 'vi' ? 'Đăng nhập' : 'Login'}
+      </Button>
     );
   }
 
-  return (
-    <div className="relative">
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center text-primary-foreground"
-      >
-        <User className="w-5 h-5" />
-      </button>
+  // Nếu đã đăng nhập
+  const email = session.user.email;
+  const firstLetter = email ? email[0].toUpperCase() : 'U';
 
-      <AnimatePresence>
-        {isOpen && (
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="secondary" className="relative w-10 h-10 rounded-full p-0 overflow-hidden shadow-lg border-2 border-white cursor-pointer">
+          <Avatar className="h-full w-full">
+            <AvatarImage src={session.user.user_metadata.avatar_url} />
+            <AvatarFallback className="bg-green-600 text-white font-bold">
+              {firstLetter}
+            </AvatarFallback>
+          </Avatar>
+        </Button>
+      </DropdownMenuTrigger>
+      
+      <DropdownMenuContent align="end" className="w-56 rounded-xl p-2 mt-2 bg-white shadow-xl border border-gray-100">
+        <DropdownMenuLabel>
+          <div className="flex flex-col space-y-1">
+            <p className="text-sm font-medium leading-none">
+              {language === 'vi' ? 'Tài khoản' : 'Account'}
+            </p>
+            <p className="text-xs leading-none text-muted-foreground truncate font-normal text-gray-500">
+              {email}
+            </p>
+          </div>
+        </DropdownMenuLabel>
+        
+        <DropdownMenuSeparator className="my-1 bg-gray-100" />
+
+        {/* --- 3. ĐOẠN CODE BẠN CẦN THÊM NẰM Ở ĐÂY --- */}
+        {email === 'admin@gmail.com' && (
           <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-40"
-              onClick={() => setIsOpen(false)}
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: -10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: -10 }}
-              className="absolute right-0 top-12 z-50 w-56 bg-background rounded-2xl shadow-xl border overflow-hidden"
+            <DropdownMenuItem 
+              onClick={() => navigate('/admin')} 
+              className="cursor-pointer font-bold text-blue-600 bg-blue-50 focus:bg-blue-100 rounded-lg p-2 mb-1"
             >
-              <div className="p-3 border-b bg-muted/30">
-                <p className="text-sm font-medium truncate">{user?.email}</p>
-              </div>
-              <div className="p-2">
-                <button
-                  onClick={() => {
-                    onFavoritesClick();
-                    setIsOpen(false);
-                  }}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-muted transition-colors"
-                >
-                  <Heart className="w-5 h-5 text-destructive" />
-                  <span className="font-medium">{t.favorites}</span>
-                </button>
-                {onStoresClick && (
-                  <button
-                    onClick={() => {
-                      onStoresClick();
-                      setIsOpen(false);
-                    }}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-muted transition-colors"
-                  >
-                    <Store className="w-5 h-5 text-primary" />
-                    <span className="font-medium">{t.stores}</span>
-                  </button>
-                )}
-                {isAdmin && (
-                  <button
-                    onClick={() => {
-                      navigate('/admin');
-                      setIsOpen(false);
-                    }}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-muted transition-colors"
-                  >
-                    <Shield className="w-5 h-5 text-primary" />
-                    <span className="font-medium">{t.admin}</span>
-                  </button>
-                )}
-                <button
-                  onClick={handleLogout}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-muted transition-colors text-destructive"
-                >
-                  <LogOut className="w-5 h-5" />
-                  <span className="font-medium">{t.logout}</span>
-                </button>
-              </div>
-            </motion.div>
+              <ShieldCheck className="mr-2 h-4 w-4" /> {/* Dùng icon Khiên cho khác biệt */}
+              <span>Trang Quản Trị (Admin)</span>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator className="my-1 bg-gray-100" />
           </>
         )}
-      </AnimatePresence>
-    </div>
+        {/* ------------------------------------------- */}
+        
+        <DropdownMenuItem onClick={onFavoritesClick} className="cursor-pointer rounded-lg hover:bg-gray-50 p-2">
+          <MapPin className="mr-2 h-4 w-4 text-green-600" />
+          <span>{language === 'vi' ? 'Địa điểm yêu thích' : 'Favorite Locations'}</span>
+        </DropdownMenuItem>
+        
+        <DropdownMenuItem onClick={onStoresClick} className="cursor-pointer rounded-lg hover:bg-gray-50 p-2">
+          <Store className="mr-2 h-4 w-4 text-orange-500" />
+          <span>{language === 'vi' ? 'Cửa hàng của tôi' : 'My Stores'}</span>
+        </DropdownMenuItem>
+        
+        <DropdownMenuSeparator className="my-1 bg-gray-100" />
+        
+        <DropdownMenuItem onClick={() => signOut()} className="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50 rounded-lg p-2">
+          <LogOut className="mr-2 h-4 w-4" />
+          <span>{language === 'vi' ? 'Đăng xuất' : 'Log out'}</span>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 };

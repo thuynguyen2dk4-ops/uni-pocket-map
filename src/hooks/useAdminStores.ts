@@ -26,7 +26,11 @@ export interface AdminStore {
 }
 
 export const useAdminStores = () => {
-  const { user } = useAuth();
+  // --- SỬA Ở ĐÂY: Dùng session thay vì user ---
+  const { session } = useAuth();
+  const user = session?.user;
+  // -------------------------------------------
+
   const [stores, setStores] = useState<AdminStore[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -35,20 +39,26 @@ export const useAdminStores = () => {
   // Check if user is admin
   const checkAdminStatus = useCallback(async () => {
     if (!user) {
+      console.log("Chưa có user session"); // <--- Log
       setIsAdmin(false);
       return false;
     }
 
     try {
+      console.log("Đang kiểm tra quyền cho user:", user.email); // <--- Log
+
       const { data, error } = await supabase
         .from('user_roles')
-        .select('role')
+        .select('*') // Lấy hết để xem có gì
         .eq('user_id', user.id)
-        .eq('role', 'admin')
         .maybeSingle();
 
+      console.log("Kết quả từ DB:", data, "Lỗi:", error); // <--- Log QUAN TRỌNG
+
       if (error) throw error;
-      const hasAdminRole = !!data;
+      
+      // Kiểm tra xem role có phải là admin không
+      const hasAdminRole = data?.role === 'admin';
       setIsAdmin(hasAdminRole);
       return hasAdminRole;
     } catch (err) {
@@ -117,13 +127,23 @@ export const useAdminStores = () => {
 
   const updateStoreStatus = async (storeId: string, status: 'approved' | 'rejected') => {
     try {
-      const { error } = await supabase
-        .from('user_stores')
-        .update({ status })
-        .eq('id', storeId);
+      // ...
+      console.log("Đang gọi hàm RPC update_store_status...");
 
-      if (error) throw error;
+      // --- SỬA Ở ĐÂY: Thêm 'as any' vào sau tên hàm ---
+      const { error } = await supabase.rpc('update_store_status' as any, { 
+        target_store_id: storeId,
+        new_status: status
+      });
+      // -----------------------------------------------
+
+      if (error) {
+// ...
+        console.error("Lỗi Supabase:", error);
+        throw error;
+      }
       
+      // Cập nhật giao diện (Giữ nguyên)
       setStores(prev => prev.map(s => 
         s.id === storeId ? { ...s, status } : s
       ));
@@ -136,7 +156,6 @@ export const useAdminStores = () => {
       return false;
     }
   };
-
   const deleteStore = async (storeId: string) => {
     try {
       const { error } = await supabase

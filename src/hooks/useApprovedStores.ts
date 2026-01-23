@@ -1,30 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { Location, LocationType } from '@/data/locations';
 
-export interface ApprovedStore {
-  id: string;
-  name_vi: string;
-  name_en: string | null;
-  description_vi: string | null;
-  description_en: string | null;
-  address_vi: string;
-  address_en: string | null;
-  phone: string | null;
-  category: string;
-  lat: number;
-  lng: number;
-  open_hours_vi: string | null;
-  open_hours_en: string | null;
-  image_url: string | null;
-}
-
-export interface StoreVoucherInfo {
-  store_id: string;
-  title_vi: string;
-  title_en: string | null;
-}
-
+// Helper chuyển đổi category sang LocationType
 const categoryToLocationType = (category: string): LocationType => {
   switch (category) {
     case 'food':
@@ -39,80 +17,66 @@ const categoryToLocationType = (category: string): LocationType => {
 };
 
 export const useApprovedStores = () => {
-  const [stores, setStores] = useState<ApprovedStore[]>([]);
-  const [storeVouchers, setStoreVouchers] = useState<Map<string, StoreVoucherInfo>>(new Map());
-  const [isLoading, setIsLoading] = useState(true);
-
-  const fetchApprovedStores = useCallback(async () => {
-    try {
-      // Fetch approved stores
+  // Sử dụng useQuery để lấy dữ liệu, cache và tự động cập nhật
+  const { data: storesAsLocations = [], isLoading, refetch } = useQuery({
+    queryKey: ['approved_stores'],
+    queryFn: async () => {
+      // 1. Lấy danh sách cửa hàng đã được duyệt (status = 'approved')
       const { data: storesData, error: storesError } = await supabase
         .from('user_stores')
         .select('*')
         .eq('status', 'approved');
 
-      if (storesError) throw storesError;
-      setStores(storesData || []);
-
-      // Fetch active vouchers for these stores
-      if (storesData && storesData.length > 0) {
-        const storeIds = storesData.map(s => s.id);
-        const { data: vouchersData, error: vouchersError } = await supabase
-          .from('store_vouchers')
-          .select('store_id, title_vi, title_en')
-          .in('store_id', storeIds)
-          .eq('is_active', true);
-
-        if (!vouchersError && vouchersData) {
-          const voucherMap = new Map<string, StoreVoucherInfo>();
-          vouchersData.forEach(v => {
-            // Only keep first voucher per store for display
-            if (!voucherMap.has(v.store_id)) {
-              voucherMap.set(v.store_id, v);
-            }
-          });
-          setStoreVouchers(voucherMap);
-        }
+      if (storesError) {
+        console.error("Error fetching stores:", storesError);
+        throw storesError;
       }
-    } catch (err) {
-      console.error('Error fetching approved stores:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+      
+      if (!storesData || storesData.length === 0) return [];
 
-  useEffect(() => {
-    fetchApprovedStores();
-  }, [fetchApprovedStores]);
+      // 2. Lấy voucher đang hoạt động của các store này
+      const storeIds = storesData.map(s => s.id);
+      const { data: vouchersData } = await supabase
+        .from('store_vouchers')
+        .select('store_id, title_vi')
+        .in('store_id', storeIds)
+        .eq('is_active', true);
 
-  // Convert stores to Location format for map display
-  const storesAsLocations: Location[] = stores.map(store => {
-    const voucher = storeVouchers.get(store.id);
-    return {
-      id: `user-store-${store.id}`,
-      name: store.name_en || store.name_vi,
-      nameVi: store.name_vi,
-      type: categoryToLocationType(store.category),
-      lat: store.lat,
-      lng: store.lng,
-      description: store.description_vi || '',
-      descriptionEn: store.description_en || undefined,
-      address: store.address_vi,
-      addressEn: store.address_en || undefined,
-      image: store.image_url || 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=800',
-      openHours: store.open_hours_vi || undefined,
-      openHoursEn: store.open_hours_en || undefined,
-      phone: store.phone || undefined,
-      isSponsored: false,
-      hasVoucher: !!voucher,
-      voucherText: voucher?.title_vi,
-    };
+      // Tạo Map để tra cứu voucher nhanh hơn
+      const voucherMap = new Map();
+      if (vouchersData) {
+        vouchersData.forEach((v: any) => {
+          // Chỉ lấy voucher đầu tiên tìm thấy cho mỗi store
+          if (!voucherMap.has(v.store_id)) voucherMap.set(v.store_id, v);
+        });
+      }
+
+      // 3. Chuyển đổi dữ liệu từ DB sang format Location để hiển thị trên Map
+      return storesData.map((store) => {
+        const voucher = voucherMap.get(store.id);
+        return {
+          id: `user-store-${store.id}`, // Thêm tiền tố để tránh trùng ID với địa điểm tĩnh
+          name: store.name_en || store.name_vi, // Ưu tiên tên tiếng Anh nếu có (hoặc tùy logic ngôn ngữ của bạn)
+          nameVi: store.name_vi,
+          type: categoryToLocationType(store.category),
+          lat: store.lat,
+          lng: store.lng,
+          description: store.description_vi || '',
+          address: store.address_vi,
+          image: store.image_url || 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=800',
+          isSponsored: false,
+          hasVoucher: !!voucher,
+          voucherText: voucher?.title_vi,
+        } as Location;
+      });
+    },
+    // Cache trong 1 phút, sau đó sẽ fetch lại ngầm
+    staleTime: 1000 * 60, 
   });
 
   return {
-    stores,
     storesAsLocations,
     isLoading,
-    refetch: fetchApprovedStores,
+    refetch,
   };
 };

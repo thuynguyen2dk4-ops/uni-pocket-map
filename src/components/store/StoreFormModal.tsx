@@ -1,352 +1,422 @@
-import { useState, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { X, MapPin, Store, Clock, Phone, Image as ImageIcon, Navigation } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useLanguage } from '@/i18n/LanguageContext';
-import { UserStore, useUserStores } from '@/hooks/useUserStores';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { UserStore } from '@/hooks/useUserStores';
+import { MapPin, Loader2, ImagePlus, CheckCircle2, X, Trash2, UploadCloud, Lock, Crown } from 'lucide-react';
+import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 import { LocationPickerModal } from './LocationPickerModal';
+
+interface StoreFormState {
+  name_vi: string;
+  address_vi: string;
+  phone: string;
+  description_vi: string;
+  category: string;
+  image_url: string;
+  lat: number;
+  lng: number;
+}
 
 interface StoreFormModalProps {
   isOpen: boolean;
   onClose: () => void;
-  store?: UserStore | null;
-  onSuccess?: () => void;
+  onSubmit: (data: any) => Promise<void>;
+  initialData?: any; // Đổi thành any để chấp nhận cả dữ liệu từ file
+  isSubmitting?: boolean;
+  customStoreId?: string; // <--- ID TÙY CHỈNH (Dùng cho Admin sửa địa điểm tĩnh)
 }
 
-const CATEGORIES = [
-  { value: 'food', labelVi: 'Ăn uống', labelEn: 'Food & Drink' },
-  { value: 'cafe', labelVi: 'Cà phê', labelEn: 'Café' },
-  { value: 'service', labelVi: 'Dịch vụ', labelEn: 'Service' },
-  { value: 'shop', labelVi: 'Cửa hàng', labelEn: 'Shop' },
-  { value: 'other', labelVi: 'Khác', labelEn: 'Other' },
-];
+export const StoreFormModal = ({ 
+  isOpen, 
+  onClose, 
+  onSubmit, 
+  initialData, 
+  isSubmitting,
+  customStoreId // <--- QUAN TRỌNG: Phải lấy biến này ra ở đây mới dùng được
+}: StoreFormModalProps) => {
+  const { session } = useAuth();
+  
+  // Kiểm tra Premium
+  const isPremium = (initialData as any)?.is_premium === true;
+  // Nếu là Admin sửa (có customStoreId) thì mặc định coi như Premium để up ảnh thoải mái
+  const canUploadGallery = isPremium || !!customStoreId;
 
-export const StoreFormModal = ({ isOpen, onClose, store, onSuccess }: StoreFormModalProps) => {
-  const { language } = useLanguage();
-  const { createStore, updateStore, uploadImage } = useUserStores();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showLocationPicker, setShowLocationPicker] = useState(false);
-  const [imagePreview, setImagePreview] = useState<string | null>(store?.image_url || null);
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  
-  const [formData, setFormData] = useState({
-    name_vi: store?.name_vi || '',
-    name_en: store?.name_en || '',
-    description_vi: store?.description_vi || '',
-    description_en: store?.description_en || '',
-    address_vi: store?.address_vi || '',
-    address_en: store?.address_en || '',
-    phone: store?.phone || '',
-    category: store?.category || 'food',
-    lat: store?.lat || 21.0380,
-    lng: store?.lng || 105.7828,
-    open_hours_vi: store?.open_hours_vi || '',
-    open_hours_en: store?.open_hours_en || '',
+  // State Form
+  const [formData, setFormData] = useState<StoreFormState>({
+    name_vi: '', address_vi: '', phone: '',
+    description_vi: '', category: 'cafe',
+    image_url: '', lat: 21.0285, lng: 105.8542
   });
+  
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string>('');
+  
+  const [galleryFiles, setGalleryFiles] = useState<File[]>([]);
+  const [galleryPreviews, setGalleryPreviews] = useState<string[]>([]);
+  const [existingGallery, setExistingGallery] = useState<any[]>([]);
+  
+  const [showMapPicker, setShowMapPicker] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  useEffect(() => {
+    if (isOpen) {
+      if (initialData) {
+        setFormData({
+          name_vi: initialData.name_vi || initialData.nameVi || '',
+          address_vi: initialData.address_vi || initialData.address || '',
+          phone: initialData.phone || '',
+          description_vi: initialData.description_vi || initialData.description || '',
+          category: initialData.category || initialData.type || 'cafe',
+          image_url: initialData.image_url || initialData.image || '',
+          lat: initialData.lat || 21.0285,
+          lng: initialData.lng || 105.8542
+        });
+        setAvatarPreview(initialData.image_url || initialData.image || '');
+        setAvatarFile(null);
+        
+        // Nếu có ID (dù là DB hay File), thử load gallery
+        const targetId = customStoreId || initialData.id;
+        if(targetId) fetchExistingGallery(targetId);
+      } else {
+        setFormData({
+            name_vi: '', address_vi: '', phone: '',
+            description_vi: '', category: 'cafe',
+            image_url: '', lat: 21.0285, lng: 105.8542
+        });
+        setAvatarPreview('');
+        setAvatarFile(null);
+        setGalleryFiles([]);
+        setGalleryPreviews([]);
+        setExistingGallery([]);
+      }
+    }
+  }, [isOpen, initialData, customStoreId]);
+
+  const fetchExistingGallery = async (storeId: string) => {
+    // Ép kiểu ID về String để so sánh với DB (vì cột store_id trong DB giờ là TEXT)
+    const cleanId = String(storeId).replace('user-store-', '');
+    
+    const { data } = await (supabase as any)
+      .from('store_gallery')
+      .select('*')
+      .eq('store_id', cleanId);
+    if (data) setExistingGallery(data);
+  };
+
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      setImageFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+      setAvatarFile(file);
+      setAvatarPreview(URL.createObjectURL(file));
     }
+  };
+
+  const handleGalleryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!canUploadGallery) {
+        toast.error("Chức năng chỉ dành cho Cửa hàng VIP hoặc Admin!");
+        return;
+    }
+
+    const files = e.target.files;
+    if (files) {
+      const newFiles = Array.from(files);
+      const total = existingGallery.length + galleryFiles.length + newFiles.length;
+      if (total > 10) {
+        toast.error("Tối đa 10 ảnh trong thư viện.");
+        return;
+      }
+      setGalleryFiles(prev => [...prev, ...newFiles]);
+      const newUrls = newFiles.map(f => URL.createObjectURL(f));
+      setGalleryPreviews(prev => [...prev, ...newUrls]);
+    }
+  };
+
+  const removeNewImage = (idx: number) => {
+    setGalleryFiles(prev => prev.filter((_, i) => i !== idx));
+    setGalleryPreviews(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const removeExistingImage = async (imageId: string) => {
+    const { error } = await (supabase as any).from('store_gallery').delete().eq('id', imageId);
+    if (!error) {
+        setExistingGallery(prev => prev.filter(img => img.id !== imageId));
+        toast.success("Đã xóa ảnh.");
+    } else {
+        toast.error("Lỗi xóa ảnh.");
+    }
+  };
+
+  const handleLocationConfirm = (lat: number, lng: number, address?: string) => {
+    setFormData(prev => ({ ...prev, lat, lng, address_vi: address || prev.address_vi }));
+    toast.success("Đã cập nhật vị trí!");
+  };
+
+  const handleUpgradeClick = () => {
+    toast.info("Tính năng thanh toán đang được phát triển!");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitting(true);
+    setIsUploading(true);
 
     try {
-      let imageUrl = store?.image_url || null;
-      
-      if (imageFile) {
-        const uploadedUrl = await uploadImage(imageFile, 'stores');
-        if (uploadedUrl) {
-          imageUrl = uploadedUrl;
+        // 1. UPLOAD AVATAR
+        let finalImageUrl = formData.image_url;
+        if (avatarFile) {
+            const fileExt = avatarFile.name.split('.').pop();
+            const fileName = `avatars/${Date.now()}_avatar.${fileExt}`;
+            const { error: uploadError } = await (supabase.storage as any)
+                .from('avatars').upload(fileName, avatarFile, { upsert: true });
+            if (!uploadError) {
+                const { data } = (supabase.storage as any).from('avatars').getPublicUrl(fileName);
+                finalImageUrl = data.publicUrl;
+            }
         }
-      }
 
-      const storeData = {
-        ...formData,
-        image_url: imageUrl,
-      };
+        // 2. XÁC ĐỊNH ID CẦN LƯU
+        // - Nếu Admin sửa địa điểm tĩnh: customStoreId sẽ có giá trị (vd: "building-a1")
+        // - Nếu User sửa cửa hàng của họ: initialData.id có giá trị
+        // - Nếu Tạo mới: Cả 2 đều null
+        let targetId = customStoreId || initialData?.id;
+        
+        // 3. CHUẨN BỊ DỮ LIỆU ĐỂ LƯU
+        const storeDataToSave = {
+            id: targetId, // Nếu null thì Supabase tự sinh UUID, nếu có text thì nó dùng text đó
+            user_id: session?.user?.id,
+            name_vi: formData.name_vi,
+            address_vi: formData.address_vi,
+            phone: formData.phone,
+            description_vi: formData.description_vi,
+            category: formData.category,
+            image_url: finalImageUrl,
+            lat: formData.lat,
+            lng: formData.lng,
+            // Nếu là Admin sửa (có customStoreId) -> Set luôn là Premium
+            is_premium: customStoreId ? true : (initialData?.is_premium || false)
+        };
 
-      if (store) {
-        await updateStore(store.id, storeData);
-      } else {
-        await createStore(storeData);
-      }
+        // 4. LƯU VÀO DB (UPSERT: Có rồi thì sửa, chưa có thì thêm)
+        const { data: savedStore, error: saveError } = await (supabase as any)
+            .from('user_stores')
+            .upsert(storeDataToSave)
+            .select()
+            .single();
 
-      onSuccess?.();
-      onClose();
-    } catch (err) {
-      console.error('Error saving store:', err);
+        if (saveError) throw saveError;
+
+        // Cập nhật lại targetId nếu vừa tạo mới (trường hợp tạo cửa hàng mới)
+        if (!targetId && savedStore) targetId = savedStore.id;
+
+        // 5. UPLOAD GALLERY
+        if (targetId && galleryFiles.length > 0) {
+            if (canUploadGallery) {
+                let count = 0;
+                for (const file of galleryFiles) {
+                    const fExt = file.name.split('.').pop();
+                    const fName = `${targetId}/${Date.now()}_${Math.random()}.${fExt}`;
+                    const { error: upErr } = await (supabase.storage as any).from('avatars').upload(fName, file);
+                    if (!upErr) {
+                        const { data } = (supabase.storage as any).from('avatars').getPublicUrl(fName);
+                        await (supabase as any).from('store_gallery').insert({ store_id: targetId, image_url: data.publicUrl });
+                        count++;
+                    }
+                }
+                if (count > 0) toast.success(`Đã thêm ${count} ảnh vào thư viện!`);
+            }
+        }
+
+        toast.success(customStoreId ? "Đã cập nhật địa điểm hệ thống!" : "Đã lưu cửa hàng!");
+        
+        // Đóng modal và gọi callback
+        if (onSubmit) await onSubmit(storeDataToSave);
+        onClose();
+
+    } catch (error: any) {
+        console.error(error);
+        toast.error("Có lỗi xảy ra: " + error.message);
     } finally {
-      setIsSubmitting(false);
+        setIsUploading(false);
     }
   };
 
-  if (!isOpen) return null;
-
   return (
-    <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
-        onClick={onClose}
-      >
-        <motion.div
-          initial={{ scale: 0.95, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0.95, opacity: 0 }}
-          className="bg-background rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
-          onClick={e => e.stopPropagation()}
-        >
-          {/* Header */}
-          <div className="sticky top-0 bg-background border-b px-4 py-3 flex items-center justify-between">
-            <h2 className="text-lg font-semibold flex items-center gap-2">
-              <Store className="w-5 h-5 text-primary" />
-              {store ? (language === 'vi' ? 'Chỉnh sửa cửa hàng' : 'Edit Store') : (language === 'vi' ? 'Thêm cửa hàng' : 'Add Store')}
-            </h2>
-            <button onClick={onClose} className="p-2 hover:bg-muted rounded-full">
-              <X className="w-5 h-5" />
-            </button>
-          </div>
+    <>
+      <Dialog open={isOpen} onOpenChange={onClose}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto bg-white p-0 gap-0 rounded-xl z-[100]">
+          
+          <DialogHeader className="p-6 border-b sticky top-0 bg-white z-20 flex flex-row items-center justify-between">
+            <DialogTitle className="text-xl font-bold">
+              {customStoreId ? 'Chỉnh sửa Địa điểm Hệ thống' : (initialData ? 'Chỉnh sửa cửa hàng' : 'Thêm cửa hàng mới')}
+            </DialogTitle>
+            
+            {canUploadGallery ? (
+                 <span className="flex items-center gap-1 text-xs font-bold bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full border border-yellow-200">
+                    <Crown className="w-3 h-3 fill-yellow-500 text-yellow-500"/> {customStoreId ? 'ADMIN MODE' : 'PREMIUM STORE'}
+                 </span>
+            ) : (
+                 <span className="text-xs font-bold bg-gray-100 text-gray-500 px-2 py-1 rounded-full">Gói Miễn Phí</span>
+            )}
+          </DialogHeader>
 
-          <form onSubmit={handleSubmit} className="p-4 space-y-4">
-            {/* Image upload */}
-            <div>
-              <Label>{language === 'vi' ? 'Ảnh cửa hàng' : 'Store Image'}</Label>
-              <div 
-                onClick={() => fileInputRef.current?.click()}
-                className="mt-2 border-2 border-dashed rounded-xl p-4 text-center cursor-pointer hover:border-primary transition-colors"
-              >
-                {imagePreview ? (
-                  <img src={imagePreview} alt="Preview" className="w-full h-40 object-cover rounded-lg" />
-                ) : (
-                  <div className="py-8 text-muted-foreground">
-                    <ImageIcon className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                    <p className="text-sm">{language === 'vi' ? 'Nhấn để tải ảnh lên' : 'Click to upload image'}</p>
-                  </div>
-                )}
-              </div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleImageChange}
-                className="hidden"
-              />
-            </div>
-
-            {/* Name */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label htmlFor="name_vi">Tên (Tiếng Việt) *</Label>
-                <Input
-                  id="name_vi"
-                  value={formData.name_vi}
-                  onChange={e => setFormData(prev => ({ ...prev, name_vi: e.target.value }))}
-                  placeholder="Tên cửa hàng"
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor="name_en">Name (English)</Label>
-                <Input
-                  id="name_en"
-                  value={formData.name_en}
-                  onChange={e => setFormData(prev => ({ ...prev, name_en: e.target.value }))}
-                  placeholder="Store name"
-                />
-              </div>
-            </div>
-
-            {/* Category */}
-            <div>
-              <Label>{language === 'vi' ? 'Danh mục' : 'Category'}</Label>
-              <Select
-                value={formData.category}
-                onValueChange={value => setFormData(prev => ({ ...prev, category: value }))}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {CATEGORIES.map(cat => (
-                    <SelectItem key={cat.value} value={cat.value}>
-                      {language === 'vi' ? cat.labelVi : cat.labelEn}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Description */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label htmlFor="desc_vi">Mô tả (Tiếng Việt)</Label>
-                <Textarea
-                  id="desc_vi"
-                  value={formData.description_vi}
-                  onChange={e => setFormData(prev => ({ ...prev, description_vi: e.target.value }))}
-                  placeholder="Mô tả cửa hàng"
-                  rows={3}
-                />
-              </div>
-              <div>
-                <Label htmlFor="desc_en">Description (English)</Label>
-                <Textarea
-                  id="desc_en"
-                  value={formData.description_en}
-                  onChange={e => setFormData(prev => ({ ...prev, description_en: e.target.value }))}
-                  placeholder="Store description"
-                  rows={3}
-                />
-              </div>
-            </div>
-
-            {/* Address */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label htmlFor="addr_vi" className="flex items-center gap-1">
-                  <MapPin className="w-3 h-3" /> Địa chỉ (Tiếng Việt) *
-                </Label>
-                <Input
-                  id="addr_vi"
-                  value={formData.address_vi}
-                  onChange={e => setFormData(prev => ({ ...prev, address_vi: e.target.value }))}
-                  placeholder="Địa chỉ"
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor="addr_en" className="flex items-center gap-1">
-                  <MapPin className="w-3 h-3" /> Address (English)
-                </Label>
-                <Input
-                  id="addr_en"
-                  value={formData.address_en}
-                  onChange={e => setFormData(prev => ({ ...prev, address_en: e.target.value }))}
-                  placeholder="Address"
-                />
-              </div>
-            </div>
-
-            {/* Location picker */}
-            <div>
-              <Label className="flex items-center gap-1">
-                <Navigation className="w-3 h-3" /> {language === 'vi' ? 'Vị trí trên bản đồ' : 'Location on Map'} *
-              </Label>
-              <div className="mt-2 p-3 border rounded-xl bg-muted/30">
-                <div className="flex items-center justify-between">
-                  <div className="text-sm">
-                    <p className="font-medium">
-                      {formData.lat.toFixed(6)}, {formData.lng.toFixed(6)}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {language === 'vi' ? 'Nhấn để chọn vị trí trên bản đồ' : 'Click to select location on map'}
-                    </p>
-                  </div>
-                  <Button 
-                    type="button" 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => setShowLocationPicker(true)}
-                  >
-                    <MapPin className="w-4 h-4 mr-1" />
-                    {language === 'vi' ? 'Chọn vị trí' : 'Pick Location'}
-                  </Button>
+          <form onSubmit={handleSubmit} className="p-6 space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+              
+              {/* AVATAR */}
+              <div className="md:col-span-4 space-y-3">
+                <Label className="font-semibold">Ảnh đại diện</Label>
+                <div 
+                  className="aspect-square w-full rounded-2xl border-2 border-dashed border-gray-300 bg-gray-50 flex flex-col items-center justify-center cursor-pointer hover:border-blue-500 hover:bg-blue-50 transition-all relative overflow-hidden group"
+                  onClick={() => document.getElementById('avatar-input')?.click()}
+                >
+                  {avatarPreview ? (
+                    <>
+                        <img src={avatarPreview} className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                            <UploadCloud className="text-white w-8 h-8"/>
+                            <span className="text-white text-xs font-medium absolute bottom-4">Đổi ảnh</span>
+                        </div>
+                    </>
+                  ) : (
+                    <>
+                      <ImagePlus className="w-10 h-10 text-gray-400 mb-2" />
+                      <span className="text-sm text-gray-500 font-medium">Tải ảnh lên</span>
+                    </>
+                  )}
+                  <input id="avatar-input" type="file" accept="image/*" onChange={handleAvatarChange} className="hidden" />
                 </div>
               </div>
-            </div>
 
-            {/* Phone */}
-            <div>
-              <Label htmlFor="phone" className="flex items-center gap-1">
-                <Phone className="w-3 h-3" /> {language === 'vi' ? 'Số điện thoại' : 'Phone'}
-              </Label>
-              <Input
-                id="phone"
-                value={formData.phone}
-                onChange={e => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-                placeholder="+84 xxx xxx xxx"
-              />
-            </div>
+              {/* THÔNG TIN CƠ BẢN */}
+              <div className="md:col-span-8 space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                        <Label>Tên địa điểm <span className="text-red-500">*</span></Label>
+                        <Input required value={formData.name_vi} onChange={e => setFormData({...formData, name_vi: e.target.value})} />
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Danh mục</Label>
+                        <Select value={formData.category} onValueChange={v => setFormData({...formData, category: v})}>
+                            <SelectTrigger><SelectValue/></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="building">🏢 Tòa nhà</SelectItem>
+                                <SelectItem value="cafe">☕ Cà phê</SelectItem>
+                                <SelectItem value="restaurant">🍴 Nhà hàng</SelectItem>
+                                <SelectItem value="street_food">🍢 Ăn vặt</SelectItem>
+                                <SelectItem value="utility">🛠️ Tiện ích</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </div>
 
-            {/* Open hours */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label htmlFor="hours_vi" className="flex items-center gap-1">
-                  <Clock className="w-3 h-3" /> Giờ mở cửa (Tiếng Việt)
-                </Label>
-                <Input
-                  id="hours_vi"
-                  value={formData.open_hours_vi}
-                  onChange={e => setFormData(prev => ({ ...prev, open_hours_vi: e.target.value }))}
-                  placeholder="7:00 - 22:00"
-                />
+                <div className="space-y-2">
+                    <Label>Số điện thoại</Label>
+                    <Input value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
+                </div>
+
+                <div className="space-y-2">
+                    <Label>Địa chỉ</Label>
+                    <div className="flex gap-2">
+                        <Input required value={formData.address_vi} onChange={e => setFormData({...formData, address_vi: e.target.value})} />
+                        <Button type="button" variant="outline" onClick={() => setShowMapPicker(true)}><MapPin className="w-4 h-4"/></Button>
+                    </div>
+                    {formData.lat && <p className="text-xs text-green-600 flex items-center gap-1"><CheckCircle2 className="w-3 h-3"/> Đã ghim vị trí</p>}
+                </div>
+
+                <div className="space-y-2">
+                    <Label>Mô tả / Giới thiệu</Label>
+                    <Textarea rows={3} value={formData.description_vi} onChange={e => setFormData({...formData, description_vi: e.target.value})} />
+                </div>
               </div>
-              <div>
-                <Label htmlFor="hours_en" className="flex items-center gap-1">
-                  <Clock className="w-3 h-3" /> Open Hours (English)
-                </Label>
-                <Input
-                  id="hours_en"
-                  value={formData.open_hours_en}
-                  onChange={e => setFormData(prev => ({ ...prev, open_hours_en: e.target.value }))}
-                  placeholder="7:00 AM - 10:00 PM"
-                />
+
+              {/* GALLERY */}
+              <div className="col-span-full space-y-3 pt-4 border-t relative">
+                 <div className="flex justify-between items-center">
+                    <Label className="text-base font-semibold flex items-center gap-2">
+                        Thư viện ảnh
+                        {!canUploadGallery && <Lock className="w-4 h-4 text-gray-400"/>}
+                    </Label>
+                    
+                    {canUploadGallery ? (
+                        <>
+                            <Button 
+                                type="button" variant="outline" size="sm" 
+                                onClick={() => document.getElementById('gallery-input')?.click()}
+                                disabled={(existingGallery.length + galleryFiles.length) >= 10}
+                            >
+                                <ImagePlus className="w-4 h-4 mr-2"/> Thêm ảnh
+                            </Button>
+                            <input id="gallery-input" type="file" multiple accept="image/*" onChange={handleGalleryChange} className="hidden" />
+                        </>
+                    ) : (
+                        <span className="text-xs text-red-500 font-medium">Tính năng VIP</span>
+                    )}
+                 </div>
+
+                 <div className={`flex gap-4 overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-gray-200 ${!canUploadGallery ? 'opacity-50 pointer-events-none select-none filter blur-[1px]' : ''}`}>
+                    {existingGallery.map((img) => (
+                        <div key={img.id} className="relative w-24 h-24 flex-shrink-0 rounded-lg overflow-hidden border group">
+                            <img src={img.image_url} className="w-full h-full object-cover" />
+                            <button type="button" onClick={() => removeExistingImage(img.id)} className="absolute top-1 right-1 bg-red-500/80 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-all">
+                                <Trash2 className="w-3 h-3"/>
+                            </button>
+                        </div>
+                    ))}
+                    {galleryPreviews.map((src, idx) => (
+                        <div key={idx} className="relative w-24 h-24 flex-shrink-0 rounded-lg overflow-hidden border border-blue-200 group">
+                            <img src={src} className="w-full h-full object-cover opacity-90" />
+                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                <span className="bg-blue-600 text-white text-[10px] px-1.5 rounded-full shadow-sm">Mới</span>
+                            </div>
+                            <button type="button" onClick={() => removeNewImage(idx)} className="absolute top-1 right-1 bg-gray-800/80 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-all pointer-events-auto">
+                                <X className="w-3 h-3"/>
+                            </button>
+                        </div>
+                    ))}
+                    {(existingGallery.length === 0 && galleryFiles.length === 0) && (
+                         <div className="w-full h-24 flex items-center justify-center text-gray-400 border-2 border-dashed rounded-lg bg-gray-50 text-sm">
+                            Chưa có ảnh nào.
+                        </div>
+                    )}
+                 </div>
+
+                 {!canUploadGallery && (
+                    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-white/60 backdrop-blur-sm rounded-xl border border-dashed border-gray-300">
+                        <div className="bg-white p-4 rounded-2xl shadow-xl flex flex-col items-center border border-yellow-100">
+                            <Crown className="w-8 h-8 text-yellow-500 mb-2" />
+                            <h3 className="font-bold text-gray-900">Nâng cấp Premium</h3>
+                            <Button type="button" size="sm" onClick={handleUpgradeClick} className="mt-2 bg-yellow-500 hover:bg-yellow-600 text-white w-full">
+                                Nâng cấp ngay
+                            </Button>
+                        </div>
+                    </div>
+                 )}
               </div>
             </div>
 
-            {/* Submit */}
-            <div className="flex gap-3 pt-4">
-              <Button type="button" variant="outline" onClick={onClose} className="flex-1">
-                {language === 'vi' ? 'Hủy' : 'Cancel'}
-              </Button>
-              <Button type="submit" disabled={isSubmitting} className="flex-1">
-                {isSubmitting 
-                  ? (language === 'vi' ? 'Đang lưu...' : 'Saving...') 
-                  : (store 
-                    ? (language === 'vi' ? 'Cập nhật' : 'Update')
-                    : (language === 'vi' ? 'Tạo cửa hàng' : 'Create Store')
-                  )
-                }
-              </Button>
-            </div>
+            <DialogFooter className="pt-4 border-t sticky bottom-0 bg-white z-20">
+               <Button type="button" variant="ghost" onClick={onClose}>Hủy</Button>
+               <Button type="submit" disabled={isUploading || isSubmitting} className="bg-blue-600 hover:bg-blue-700 text-white">
+                 {(isUploading || isSubmitting) && <Loader2 className="w-4 h-4 mr-2 animate-spin"/>}
+                 Lưu thông tin
+               </Button>
+            </DialogFooter>
           </form>
-        </motion.div>
-      </motion.div>
-
-      {/* Location Picker Modal */}
-      <LocationPickerModal
-        isOpen={showLocationPicker}
-        onClose={() => setShowLocationPicker(false)}
+        </DialogContent>
+      </Dialog>
+      
+      <LocationPickerModal 
+        isOpen={showMapPicker}
+        onClose={() => setShowMapPicker(false)}
+        onConfirm={handleLocationConfirm}
         initialLat={formData.lat}
         initialLng={formData.lng}
-        onSelect={(lat, lng, address) => {
-          setFormData(prev => ({ 
-            ...prev, 
-            lat, 
-            lng,
-            // Auto-fill address if empty
-            address_vi: prev.address_vi || address || '',
-          }));
-        }}
       />
-    </AnimatePresence>
+    </>
   );
 };

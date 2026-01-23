@@ -1,241 +1,134 @@
-import { useState, useRef, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { X, MapPin, Check, Search } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { useLanguage } from '@/i18n/LanguageContext';
 import { getMapboxToken } from '@/lib/mapboxToken';
-import { VNU_CENTER } from '@/data/locations';
+import { Loader2, MapPin } from 'lucide-react';
 
 interface LocationPickerModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSelect: (lat: number, lng: number, address?: string) => void;
-  initialLat?: number;
-  initialLng?: number;
+  onConfirm: (lat: number, lng: number, address?: string) => void;
+  initialLat: number;
+  initialLng: number;
 }
 
 export const LocationPickerModal = ({ 
-  isOpen, 
-  onClose, 
-  onSelect,
-  initialLat,
-  initialLng 
+  isOpen, onClose, onConfirm, initialLat, initialLng 
 }: LocationPickerModalProps) => {
-  const { language } = useLanguage();
+  
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
-  const markerRef = useRef<mapboxgl.Marker | null>(null);
+  const marker = useRef<mapboxgl.Marker | null>(null);
   
-  const [selectedLat, setSelectedLat] = useState(initialLat || VNU_CENTER.lat);
-  const [selectedLng, setSelectedLng] = useState(initialLng || VNU_CENTER.lng);
+  const [selectedCoords, setSelectedCoords] = useState({ lat: initialLat, lng: initialLng });
   const [address, setAddress] = useState('');
-  const [isGeocoding, setIsGeocoding] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [isLoadingAddress, setIsLoadingAddress] = useState(false);
 
-  const mapboxToken = getMapboxToken();
-
-  // Initialize map
   useEffect(() => {
-    if (!isOpen || !mapContainer.current || map.current || !mapboxToken) return;
+    // Chỉ khởi tạo map khi Modal mở ra
+    if (!isOpen) return;
 
-    mapboxgl.accessToken = mapboxToken;
+    // Timeout nhỏ để đảm bảo Dialog đã render xong DOM thì Mapbox mới gắn vào
+    const timer = setTimeout(() => {
+        if (!mapContainer.current) return;
+        const token = getMapboxToken();
+        if (!token) return;
 
-    map.current = new mapboxgl.Map({
-      container: mapContainer.current,
-      style: 'mapbox://styles/mapbox/streets-v12',
-      center: [selectedLng, selectedLat],
-      zoom: 16,
-    });
+        mapboxgl.accessToken = token;
 
-    map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
-    map.current.addControl(new mapboxgl.GeolocateControl({
-      positionOptions: { enableHighAccuracy: true },
-      trackUserLocation: false,
-    }), 'top-right');
+        map.current = new mapboxgl.Map({
+            container: mapContainer.current,
+            style: 'mapbox://styles/mapbox/streets-v12',
+            center: [initialLng, initialLat],
+            zoom: 15,
+        });
 
-    // Add initial marker
-    const el = createMarkerElement();
-    markerRef.current = new mapboxgl.Marker({ element: el, draggable: true })
-      .setLngLat([selectedLng, selectedLat])
-      .addTo(map.current);
+        marker.current = new mapboxgl.Marker({ color: 'red', draggable: true })
+            .setLngLat([initialLng, initialLat])
+            .addTo(map.current);
 
-    // Handle marker drag
-    markerRef.current.on('dragend', () => {
-      const lngLat = markerRef.current?.getLngLat();
-      if (lngLat) {
-        setSelectedLat(lngLat.lat);
-        setSelectedLng(lngLat.lng);
-        reverseGeocode(lngLat.lat, lngLat.lng);
-      }
-    });
+        marker.current.on('dragend', () => {
+            const lngLat = marker.current?.getLngLat();
+            if (lngLat) handleSelectLocation(lngLat.lat, lngLat.lng);
+        });
 
-    // Handle map click
-    map.current.on('click', (e) => {
-      const { lat, lng } = e.lngLat;
-      setSelectedLat(lat);
-      setSelectedLng(lng);
-      markerRef.current?.setLngLat([lng, lat]);
-      reverseGeocode(lat, lng);
-    });
-
-    // Initial reverse geocode
-    reverseGeocode(selectedLat, selectedLng);
+        map.current.on('click', (e) => {
+            handleSelectLocation(e.lngLat.lat, e.lngLat.lng);
+        });
+        
+        // Resize lại map ngay khi load xong để tránh lỗi hiển thị xám
+        map.current.resize();
+    }, 100);
 
     return () => {
-      markerRef.current?.remove();
-      map.current?.remove();
-      map.current = null;
+        clearTimeout(timer);
+        map.current?.remove();
     };
-  }, [isOpen, mapboxToken]);
+  }, [isOpen]); // Phụ thuộc vào isOpen
 
-  const createMarkerElement = () => {
-    const el = document.createElement('div');
-    el.innerHTML = `
-      <div style="
-        width: 40px;
-        height: 40px;
-        background: #ef4444;
-        border-radius: 50% 50% 50% 0;
-        transform: rotate(-45deg);
-        border: 3px solid white;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: grab;
-      ">
-        <div style="
-          width: 12px;
-          height: 12px;
-          background: white;
-          border-radius: 50%;
-          transform: rotate(45deg);
-        "></div>
-      </div>
-    `;
-    return el;
-  };
+  const handleSelectLocation = async (lat: number, lng: number) => {
+    setSelectedCoords({ lat, lng });
+    marker.current?.setLngLat([lng, lat]);
 
-  const reverseGeocode = async (lat: number, lng: number) => {
-    if (!mapboxToken) return;
-    
-    setIsGeocoding(true);
+    setIsLoadingAddress(true);
     try {
-      const response = await fetch(
-        `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${mapboxToken}&language=${language}`
-      );
-      const data = await response.json();
-      if (data.features && data.features.length > 0) {
-        setAddress(data.features[0].place_name);
+      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
+      const data = await res.json();
+      if (data && data.display_name) {
+        const shortAddr = data.display_name.split(',').slice(0, 3).join(',');
+        setAddress(shortAddr);
       }
     } catch (err) {
-      console.error('Reverse geocoding error:', err);
+      console.error(err);
     } finally {
-      setIsGeocoding(false);
-    }
-  };
-
-  const handleSearch = async () => {
-    if (!searchQuery.trim() || !mapboxToken) return;
-
-    try {
-      const response = await fetch(
-        `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(searchQuery)}.json?access_token=${mapboxToken}&proximity=${VNU_CENTER.lng},${VNU_CENTER.lat}&language=${language}`
-      );
-      const data = await response.json();
-      if (data.features && data.features.length > 0) {
-        const [lng, lat] = data.features[0].center;
-        setSelectedLat(lat);
-        setSelectedLng(lng);
-        setAddress(data.features[0].place_name);
-        
-        markerRef.current?.setLngLat([lng, lat]);
-        map.current?.flyTo({ center: [lng, lat], zoom: 17 });
-      }
-    } catch (err) {
-      console.error('Geocoding error:', err);
+      setIsLoadingAddress(false);
     }
   };
 
   const handleConfirm = () => {
-    onSelect(selectedLat, selectedLng, address);
+    onConfirm(selectedCoords.lat, selectedCoords.lng, address);
     onClose();
   };
 
-  if (!isOpen) return null;
-
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4"
-      onClick={onClose}
-    >
-      <motion.div
-        initial={{ scale: 0.95, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.95, opacity: 0 }}
-        className="bg-background rounded-2xl w-full max-w-2xl h-[80vh] flex flex-col overflow-hidden"
-        onClick={e => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b">
-          <h2 className="text-lg font-semibold flex items-center gap-2">
-            <MapPin className="w-5 h-5 text-primary" />
-            {language === 'vi' ? 'Chọn vị trí' : 'Select Location'}
-          </h2>
-          <button onClick={onClose} className="p-2 hover:bg-muted rounded-full">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      {/* QUAN TRỌNG: Thêm z-[200] để nó cao hơn cái Form cửa hàng (đang là z-100) 
+         Thêm pointer-events-auto để chắc chắn nhận được click chuột
+      */}
+      <DialogContent className="max-w-3xl h-[80vh] flex flex-col p-0 gap-0 bg-white z-[200] pointer-events-auto">
+        <DialogHeader className="p-4 border-b">
+          <DialogTitle>Chọn vị trí chính xác</DialogTitle>
+        </DialogHeader>
 
-        {/* Search bar */}
-        <div className="p-4 border-b">
-          <div className="flex gap-2">
-            <Input
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder={language === 'vi' ? 'Tìm kiếm địa điểm...' : 'Search location...'}
-              onKeyDown={e => e.key === 'Enter' && handleSearch()}
-              className="flex-1"
-            />
-            <Button onClick={handleSearch} size="icon" variant="outline">
-              <Search className="w-4 h-4" />
-            </Button>
+        <div className="flex-1 relative bg-gray-100 w-full min-h-0">
+          {/* Container cho Mapbox */}
+          <div ref={mapContainer} className="w-full h-full absolute inset-0" />
+          
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur px-4 py-2 rounded-full shadow-lg text-sm font-medium z-10 border pointer-events-none">
+            Click hoặc kéo thả ghim đỏ để chọn vị trí
           </div>
         </div>
 
-        {/* Map */}
-        <div ref={mapContainer} className="flex-1" />
-
-        {/* Footer with selected location */}
-        <div className="p-4 border-t bg-muted/30">
-          <div className="mb-3">
-            <p className="text-xs text-muted-foreground mb-1">
-              {language === 'vi' ? 'Vị trí đã chọn:' : 'Selected location:'}
-            </p>
-            <p className="text-sm font-medium line-clamp-2">
-              {isGeocoding ? (language === 'vi' ? 'Đang tải...' : 'Loading...') : (address || `${selectedLat.toFixed(6)}, ${selectedLng.toFixed(6)}`)}
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Lat: {selectedLat.toFixed(6)}, Lng: {selectedLng.toFixed(6)}
-            </p>
+        <DialogFooter className="p-4 border-t bg-white flex justify-between items-center sm:justify-between z-20">
+          <div className="text-sm text-gray-600 flex-1 mr-4">
+             <p className="font-bold flex items-center gap-2">
+                <MapPin className="w-4 h-4 text-red-500"/>
+                {isLoadingAddress ? "Đang tìm tên đường..." : (address || "Chưa có địa chỉ")}
+             </p>
+             <p className="text-xs mt-1 font-mono text-gray-400">
+                {selectedCoords.lat.toFixed(5)}, {selectedCoords.lng.toFixed(5)}
+             </p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={onClose} className="flex-1">
-              {language === 'vi' ? 'Hủy' : 'Cancel'}
-            </Button>
-            <Button onClick={handleConfirm} className="flex-1">
-              <Check className="w-4 h-4 mr-2" />
-              {language === 'vi' ? 'Xác nhận' : 'Confirm'}
+            <Button variant="outline" onClick={onClose}>Hủy</Button>
+            <Button onClick={handleConfirm} className="bg-blue-600 hover:bg-blue-500 text-white shadow-lg">
+              Xác nhận vị trí này
             </Button>
           </div>
-        </div>
-      </motion.div>
-    </motion.div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };

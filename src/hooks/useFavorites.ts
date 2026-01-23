@@ -1,120 +1,122 @@
-import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { Location } from '@/data/locations';
-import { useAuth } from './useAuth';
-import { toast } from 'sonner';
-
-export interface Favorite {
-  id: string;
-  location_id: string;
-  location_name: string;
-  location_name_en: string | null;
-  location_lat: number;
-  location_lng: number;
-  location_type: string;
-  created_at: string;
-}
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "./useAuth";
+import { toast } from "sonner";
+import { Location } from "@/data/locations";
 
 export const useFavorites = () => {
-  const { user, isAuthenticated } = useAuth();
-  const [favorites, setFavorites] = useState<Favorite[]>([]);
-  const [loading, setLoading] = useState(false);
+  const { session } = useAuth();
+  const queryClient = useQueryClient();
+  const userId = session?.user?.id;
 
-  const fetchFavorites = useCallback(async () => {
-    if (!user) {
-      setFavorites([]);
-      return;
-    }
-
-    setLoading(true);
-    try {
+  // 1. Lấy danh sách Favorites
+  const { data: favorites = [], isLoading } = useQuery({
+    queryKey: ['favorites', userId],
+    queryFn: async () => {
+      if (!userId) return [];
+      
       const { data, error } = await supabase
         .from('favorites')
         .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
-
+        .eq('user_id', userId);
+      
       if (error) throw error;
-      setFavorites(data || []);
-    } catch (error) {
-      console.error('Error fetching favorites:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, [user]);
 
-  useEffect(() => {
-    fetchFavorites();
-  }, [fetchFavorites]);
+      // Chuyển đổi dữ liệu DB thành object Location
+      return data.map(fav => ({
+        id: fav.location_id,
+        name: fav.location_name_en || fav.location_name,
+        nameVi: fav.location_name,
+        type: fav.location_type as any,
+        lat: fav.location_lat,
+        lng: fav.location_lng,
+        address: '', 
+        description: '',
+        image: 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=800',
+        isSponsored: false,
+        hasVoucher: false
+      })) as Location[];
+    },
+    enabled: !!userId,
+  });
 
-  const addFavorite = useCallback(async (location: Location) => {
-    if (!user) {
-      toast.error('Vui lòng đăng nhập để lưu địa điểm yêu thích');
-      return false;
-    }
+  // 2. Thêm Favorite
+  const addMutation = useMutation({
+    mutationFn: async (location: Location) => {
+      if (!userId) throw new Error("Vui lòng đăng nhập");
+      const idStr = location.id.toString();
+      
+      // Kiểm tra trùng
+      const { data: existing } = await supabase
+        .from('favorites')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('location_id', idStr)
+        .maybeSingle();
 
-    try {
-      const { error } = await supabase.from('favorites').insert({
-        user_id: user.id,
-        location_id: location.id,
-        location_name: location.nameVi,
-        location_name_en: location.name || null,
-        location_lat: location.lat,
-        location_lng: location.lng,
-        location_type: location.type,
-      });
+      if (existing) return;
 
-      if (error) {
-        if (error.code === '23505') {
-          toast.error('Địa điểm này đã được lưu');
-        } else {
-          throw error;
-        }
-        return false;
-      }
+      // Insert vào DB
+      const { error } = await supabase
+        .from('favorites')
+        .insert({ 
+          user_id: userId, 
+          location_id: idStr,
+          location_name: location.nameVi || location.name,
+          location_name_en: location.name || null,
+          location_lat: location.lat,
+          location_lng: location.lng,
+          location_type: location.type
+        });
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['favorites'] });
+      toast.success("Đã thêm vào yêu thích ❤️");
+    },
+    onError: (err) => toast.error(err.message),
+  });
 
-      await fetchFavorites();
-      toast.success('Đã thêm vào yêu thích');
-      return true;
-    } catch (error) {
-      console.error('Error adding favorite:', error);
-      toast.error('Không thể thêm vào yêu thích');
-      return false;
-    }
-  }, [user, fetchFavorites]);
-
-  const removeFavorite = useCallback(async (locationId: string) => {
-    if (!user) return false;
-
-    try {
+  // 3. Xóa Favorite
+  const removeMutation = useMutation({
+    mutationFn: async (locationId: string | number) => {
+      if (!userId) throw new Error("Vui lòng đăng nhập");
       const { error } = await supabase
         .from('favorites')
         .delete()
-        .eq('user_id', user.id)
-        .eq('location_id', locationId);
-
+        .eq('user_id', userId)
+        .eq('location_id', locationId.toString());
+      
       if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['favorites'] });
+      toast.info("Đã xóa khỏi yêu thích");
+    },
+    onError: (err) => toast.error(err.message),
+  });
 
-      await fetchFavorites();
-      toast.success('Đã xóa khỏi yêu thích');
-      return true;
-    } catch (error) {
-      console.error('Error removing favorite:', error);
-      toast.error('Không thể xóa khỏi yêu thích');
-      return false;
+  const isFavorite = (locationId: string | number) => {
+    return favorites.some(f => f.id.toString() === locationId.toString());
+  };
+
+  // --- HÀM MỚI: Tự động kiểm tra để Thêm hoặc Xóa ---
+  const toggleFavorite = (location: Location) => {
+    if (isFavorite(location.id)) {
+      removeMutation.mutate(location.id);
+    } else {
+      addMutation.mutate(location);
     }
-  }, [user, fetchFavorites]);
-
-  const isFavorite = useCallback((locationId: string) => {
-    return favorites.some(f => f.location_id === locationId);
-  }, [favorites]);
+  };
 
   return {
     favorites,
-    loading,
-    addFavorite,
-    removeFavorite,
+    isLoading,
+    addFavorite: addMutation.mutate,
+    removeFavorite: removeMutation.mutate,
     isFavorite,
-    isAuthenticated,
+    toggleFavorite, // <--- Đã thêm export hàm này
+    isAdding: addMutation.isPending,
   };
 };
