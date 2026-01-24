@@ -1,5 +1,6 @@
 export const getMapboxToken = () => {
-  return localStorage.getItem("mapbox_token") || import.meta.env.VITE_MAPBOX_TOKEN || "";
+  // Sửa dòng này:
+return localStorage.getItem("mapbox_token") || import.meta.env.VITE_MAPBOX_PUBLIC_TOKEN || "";
 };
 
 export const setMapboxToken = (token: string) => {
