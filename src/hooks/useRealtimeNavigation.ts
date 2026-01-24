@@ -139,7 +139,6 @@ export const useRealtimeNavigation = ({
         return newState;
     });
 
-  }, [isNavigating, userLocation, routeGeometry, updateCurrentStep, onOffRoute]);
-
+  }, [isNavigating, userLocation?.lat, userLocation?.lng, routeGeometry, steps, onOffRoute]);
   return state;
 };
