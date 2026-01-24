@@ -26,48 +26,41 @@ export interface AdminStore {
 }
 
 export const useAdminStores = () => {
-  // --- SỬA Ở ĐÂY: Dùng session thay vì user ---
   const { session } = useAuth();
   const user = session?.user;
-  // -------------------------------------------
 
   const [stores, setStores] = useState<AdminStore[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending');
 
-  // Check if user is admin
+  // 1. Kiểm tra quyền Admin
   const checkAdminStatus = useCallback(async () => {
     if (!user) {
-      console.log("Chưa có user session"); // <--- Log
       setIsAdmin(false);
       return false;
     }
 
     try {
-      console.log("Đang kiểm tra quyền cho user:", user.email); // <--- Log
-
       const { data, error } = await supabase
         .from('user_roles')
-        .select('*') // Lấy hết để xem có gì
+        .select('role')
         .eq('user_id', user.id)
         .maybeSingle();
 
-      console.log("Kết quả từ DB:", data, "Lỗi:", error); // <--- Log QUAN TRỌNG
-
       if (error) throw error;
       
-      // Kiểm tra xem role có phải là admin không
       const hasAdminRole = data?.role === 'admin';
       setIsAdmin(hasAdminRole);
       return hasAdminRole;
     } catch (err) {
-      console.error('Error checking admin status:', err);
+      console.error('Lỗi kiểm tra admin:', err);
       setIsAdmin(false);
       return false;
     }
   }, [user]);
 
+  // 2. Lấy danh sách cửa hàng
   const fetchStores = useCallback(async () => {
     if (!user) {
       setStores([]);
@@ -89,30 +82,33 @@ export const useAdminStores = () => {
 
       if (error) throw error;
       
-      // Fetch user emails for each store
+      // Lấy thêm email từ bảng profiles
       const storesWithEmails: AdminStore[] = [];
-      for (const store of data || []) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('email')
-          .eq('id', store.user_id)
-          .single();
-        
-        storesWithEmails.push({
-          ...store,
-          user_email: profile?.email || 'N/A'
-        });
+      if (data) {
+        for (const store of data) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('email')
+            .eq('id', store.user_id)
+            .single();
+          
+          storesWithEmails.push({
+            ...store,
+            user_email: profile?.email || 'N/A'
+          });
+        }
       }
       
       setStores(storesWithEmails);
     } catch (err) {
-      console.error('Error fetching stores:', err);
+      console.error('Lỗi tải danh sách cửa hàng:', err);
       toast.error('Không thể tải danh sách cửa hàng');
     } finally {
       setIsLoading(false);
     }
   }, [user, filter]);
 
+  // 3. Khởi chạy khi component mount
   useEffect(() => {
     const init = async () => {
       const hasAdmin = await checkAdminStatus();
@@ -126,36 +122,39 @@ export const useAdminStores = () => {
   }, [checkAdminStatus, fetchStores]);
 
   const updateStoreStatus = async (storeId: string, status: 'approved' | 'rejected') => {
-    try {
-      // ...
-      console.log("Đang gọi hàm RPC update_store_status...");
+  try {
+    console.log(`Đang gọi RPC để update store ${storeId} sang ${status}...`);
 
-      // --- SỬA Ở ĐÂY: Thêm 'as any' vào sau tên hàm ---
-      const { error } = await supabase.rpc('update_store_status' as any, { 
-        target_store_id: storeId,
-        new_status: status
-      });
-      // -----------------------------------------------
+    // GỌI HÀM RPC VỪA TẠO (Thay thế cho .update)
+    const { error } = await supabase.rpc('approve_store_by_id' as any, {
+      store_id_input: storeId,
+      new_status: status
+    });
 
-      if (error) {
-// ...
-        console.error("Lỗi Supabase:", error);
-        throw error;
-      }
-      
-      // Cập nhật giao diện (Giữ nguyên)
-      setStores(prev => prev.map(s => 
-        s.id === storeId ? { ...s, status } : s
-      ));
-      
-      toast.success(status === 'approved' ? 'Đã duyệt cửa hàng!' : 'Đã từ chối cửa hàng!');
-      return true;
-    } catch (err) {
-      console.error('Error updating store status:', err);
-      toast.error('Không thể cập nhật trạng thái');
-      return false;
+    if (error) {
+      console.error("RPC Error:", error);
+      throw error;
     }
-  };
+
+    // Update thành công -> Cập nhật giao diện
+    setStores(prev => prev.map(s => 
+      s.id === storeId ? { ...s, status } : s
+    ));
+    
+    // Nếu đang ở tab pending thì ẩn nó đi cho gọn
+    if (filter === 'pending') {
+         setStores(prev => prev.filter(s => s.id !== storeId));
+    }
+
+    toast.success(status === 'approved' ? 'Đã duyệt xong!' : 'Đã từ chối!');
+
+  } catch (err: any) {
+    console.error('Lỗi Update:', err);
+    toast.error(`Lỗi: ${err.message || "Không thể kết nối"}`);
+  }
+};
+
+  // 5. Hàm Xóa cửa hàng
   const deleteStore = async (storeId: string) => {
     try {
       const { error } = await supabase

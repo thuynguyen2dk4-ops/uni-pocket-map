@@ -34,8 +34,10 @@ const Index = () => {
   const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
   const [selectedDepartment, setSelectedDepartment] = useState<Department | null>(null);
   const [flyToLocation, setFlyToLocation] = useState<Location | null>(null);
-  
-  const [activeCategories, setActiveCategories] = useState<LocationType[]>(['building', 'food', 'housing', 'job']);
+  const [activeCategories, setActiveCategories] = useState<LocationType[]>([
+    'building', 'food', 'housing', 'job', 
+    'lecture_hall', 'office', 'cafe', 'entertainment', 'checkin'
+  ]);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   
   const [isNavigating, setIsNavigating] = useState(false);
@@ -198,13 +200,13 @@ const Index = () => {
   const handleToggleCategory = useCallback((category: LocationType) => {
     setActiveCategories(prev => {
       if (prev.includes(category)) {
-        if (prev.length === 1) return prev;
+        // Bỏ đoạn kiểm tra "if (prev.length === 1) return prev;" đi
+        // Để cho phép người dùng tắt hết nếu muốn
         return prev.filter(c => c !== category);
       }
       return [...prev, category];
     });
   }, []);
-
   // --- Realtime Nav ---
   const { 
     currentStepIndex, 
@@ -230,12 +232,14 @@ const Index = () => {
     setIsAddingStop(true);
     toast.info(language === 'vi' ? 'Chọn điểm dừng tiếp theo trên bản đồ' : 'Select next stop on the map');
   }, [language]);
-
   const handlePromoteLocation = useCallback((location: Location) => {
     // setPromotingLocation(location); // Giả sử bạn có state này nếu dùng StoreManagement
     setShowSponsoredModal(true);
     setSelectedLocation(null);
   }, []);
+  const handleSelectCategory = (categories: LocationType[]) => { 
+  setActiveCategories(categories);
+}
 
   return (
     <div className="relative h-screen w-full overflow-hidden bg-background">

@@ -1,4 +1,4 @@
-export type LocationType = 'building' | 'food' | 'housing' | 'job';
+export type LocationType = 'building' | 'food' | 'housing' | 'job' | 'checkin' | 'lecture_hall' | 'office' | 'cafe' | 'entertainment';
 
 export interface Department {
   name: string;

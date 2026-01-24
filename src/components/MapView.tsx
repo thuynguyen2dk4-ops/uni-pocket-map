@@ -5,8 +5,7 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 
 // --- IMPORT ICON ĐẸP ---
 import { 
-  School, Utensils, Home, Briefcase, MapPin, Star, Navigation 
-} from 'lucide-react';
+  School, Utensils, Home, Briefcase, MapPin, Star, Navigation, Coffee, GraduationCap, Building, Gamepad2} from 'lucide-react';
 
 import { Location, VNU_CENTER, locations, LocationType } from '@/data/locations';
 import { RouteInfo } from '@/hooks/useDirections';
@@ -33,12 +32,32 @@ interface MapViewProps {
 
 // --- COMPONENT ICON ĐỂ RENDER ---
 const MarkerIcon = ({ type, isSelected, isSponsored, hasVoucher }: { type: LocationType, isSelected: boolean, isSponsored: boolean, hasVoucher?: boolean }) => {
-  // Config màu sắc & Icon
   let Icon = MapPin;
-  let color = '#64748B'; // Mặc định xám
+  let color = '#64748B'; 
   let bg = '#F8FAFC';
 
   switch (type) {
+    // --- CÁC LOẠI MỚI ---
+    case 'lecture_hall': 
+      Icon = GraduationCap; 
+      color = '#0EA5E9'; // Sky Blue (Giảng đường màu xanh trời)
+      bg = '#E0F2FE'; 
+      break;
+    case 'office': 
+      Icon = Building; 
+      color = '#475569'; // Slate (Văn phòng màu xám nghiêm túc)
+      bg = '#F1F5F9'; 
+      break;
+    case 'cafe': 
+      Icon = Coffee; 
+      color = '#78350F'; // Brown (Cafe màu nâu)
+      bg = '#FEF3C7'; 
+      break;
+    case 'entertainment': 
+      Icon = Gamepad2; 
+      color = '#DB2777'; // Pink (Vui chơi màu hồng)
+      bg = '#FCE7F3'; 
+      break;
     case 'building': Icon = School; color = '#10B981'; bg = '#ECFDF5'; break; // Xanh lá
     case 'food': Icon = Utensils; color = '#F97316'; bg = '#FFF7ED'; break; // Cam
     case 'housing': Icon = Home; color = '#3B82F6'; bg = '#EFF6FF'; break; // Xanh dương

@@ -133,7 +133,15 @@ export const translations = {
     landscape: 'Cảnh quan',
     sportsField: 'Sân bóng',
     carParking: 'Đỗ xe ô tô',
-    
+    checkin: 'Check-in',
+    lecture_hall: 'Giảng đường',
+    office: 'Văn phòng',
+    cafe: 'Café',
+    entertainment: 'Vui chơi',
+    food: 'Quán ăn',
+    building: 'Tòa nhà',
+    job: 'Việc làm',
+    housing: 'Nhà trọ',
     // Food related
     coffee: 'Cà phê',
     studySpace: 'Không gian học tập',
@@ -146,15 +154,26 @@ export const translations = {
     aesthetic: 'Sống ảo',
     
     // Housing
-    housing: 'Nhà trọ',
     safe: 'An ninh',
-    
     // Jobs
     partTime: 'Part-time',
     sales: 'Bán hàng',
     evening: 'Tối',
+    selectCategory: 'Chọn danh mục',
+    category: 'Danh mục',
+    save: 'Lưu thông tin',
+    cancel: 'Hủy',
+    premium: 'VIP',
   },
   en: {
+    lecture_hall: 'Lecture Hall',
+    checkin: 'Check-in',
+    office: 'Office',
+    cafe: 'Cafe',
+    entertainment: 'Entertainment',
+    food: 'Food',
+    building: 'Building',
+    job: 'Job',
     // App header
     appName: 'UniPocket',
     appTagline: 'Campus & Lifestyle Map',
@@ -167,7 +186,7 @@ export const translations = {
     categoryFood: 'Food & Drink',
     categoryHousing: 'Housing',
     categoryJob: 'Jobs',
-    
+    category: 'Category',
     // Bottom sheet
     reviews: 'Reviews',
     departments: 'Departments',

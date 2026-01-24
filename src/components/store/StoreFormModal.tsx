@@ -5,12 +5,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { UserStore } from '@/hooks/useUserStores';
-import { MapPin, Loader2, ImagePlus, CheckCircle2, X, Trash2, UploadCloud, Lock, Crown } from 'lucide-react';
+import { 
+  MapPin, Loader2, ImagePlus, CheckCircle2, X, Trash2, UploadCloud, Lock, Crown,
+  Coffee, GraduationCap, Building, Gamepad2, Home, Briefcase, Utensils, Building2, UserCheck
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { LocationPickerModal } from './LocationPickerModal';
+import { useLanguage } from '@/i18n/LanguageContext';
 
 interface StoreFormState {
   name_vi: string;
@@ -27,9 +30,9 @@ interface StoreFormModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (data: any) => Promise<void>;
-  initialData?: any; // Đổi thành any để chấp nhận cả dữ liệu từ file
+  initialData?: any; 
   isSubmitting?: boolean;
-  customStoreId?: string; // <--- ID TÙY CHỈNH (Dùng cho Admin sửa địa điểm tĩnh)
+  customStoreId?: string;
 }
 
 export const StoreFormModal = ({ 
@@ -38,16 +41,14 @@ export const StoreFormModal = ({
   onSubmit, 
   initialData, 
   isSubmitting,
-  customStoreId // <--- QUAN TRỌNG: Phải lấy biến này ra ở đây mới dùng được
+  customStoreId
 }: StoreFormModalProps) => {
   const { session } = useAuth();
+  const { t } = useLanguage();
   
-  // Kiểm tra Premium
   const isPremium = (initialData as any)?.is_premium === true;
-  // Nếu là Admin sửa (có customStoreId) thì mặc định coi như Premium để up ảnh thoải mái
   const canUploadGallery = isPremium || !!customStoreId;
 
-  // State Form
   const [formData, setFormData] = useState<StoreFormState>({
     name_vi: '', address_vi: '', phone: '',
     description_vi: '', category: 'cafe',
@@ -80,7 +81,6 @@ export const StoreFormModal = ({
         setAvatarPreview(initialData.image_url || initialData.image || '');
         setAvatarFile(null);
         
-        // Nếu có ID (dù là DB hay File), thử load gallery
         const targetId = customStoreId || initialData.id;
         if(targetId) fetchExistingGallery(targetId);
       } else {
@@ -99,9 +99,7 @@ export const StoreFormModal = ({
   }, [isOpen, initialData, customStoreId]);
 
   const fetchExistingGallery = async (storeId: string) => {
-    // Ép kiểu ID về String để so sánh với DB (vì cột store_id trong DB giờ là TEXT)
     const cleanId = String(storeId).replace('user-store-', '');
-    
     const { data } = await (supabase as any)
       .from('store_gallery')
       .select('*')
@@ -166,7 +164,6 @@ export const StoreFormModal = ({
     setIsUploading(true);
 
     try {
-        // 1. UPLOAD AVATAR
         let finalImageUrl = formData.image_url;
         if (avatarFile) {
             const fileExt = avatarFile.name.split('.').pop();
@@ -179,15 +176,10 @@ export const StoreFormModal = ({
             }
         }
 
-        // 2. XÁC ĐỊNH ID CẦN LƯU
-        // - Nếu Admin sửa địa điểm tĩnh: customStoreId sẽ có giá trị (vd: "building-a1")
-        // - Nếu User sửa cửa hàng của họ: initialData.id có giá trị
-        // - Nếu Tạo mới: Cả 2 đều null
         let targetId = customStoreId || initialData?.id;
         
-        // 3. CHUẨN BỊ DỮ LIỆU ĐỂ LƯU
         const storeDataToSave = {
-            id: targetId, // Nếu null thì Supabase tự sinh UUID, nếu có text thì nó dùng text đó
+            id: targetId,
             user_id: session?.user?.id,
             name_vi: formData.name_vi,
             address_vi: formData.address_vi,
@@ -197,11 +189,9 @@ export const StoreFormModal = ({
             image_url: finalImageUrl,
             lat: formData.lat,
             lng: formData.lng,
-            // Nếu là Admin sửa (có customStoreId) -> Set luôn là Premium
             is_premium: customStoreId ? true : (initialData?.is_premium || false)
         };
 
-        // 4. LƯU VÀO DB (UPSERT: Có rồi thì sửa, chưa có thì thêm)
         const { data: savedStore, error: saveError } = await (supabase as any)
             .from('user_stores')
             .upsert(storeDataToSave)
@@ -210,10 +200,8 @@ export const StoreFormModal = ({
 
         if (saveError) throw saveError;
 
-        // Cập nhật lại targetId nếu vừa tạo mới (trường hợp tạo cửa hàng mới)
         if (!targetId && savedStore) targetId = savedStore.id;
 
-        // 5. UPLOAD GALLERY
         if (targetId && galleryFiles.length > 0) {
             if (canUploadGallery) {
                 let count = 0;
@@ -232,8 +220,6 @@ export const StoreFormModal = ({
         }
 
         toast.success(customStoreId ? "Đã cập nhật địa điểm hệ thống!" : "Đã lưu cửa hàng!");
-        
-        // Đóng modal và gọi callback
         if (onSubmit) await onSubmit(storeDataToSave);
         onClose();
 
@@ -299,16 +285,91 @@ export const StoreFormModal = ({
                         <Label>Tên địa điểm <span className="text-red-500">*</span></Label>
                         <Input required value={formData.name_vi} onChange={e => setFormData({...formData, name_vi: e.target.value})} />
                     </div>
+                    
+                    {/* --- PHẦN DANH MỤC MỚI ĐÃ ĐƯỢC CẬP NHẬT TẠI ĐÂY --- */}
                     <div className="space-y-2">
-                        <Label>Danh mục</Label>
-                        <Select value={formData.category} onValueChange={v => setFormData({...formData, category: v})}>
-                            <SelectTrigger><SelectValue/></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="building">🏢 Tòa nhà</SelectItem>
-                                <SelectItem value="cafe">☕ Cà phê</SelectItem>
-                                <SelectItem value="restaurant">🍴 Nhà hàng</SelectItem>
-                                <SelectItem value="street_food">🍢 Ăn vặt</SelectItem>
-                                <SelectItem value="utility">🛠️ Tiện ích</SelectItem>
+                        <Label>Danh mục <span className="text-red-500">*</span></Label>
+                        <Select 
+                            value={formData.category} 
+                            onValueChange={(v) => setFormData({...formData, category: v})}
+                        >
+                            <SelectTrigger className="bg-white">
+                                {/* Thay placeholder cứng bằng hàm dịch */}
+                                <SelectValue placeholder={t('selectCategory') || "Chọn danh mục"} />
+                            </SelectTrigger>
+                            <SelectContent className="max-h-[300px]">
+                                {/* 1. Ăn uống */}
+                                <SelectItem value="food">
+                                  <div className="flex items-center gap-2">
+                                    <Utensils className="w-4 h-4 text-orange-500" />
+                                    <span>{t('food')}</span>
+                                  </div>
+                                </SelectItem>
+
+                                {/* 2. Café */}
+                                <SelectItem value="cafe">
+                                  <div className="flex items-center gap-2">
+                                    <Coffee className="w-4 h-4 text-amber-700" />
+                                    <span>{t('cafe')}</span>
+                                  </div>
+                                </SelectItem>
+
+                                {/* 3. Vui chơi */}
+                                <SelectItem value="entertainment">
+                                  <div className="flex items-center gap-2">
+                                    <Gamepad2 className="w-4 h-4 text-pink-500" />
+                                    <span>{t('entertainment')}</span>
+                                  </div>
+                                </SelectItem>
+
+                                {/* 4. Giảng đường */}
+                                <SelectItem value="lecture_hall">
+                                  <div className="flex items-center gap-2">
+                                    <GraduationCap className="w-4 h-4 text-sky-500" />
+                                    <span>{t('lecture_hall')}</span>
+                                  </div>
+                                </SelectItem>
+
+                                {/* 5. Văn phòng */}
+                                <SelectItem value="office">
+                                  <div className="flex items-center gap-2">
+                                    <Building className="w-4 h-4 text-slate-500" />
+                                    <span>{t('office')}</span>
+                                  </div>
+                                </SelectItem>
+
+                                {/* 6. Nhà trọ */}
+                                <SelectItem value="housing">
+                                  <div className="flex items-center gap-2">
+                                    <Home className="w-4 h-4 text-blue-500" />
+                                    <span>{t('housing')}</span>
+                                  </div>
+                                </SelectItem>
+
+                                {/* 7. Việc làm */}
+                                <SelectItem value="job">
+                                  <div className="flex items-center gap-2">
+                                    <Briefcase className="w-4 h-4 text-purple-500" />
+                                    <span>{t('job')}</span>
+                                  </div>
+                                </SelectItem>
+
+                                {/* 8. Tòa nhà */}
+                                <SelectItem value="building">
+                                  <div className="flex items-center gap-2">
+                                    <Building2 className="w-4 h-4 text-emerald-500" />
+                                    <span>{t('building')}</span>
+                                  </div>
+                                </SelectItem>
+
+                                {/* 9. Check-in */}
+                                <SelectItem value="checkin">
+                                  <div className="flex items-center gap-2">
+                                    <UserCheck className="w-4 h-4 text-rose-500" />
+                                    <span>{t('checkin')}</span>
+                                  </div>
+                                </SelectItem>
+
                             </SelectContent>
                         </Select>
                     </div>
