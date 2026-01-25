@@ -1,11 +1,13 @@
-import { useEffect, useRef, useState, useMemo } from 'react';
-import { createRoot, Root } from 'react-dom/client'; // Kỹ thuật để vẽ Icon React vào Mapbox
+import { useEffect, useRef, useState } from 'react';
+import { createRoot, Root } from 'react-dom/client';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
-// --- IMPORT ICON ĐẸP ---
+// --- IMPORT ICON TỪ LUCIDE ---
 import { 
-  School, Utensils, Home, Briefcase, MapPin, Star, Navigation, Coffee, GraduationCap, Building, Gamepad2} from 'lucide-react';
+  School, Utensils, Home, Briefcase, MapPin, Star, 
+  Coffee, GraduationCap, Building, Gamepad2, Building2, UserCheck
+} from 'lucide-react';
 
 import { Location, VNU_CENTER, locations, LocationType } from '@/data/locations';
 import { RouteInfo } from '@/hooks/useDirections';
@@ -30,46 +32,72 @@ interface MapViewProps {
   isMultiStopMode: boolean;
 }
 
-// --- COMPONENT ICON ĐỂ RENDER ---
+// --- COMPONENT RENDER ICON MARKER ---
 const MarkerIcon = ({ type, isSelected, isSponsored, hasVoucher }: { type: LocationType, isSelected: boolean, isSponsored: boolean, hasVoucher?: boolean }) => {
+  // Cấu hình Icon và Màu sắc mặc định
   let Icon = MapPin;
   let color = '#64748B'; 
   let bg = '#F8FAFC';
 
+  // --- LOGIC CHỌN ICON THEO DANH MỤC ---
   switch (type) {
-    // --- CÁC LOẠI MỚI ---
     case 'lecture_hall': 
       Icon = GraduationCap; 
-      color = '#0EA5E9'; // Sky Blue (Giảng đường màu xanh trời)
+      color = '#0EA5E9'; // Xanh dương trời (Sky)
       bg = '#E0F2FE'; 
       break;
     case 'office': 
       Icon = Building; 
-      color = '#475569'; // Slate (Văn phòng màu xám nghiêm túc)
+      color = '#475569'; // Xám đậm (Slate)
       bg = '#F1F5F9'; 
       break;
     case 'cafe': 
       Icon = Coffee; 
-      color = '#78350F'; // Brown (Cafe màu nâu)
+      color = '#D97706'; // Nâu cam (Amber)
       bg = '#FEF3C7'; 
       break;
     case 'entertainment': 
       Icon = Gamepad2; 
-      color = '#DB2777'; // Pink (Vui chơi màu hồng)
+      color = '#DB2777'; // Hồng đậm (Pink)
       bg = '#FCE7F3'; 
       break;
-    case 'building': Icon = School; color = '#10B981'; bg = '#ECFDF5'; break; // Xanh lá
-    case 'food': Icon = Utensils; color = '#F97316'; bg = '#FFF7ED'; break; // Cam
-    case 'housing': Icon = Home; color = '#3B82F6'; bg = '#EFF6FF'; break; // Xanh dương
-    case 'job': Icon = Briefcase; color = '#8B5CF6'; bg = '#F5F3FF'; break; // Tím
+    case 'food': 
+      Icon = Utensils; 
+      color = '#F97316'; // Cam (Orange)
+      bg = '#FFF7ED'; 
+      break;
+    case 'housing': 
+      Icon = Home; 
+      color = '#3B82F6'; // Xanh dương (Blue)
+      bg = '#EFF6FF'; 
+      break;
+    case 'job': 
+      Icon = Briefcase; 
+      color = '#8B5CF6'; // Tím (Violet)
+      bg = '#F5F3FF'; 
+      break;
+    case 'building': 
+      Icon = Building2; 
+      color = '#10B981'; // Xanh lá (Emerald)
+      bg = '#ECFDF5'; 
+      break;
+    case 'checkin':
+      Icon = UserCheck;
+      color = '#EC4899'; // Hồng (Pink)
+      bg = '#FDF2F8';
+      break;
+    default:
+      Icon = MapPin;
+      color = '#64748B';
+      bg = '#F8FAFC';
   }
 
   const size = isSelected ? 48 : (isSponsored ? 42 : 36);
   const iconSize = isSelected ? 24 : (isSponsored ? 20 : 18);
 
   return (
-    <div className="relative flex flex-col items-center justify-center transition-all duration-300"
-         style={{ transform: isSelected ? 'scale(1.15) translateY(-5px)' : 'scale(1)' }}>
+    <div className="relative flex flex-col items-center justify-center transition-all duration-300 group cursor-pointer"
+         style={{ transform: isSelected ? 'scale(1.15) translateY(-10px)' : 'scale(1)' }}>
       
       {/* 1. Vòng tròn Icon */}
       <div style={{
@@ -81,11 +109,12 @@ const MarkerIcon = ({ type, isSelected, isSponsored, hasVoucher }: { type: Locat
         boxShadow: isSelected 
           ? `0 10px 25px -5px ${color}90` 
           : '0 4px 6px -1px rgba(0,0,0,0.15)',
+        zIndex: isSelected ? 50 : 10
       }}>
         <Icon size={iconSize} color={isSelected ? 'white' : color} strokeWidth={2.5} />
       </div>
 
-      {/* 2. Mũi nhọn (Pin tail) - Chỉ hiện khi chưa chọn */}
+      {/* 2. Mũi nhọn (Pin tail) */}
       {!isSelected && (
         <div style={{
           width: 0, height: 0,
@@ -97,10 +126,10 @@ const MarkerIcon = ({ type, isSelected, isSponsored, hasVoucher }: { type: Locat
         }} />
       )}
 
-      {/* 3. Sao Voucher */}
+      {/* 3. Sao Voucher (Nảy nảy) */}
       {hasVoucher && (
-        <div className="absolute -top-1 -right-1 bg-yellow-400 border-2 border-white rounded-full p-0.5 shadow-sm animate-bounce">
-          <Star size={10} fill="white" className="text-white" />
+        <div className="absolute -top-2 -right-2 bg-yellow-400 border-2 border-white rounded-full p-0.5 shadow-sm animate-bounce z-[60]">
+          <Star size={12} fill="white" className="text-white" />
         </div>
       )}
     </div>
@@ -125,7 +154,6 @@ export const MapView = ({
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   
-  // Quản lý Marker & Root React
   const markersRef = useRef<{ marker: mapboxgl.Marker, root: Root }[]>([]);
   const originMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const destinationMarkerRef = useRef<mapboxgl.Marker | null>(null);
@@ -150,7 +178,7 @@ export const MapView = ({
     setMapboxTokenState(token);
   };
 
-  // --- 1. SETUP MAP (GIỮ NGUYÊN) ---
+  // 1. KHỞI TẠO MAP
   useEffect(() => {
     if (!mapContainer.current || map.current || !mapboxToken) return;
 
@@ -190,29 +218,30 @@ export const MapView = ({
     };
   }, [mapboxToken]);
 
-  // --- 2. VẼ MARKER ICON ĐẸP (SỬ DỤNG REACT ROOT) ---
+  // 2. VẼ MARKER ICON
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
 
-    // Xóa marker cũ & Unmount React Root để tránh memory leak
+    // Clear markers cũ
     markersRef.current.forEach(({ marker, root }) => {
-      root.unmount(); // Quan trọng: Hủy React instance
-      marker.remove(); // Xóa DOM khỏi map
+      root.unmount();
+      marker.remove();
     });
     markersRef.current = [];
 
+    // Gộp dữ liệu có sẵn + cửa hàng người dùng
     const allLocations = [...locations, ...storesAsLocations];
+    // Lọc theo danh mục đang chọn
     const filteredLocations = allLocations.filter(loc => activeCategories.includes(loc.type));
 
     filteredLocations.forEach((location) => {
-      // 1. Tạo thẻ DIV chứa marker
       const el = document.createElement('div');
-      el.className = 'custom-marker-container'; // Class để CSS nếu cần
+      el.className = 'custom-marker-container';
       
-      // 2. Tạo React Root và Render Icon vào đó
       const root = createRoot(el);
       const isSelected = selectedLocation?.id === location.id;
       
+      // Render React Component vào Marker
       root.render(
         <MarkerIcon 
           type={location.type} 
@@ -222,26 +251,19 @@ export const MapView = ({
         />
       );
 
-      // 3. Label Tên (Chỉ hiện cho Building hoặc khi chọn)
+      // Label tên địa điểm (khi chọn hoặc là Tòa nhà)
       if (location.type === 'building' || isSelected) {
         const nameEl = document.createElement('div');
         const nameText = language === 'en' && location.name ? location.name : location.nameVi;
-        nameEl.innerHTML = `<div class="px-2 py-1 bg-slate-900/90 text-white text-[10px] font-bold rounded shadow-lg backdrop-blur-sm mt-1 whitespace-nowrap">${nameText}</div>`;
-        nameEl.style.position = 'absolute';
-        nameEl.style.top = '100%';
-        nameEl.style.left = '50%';
-        nameEl.style.transform = 'translateX(-50%)';
-        nameEl.style.zIndex = '100';
+        nameEl.innerHTML = `<div class="px-2 py-1 bg-slate-900/90 text-white text-[10px] font-bold rounded shadow-lg backdrop-blur-sm mt-2 whitespace-nowrap transform -translate-x-1/2 left-1/2 relative">${nameText}</div>`;
         el.appendChild(nameEl);
       }
 
-      // 4. Sự kiện Click
       el.addEventListener('click', (e) => {
         e.stopPropagation();
         onSelectLocation(location);
       });
 
-      // 5. Thêm vào Map
       const marker = new mapboxgl.Marker({ element: el, anchor: 'bottom' })
         .setLngLat([location.lng, location.lat])
         .addTo(map.current!);
@@ -251,7 +273,7 @@ export const MapView = ({
 
   }, [activeCategories, mapLoaded, selectedLocation, onSelectLocation, language, storesAsLocations]);
 
-  // --- 3. FLY TO (GIỮ NGUYÊN) ---
+  // 3. FLY TO KHI CHỌN
   useEffect(() => {
     if (!map.current || !flyToLocation) return;
     map.current.flyTo({
@@ -262,11 +284,11 @@ export const MapView = ({
     });
   }, [flyToLocation]);
 
-  // --- 4. LOGIC VẼ ĐƯỜNG ĐI (ĐÃ FIX LỖI MULTI-STOP) ---
+  // 4. VẼ ĐƯỜNG ĐI (ROUTE)
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
     
-    // Clean up
+    // Cleanup Layers cũ
     if (map.current.getLayer(routeArrowLayerId)) map.current.removeLayer(routeArrowLayerId);
     if (map.current.getLayer(routeLayerId)) map.current.removeLayer(routeLayerId);
     if (map.current.getSource(routeSourceId)) map.current.removeSource(routeSourceId);
@@ -276,7 +298,6 @@ export const MapView = ({
     const activeRouteData = isMultiStopMode ? multiStopRoute : routeInfo;
     if (!activeRouteData?.geometry) return;
 
-    // Vẽ đường
     map.current.addSource(routeSourceId, {
       type: 'geojson',
       data: { type: 'Feature', properties: {}, geometry: activeRouteData.geometry },
@@ -293,7 +314,6 @@ export const MapView = ({
       layout: { 'symbol-placement': 'line', 'symbol-spacing': 80, 'icon-image': 'arrow-right', 'icon-size': 0.6, 'icon-allow-overlap': true, 'icon-ignore-placement': true },
     });
 
-    // Load Arrow Icon
     if (!map.current.hasImage('arrow-right')) {
         const arrowSvg = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M5 12H19M19 12L12 5M19 12L12 19" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
         const img = new Image(24, 24);
@@ -301,7 +321,6 @@ export const MapView = ({
         img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(arrowSvg);
     }
 
-    // Vẽ điểm đầu/cuối
     if (routeOrigin) {
       const el = document.createElement('div');
       const root = createRoot(el);
@@ -312,24 +331,17 @@ export const MapView = ({
     if (!isMultiStopMode && routeDestination) {
       const el = document.createElement('div');
       const root = createRoot(el);
-      root.render(
-        <div className="flex flex-col items-center pb-2">
-           <MapPin size={32} className="text-red-600 drop-shadow-md fill-red-600" />
-        </div>
-      );
+      root.render(<div className="flex flex-col items-center pb-2"><MapPin size={32} className="text-red-600 drop-shadow-md fill-red-600" /></div>);
       destinationMarkerRef.current = new mapboxgl.Marker({ element: el, anchor: 'bottom' }).setLngLat(routeDestination).addTo(map.current);
     }
 
-    // Fit Bounds
     const coordinates = activeRouteData.geometry.coordinates as [number, number][];
     if (coordinates && coordinates.length > 0) {
         const bounds = coordinates.reduce((b, c) => b.extend(c as [number, number]), new mapboxgl.LngLatBounds(coordinates[0], coordinates[0]));
         map.current.fitBounds(bounds, { padding: { top: 150, bottom: 300, left: 50, right: 50 }, duration: 1000 });
     }
-
   }, [routeInfo, multiStopRoute, isMultiStopMode, routeOrigin, routeDestination, mapLoaded]); 
 
-  // --- 5. BANNER HELPER ---
   const handleFlyToStore = (lat: number, lng: number) => {
     if (map.current) {
       if (tempMarkerRef.current) tempMarkerRef.current.remove();
