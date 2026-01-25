@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Plus, Store, Edit2, Trash2, UtensilsCrossed, Tag, ChevronDown, ChevronUp, Clock, MapPin, Phone, AlertCircle } from 'lucide-react';
+import { X, Plus, Store, Edit2, Trash2, UtensilsCrossed, Tag, ChevronDown, ChevronUp, MapPin, Phone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { useUserStores, UserStore, StoreMenuItem, StoreVoucher } from '@/hooks/useUserStores';
 import { StoreFormModal } from './StoreFormModal';
-import { MenuItemForm } from './MenuItemForm'; // Đảm bảo bạn đã có file này
-import { VoucherForm } from './VoucherForm';   // Đảm bảo bạn đã có file này
+import { MenuItemForm } from './MenuItemForm'; 
+import { VoucherForm } from './VoucherForm';   
 import { useAuth } from '@/hooks/useAuth';
 
 interface StoreManagementPanelProps {
@@ -29,23 +29,21 @@ const STATUS_LABELS = {
 
 export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreManagementPanelProps) => {
   const { language } = useLanguage();
-  const { session } = useAuth(); // Dùng session để check login
+  const { session } = useAuth(); 
   
+  // Lưu ý: Không cần lấy createStore/updateStore ra vì Modal đã tự làm việc đó
   const { 
     stores, isLoading, fetchStores, 
-    createStore, updateStore, deleteStore, 
+    deleteStore, 
     fetchMenuItems, fetchVouchers, deleteMenuItem, deleteVoucher 
   } = useUserStores();
   
-  // State cho Store Modal
   const [showStoreForm, setShowStoreForm] = useState(false);
   const [editingStore, setEditingStore] = useState<UserStore | null>(null);
   
-  // State cho Accordion (Mở rộng chi tiết cửa hàng)
   const [expandedStoreId, setExpandedStoreId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'menu' | 'voucher'>('menu');
   
-  // State cho Menu & Voucher
   const [menuItems, setMenuItems] = useState<StoreMenuItem[]>([]);
   const [vouchers, setVouchers] = useState<StoreVoucher[]>([]);
   const [showMenuForm, setShowMenuForm] = useState(false);
@@ -53,7 +51,6 @@ export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreMan
   const [editingMenuItem, setEditingMenuItem] = useState<StoreMenuItem | null>(null);
   const [editingVoucher, setEditingVoucher] = useState<StoreVoucher | null>(null);
 
-  // Load chi tiết khi mở rộng 1 cửa hàng
   useEffect(() => {
     if (expandedStoreId) {
       loadStoreDetails(expandedStoreId);
@@ -69,24 +66,23 @@ export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreMan
     setVouchers(voucherList);
   };
 
-  // --- HÀM QUAN TRỌNG: XỬ LÝ SUBMIT STORE ---
+  // --- 🔥 SỬA LỖI QUAN TRỌNG TẠI ĐÂY 🔥 ---
   const handleStoreSubmit = async (formData: any) => {
+    // Modal đã tự lưu vào Supabase rồi.
+    // Tại đây, ta CHỈ CẦN tải lại danh sách mới nhất để hiển thị.
+    // TUYỆT ĐỐI KHÔNG gọi createStore() hay updateStore() ở đây nữa.
+    
     try {
-      if (editingStore) {
-        // Nếu đang sửa
-        await updateStore(editingStore.id, formData);
-      } else {
-        // Nếu tạo mới
-        await createStore(formData);
-      }
-      // Đóng modal và reset
-      setShowStoreForm(false);
-      setEditingStore(null);
-    } catch (error) {
-      console.error("Lỗi khi lưu cửa hàng:", error);
+      await fetchStores(); // <-- Chỉ reload lại danh sách
+    } catch (e) {
+      console.error(e);
     }
+    
+    // Đóng modal và reset
+    setShowStoreForm(false);
+    setEditingStore(null);
   };
-  // ------------------------------------------
+  // ----------------------------------------
 
   const handleDeleteStore = async (storeId: string) => {
     if (confirm(language === 'vi' ? 'Bạn có chắc muốn xóa cửa hàng này?' : 'Are you sure you want to delete this store?')) {
@@ -97,14 +93,14 @@ export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreMan
   const handleDeleteMenuItem = async (itemId: string) => {
     if (confirm(language === 'vi' ? 'Xóa món này?' : 'Delete this item?')) {
       await deleteMenuItem(itemId);
-      if (expandedStoreId) loadStoreDetails(expandedStoreId); // Reload lại list
+      if (expandedStoreId) loadStoreDetails(expandedStoreId); 
     }
   };
 
   const handleDeleteVoucher = async (voucherId: string) => {
     if (confirm(language === 'vi' ? 'Xóa voucher này?' : 'Delete this voucher?')) {
       await deleteVoucher(voucherId);
-      if (expandedStoreId) loadStoreDetails(expandedStoreId); // Reload lại list
+      if (expandedStoreId) loadStoreDetails(expandedStoreId); 
     }
   };
 
@@ -116,7 +112,6 @@ export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreMan
 
   return (
     <>
-      {/* Backdrop mờ */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -125,7 +120,6 @@ export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreMan
         onClick={onClose}
       />
       
-      {/* Panel trượt từ phải sang */}
       <motion.div
         initial={{ x: '100%' }}
         animate={{ x: 0 }}
@@ -133,7 +127,6 @@ export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreMan
         transition={{ type: 'spring', damping: 30, stiffness: 300 }}
         className="fixed right-0 top-0 bottom-0 w-full max-w-md bg-background z-50 shadow-2xl flex flex-col bg-white"
       >
-        {/* Header Panel */}
         <div className="flex items-center justify-between p-4 border-b">
           <h2 className="text-lg font-semibold flex items-center gap-2">
             <Store className="w-5 h-5 text-primary" />
@@ -144,7 +137,6 @@ export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreMan
           </button>
         </div>
 
-        {/* Content Panel */}
         <div className="flex-1 overflow-y-auto p-4 bg-gray-50/50">
           {!session ? (
             <div className="text-center py-12">
@@ -175,7 +167,6 @@ export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreMan
             <div className="space-y-4">
               {stores.map(store => (
                 <div key={store.id} className="border bg-white rounded-xl overflow-hidden shadow-sm">
-                  {/* Thông tin Store */}
                   <div className="p-4">
                     <div className="flex gap-3">
                       <div className="w-16 h-16 flex-shrink-0">
@@ -206,16 +197,9 @@ export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreMan
                           <MapPin className="w-3 h-3 flex-shrink-0" />
                           <span className="truncate">{language === 'en' && store.address_en ? store.address_en : store.address_vi}</span>
                         </div>
-                        {store.phone && (
-                          <div className="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
-                            <Phone className="w-3 h-3 flex-shrink-0" />
-                            <span>{store.phone}</span>
-                          </div>
-                        )}
                       </div>
                     </div>
 
-                    {/* Nút hành động Store */}
                     <div className="flex items-center gap-2 mt-4 pt-3 border-t">
                       <Button
                         variant="outline"
@@ -248,7 +232,6 @@ export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreMan
                     </div>
                   </div>
 
-                  {/* Phần mở rộng: Menu & Voucher */}
                   <AnimatePresence>
                     {expandedStoreId === store.id && (
                       <motion.div
@@ -257,7 +240,6 @@ export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreMan
                         exit={{ height: 0, opacity: 0 }}
                         className="border-t bg-gray-50"
                       >
-                        {/* Tabs */}
                         <div className="flex border-b bg-white">
                           <button
                             onClick={() => setActiveTab('menu')}
@@ -282,7 +264,6 @@ export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreMan
                         <div className="p-4">
                           {activeTab === 'menu' ? (
                             <>
-                              {/* Form thêm Menu */}
                               <AnimatePresence>
                                 {showMenuForm && (
                                   <MenuItemForm
@@ -309,7 +290,6 @@ export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreMan
                                 </Button>
                               )}
 
-                              {/* Danh sách Menu */}
                               <div className="space-y-2">
                                 {menuItems.map(item => (
                                   <div key={item.id} className="flex items-center gap-3 p-2 bg-white rounded-lg border shadow-sm">
@@ -348,7 +328,6 @@ export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreMan
                             </>
                           ) : (
                             <>
-                              {/* Form thêm Voucher */}
                               <AnimatePresence>
                                 {showVoucherForm && (
                                   <VoucherForm
@@ -375,7 +354,6 @@ export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreMan
                                 </Button>
                               )}
 
-                              {/* Danh sách Voucher */}
                               <div className="space-y-2">
                                 {vouchers.map(voucher => (
                                   <div key={voucher.id} className="p-3 bg-white rounded-lg border border-dashed border-primary/30">
@@ -385,11 +363,6 @@ export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreMan
                                           <span className="font-mono text-xs font-bold bg-primary/10 text-primary px-2 py-0.5 rounded">
                                             {voucher.code}
                                           </span>
-                                          {!voucher.is_active && (
-                                            <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">
-                                              Dừng
-                                            </span>
-                                          )}
                                         </div>
                                         <p className="text-sm font-medium mt-1 text-gray-900">
                                           {language === 'en' && voucher.title_en ? voucher.title_en : voucher.title_vi}
@@ -431,7 +404,6 @@ export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreMan
                 </div>
               ))}
 
-              {/* Nút thêm cửa hàng dưới cùng */}
               <Button onClick={() => setShowStoreForm(true)} className="w-full shadow-lg">
                 <Plus className="w-4 h-4 mr-2" />
                 {language === 'vi' ? 'Thêm cửa hàng mới' : 'Add New Store'}
@@ -441,15 +413,14 @@ export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreMan
         </div>
       </motion.div>
 
-      {/* --- MODAL CHÍNH THỨC (Đã sửa khớp props) --- */}
       <StoreFormModal
         isOpen={showStoreForm}
         onClose={() => {
           setShowStoreForm(false);
           setEditingStore(null);
         }}
-        initialData={editingStore}    // <-- Đã sửa: dùng initialData
-        onSubmit={handleStoreSubmit}  // <-- Đã sửa: dùng onSubmit và hàm handleStoreSubmit
+        initialData={editingStore}
+        onSubmit={handleStoreSubmit}
         isSubmitting={isLoading}
       />
     </>

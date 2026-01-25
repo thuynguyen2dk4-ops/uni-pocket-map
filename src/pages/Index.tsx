@@ -3,7 +3,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Compass, Heart } from 'lucide-react';
 import { toast } from 'sonner';
-
+import { MiniShowcase } from '@/components/MiniShowcase';
 import { MapView } from '@/components/MapView';
 import { SearchBar } from '@/components/SearchBar'; 
 import { CategoryFilter } from '@/components/CategoryFilter';
@@ -424,6 +424,10 @@ const Index = () => {
           setShowAuthModal(true);
         }}
       />
+      {/* Chỉ hiện khi không đang dẫn đường */}
+      {!isNavigating && (
+         <MiniShowcase onSelectLocation={handleSelectLocation} />
+      )}
     </div>
   );
 };

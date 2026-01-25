@@ -3,7 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { toast } from "sonner";
 
-// Định nghĩa lại Type cho khớp với DB
+// --- 1. ĐỊNH NGHĨA INTERFACE ---
+
 export interface UserStore {
   id: string;
   user_id: string;
@@ -20,89 +21,113 @@ export interface UserStore {
   open_hours_vi: string | null;
   open_hours_en: string | null;
   image_url: string | null;
-  status: string;
+  status: 'pending' | 'approved' | 'rejected';
+  // is_active: boolean; // Tạm ẩn vì DB chưa có
   created_at: string;
   updated_at: string;
 }
+
+export interface StoreMenuItem {
+  id: string;
+  store_id: string;
+  name_vi: string;
+  name_en?: string;
+  description_vi?: string;
+  description_en?: string;
+  price: number;
+  image_url?: string;
+  category?: string;
+  is_available: boolean;
+  sort_order?: number;
+}
+
+export interface StoreVoucher {
+  id: string;
+  store_id: string;
+  code: string;
+  title_vi: string;
+  title_en?: string;
+  description_vi?: string;
+  description_en?: string;
+  discount_type: 'percent' | 'fixed';
+  discount_value: number;
+  min_order_value?: number;
+  min_order?: number;     
+  max_discount_amount?: number;
+  start_date?: string;
+  end_date?: string;
+  usage_limit?: number;
+  max_uses?: number;      
+  used_count?: number;
+  is_active: boolean;
+}
+
+// --- 2. HOOK CHÍNH ---
 
 export const useUserStores = () => {
   const { session } = useAuth();
   const queryClient = useQueryClient();
   const user = session?.user;
 
-  // 1. Lấy danh sách cửa hàng (Query)
-  const { data: stores = [], isLoading } = useQuery({
+  // --- A. QUẢN LÝ CỬA HÀNG (STORES) ---
+
+  const { data: stores = [], isLoading, refetch } = useQuery({
     queryKey: ['user_stores', user?.id],
     queryFn: async () => {
       if (!user) return [];
-      
       const { data, error } = await supabase
-        .from('user_stores') // <--- ĐÃ SỬA: Dùng đúng tên bảng
+        .from('user_stores')
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
-
       if (error) throw error;
       return data as UserStore[];
     },
     enabled: !!user,
   });
 
-  // 2. Tạo cửa hàng (Mutation)
   const createStoreMutation = useMutation({
-    mutationFn: async (storeData: Omit<UserStore, 'id' | 'user_id' | 'status' | 'created_at' | 'updated_at'>) => {
+    mutationFn: async (storeData: Partial<UserStore>) => {
       if (!user) throw new Error("Vui lòng đăng nhập");
-
+      // Loại bỏ các trường không cần thiết khi insert
+      const { id, created_at, updated_at, ...payload } = storeData as any;
+      
+      // --- SỬA LỖI Ở ĐÂY: XÓA is_active: true ---
       const { data, error } = await supabase
-        .from('user_stores') // <--- ĐÃ SỬA
-        .insert({
-          ...storeData,
-          user_id: user.id, // <--- ĐÃ SỬA: Dùng user_id thay vì owner_id
-          status: 'pending' // Mặc định chờ duyệt
+        .from('user_stores')
+        .insert({ 
+            ...payload, 
+            user_id: user.id, 
+            status: 'pending' 
+            // Đã xóa dòng is_active: true để tránh lỗi DB chưa có cột
         })
-        .select()
-        .single();
-
+        .select().single();
+      
       if (error) throw error;
       return data;
     },
     onSuccess: () => {
-      // Tự động refresh lại list ngay lập tức
       queryClient.invalidateQueries({ queryKey: ['user_stores'] });
-      toast.success('Đã tạo cửa hàng thành công!');
+      toast.success('Đã gửi yêu cầu tạo cửa hàng!');
     },
-    onError: (err) => {
-      console.error(err);
-      toast.error('Lỗi khi tạo cửa hàng: ' + err.message);
-    },
+    onError: (err) => toast.error('Lỗi: ' + err.message),
   });
 
-  // 3. Cập nhật cửa hàng
   const updateStoreMutation = useMutation({
-    mutationFn: async ({ id, ...updates }: Partial<UserStore> & { id: string }) => {
-      // Lọc bỏ các trường undefined/null không cần thiết nếu muốn
-      const { error } = await supabase
-        .from('user_stores') // <--- ĐÃ SỬA
-        .update(updates)
-        .eq('id', id);
-
+    mutationFn: async ({ id, data }: { id: string; data: Partial<UserStore> }) => {
+      const { error } = await supabase.from('user_stores').update(data).eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user_stores'] });
       toast.success('Đã cập nhật cửa hàng!');
     },
-    onError: (err) => toast.error('Lỗi cập nhật: ' + err.message),
+    onError: (err) => toast.error('Lỗi: ' + err.message),
   });
 
-  // 4. Xóa cửa hàng
   const deleteStoreMutation = useMutation({
     mutationFn: async (storeId: string) => {
-      const { error } = await supabase
-        .from('user_stores') // <--- ĐÃ SỬA
-        .delete()
-        .eq('id', storeId);
-
+      const { error } = await supabase.from('user_stores').delete().eq('id', storeId);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -112,41 +137,124 @@ export const useUserStores = () => {
     onError: (err) => toast.error('Lỗi xóa: ' + err.message),
   });
 
-  // Helper upload ảnh (Giữ nguyên logic cũ nhưng bọc lại gọn hơn)
-  const uploadImage = async (file: File, folder: string = 'stores'): Promise<string | null> => {
-    if (!user) return null;
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${user.id}/${folder}/${Date.now()}.${fileExt}`;
+  // --- B. QUẢN LÝ MENU ---
 
+  const fetchMenuItems = async (storeId: string): Promise<StoreMenuItem[]> => {
+    const { data } = await supabase.from('store_menu_items').select('*').eq('store_id', storeId).order('sort_order', { ascending: true });
+    return (data as StoreMenuItem[]) || [];
+  };
+
+  const createMenuItemMutation = useMutation({
+    mutationFn: async (itemData: Partial<StoreMenuItem>) => {
+      const { error } = await supabase.from('store_menu_items').insert(itemData as any);
+      if (error) throw error;
+    },
+    onSuccess: () => toast.success('Đã thêm món mới'),
+    onError: (err) => toast.error('Lỗi thêm món: ' + err.message),
+  });
+
+  const updateMenuItemMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<StoreMenuItem> }) => {
+      const { error } = await supabase.from('store_menu_items').update(data).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => toast.success('Đã cập nhật món'),
+    onError: (err) => toast.error('Lỗi cập nhật: ' + err.message),
+  });
+
+  const deleteMenuItemMutation = useMutation({
+    mutationFn: async (itemId: string) => {
+      const { error } = await supabase.from('store_menu_items').delete().eq('id', itemId);
+      if (error) throw error;
+    },
+    onSuccess: () => toast.success('Đã xóa món ăn'),
+  });
+
+  // --- C. QUẢN LÝ VOUCHER ---
+
+  const fetchVouchers = async (storeId: string): Promise<StoreVoucher[]> => {
+    const { data } = await supabase.from('store_vouchers').select('*').eq('store_id', storeId).order('created_at', { ascending: false });
+    return (data as StoreVoucher[]) || [];
+  };
+
+  const createVoucherMutation = useMutation({
+    mutationFn: async (voucherData: Partial<StoreVoucher>) => {
+      const { error } = await supabase.from('store_vouchers').insert(voucherData as any);
+      if (error) throw error;
+    },
+    onSuccess: () => toast.success('Đã tạo voucher'),
+    onError: (err) => toast.error('Lỗi tạo voucher: ' + err.message),
+  });
+
+  const updateVoucherMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<StoreVoucher> }) => {
+      const { error } = await supabase.from('store_vouchers').update(data).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => toast.success('Đã cập nhật voucher'),
+    onError: (err) => toast.error('Lỗi cập nhật: ' + err.message),
+  });
+
+  const deleteVoucherMutation = useMutation({
+    mutationFn: async (voucherId: string) => {
+      const { error } = await supabase.from('store_vouchers').delete().eq('id', voucherId);
+      if (error) throw error;
+    },
+    onSuccess: () => toast.success('Đã xóa voucher'),
+  });
+
+  // --- D. UPLOAD IMAGE (ĐÃ SỬA: Hàm này nhận 2 tham số: file và folder) ---
+  const uploadImage = async (file: File, folder: string = 'common'): Promise<string | null> => {
     try {
+      if (!user) return null;
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user.id}/${folder}/${Date.now()}.${fileExt}`;
+      
       const { error: uploadError } = await supabase.storage
-        .from('store-images') // Đảm bảo bucket này tồn tại
+        .from('avatars') 
         .upload(fileName, file);
 
       if (uploadError) throw uploadError;
 
-      const { data: { publicUrl } } = supabase.storage
-        .from('store-images')
-        .getPublicUrl(fileName);
-
-      return publicUrl;
-    } catch (err) {
-      console.error('Error uploading image:', err);
-      toast.error('Không thể tải ảnh lên');
+      const { data } = supabase.storage.from('avatars').getPublicUrl(fileName);
+      return data.publicUrl;
+    } catch (error) {
+      console.error('Upload failed:', error);
+      toast.error('Lỗi tải ảnh lên');
       return null;
     }
   };
 
+  // --- E. RETURN ĐẦY ĐỦ ---
   return {
     stores,
     isLoading,
-    createStore: createStoreMutation.mutate,
-    updateStore: (id: string, updates: Partial<UserStore>) => updateStoreMutation.mutate({ id, ...updates }),
-    deleteStore: deleteStoreMutation.mutate,
-    uploadImage,
-    // Trả về trạng thái loading của mutation để UI hiển thị spinner
-    isCreating: createStoreMutation.isPending,
-    isUpdating: updateStoreMutation.isPending,
-    isDeleting: deleteStoreMutation.isPending,
+    fetchStores: refetch,
+    
+    // Store Actions
+    createStore: createStoreMutation.mutateAsync,
+    updateStore: async (id: string, data: Partial<UserStore>) => {
+      return await updateStoreMutation.mutateAsync({ id, data });
+    },
+    deleteStore: deleteStoreMutation.mutateAsync,
+
+    // Menu Actions
+    fetchMenuItems,
+    createMenuItem: createMenuItemMutation.mutateAsync,
+    updateMenuItem: async (id: string, data: Partial<StoreMenuItem>) => {
+      return await updateMenuItemMutation.mutateAsync({ id, data });
+    },
+    deleteMenuItem: deleteMenuItemMutation.mutateAsync,
+
+    // Voucher Actions
+    fetchVouchers,
+    createVoucher: createVoucherMutation.mutateAsync,
+    updateVoucher: async (id: string, data: Partial<StoreVoucher>) => {
+      return await updateVoucherMutation.mutateAsync({ id, data });
+    },
+    deleteVoucher: deleteVoucherMutation.mutateAsync,
+
+    // Common
+    uploadImage, // Hàm này giờ đã chuẩn 2 tham số
   };
 };

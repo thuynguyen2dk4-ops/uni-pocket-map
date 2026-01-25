@@ -29,7 +29,7 @@ export const VoucherForm = ({ storeId, voucher, onClose, onSuccess }: VoucherFor
     title_en: voucher?.title_en || '',
     description_vi: voucher?.description_vi || '',
     description_en: voucher?.description_en || '',
-    discount_type: voucher?.discount_type || 'percent',
+    discount_type: (voucher?.discount_type as "percent" | "fixed") || 'percent', // Ép kiểu khởi tạo
     discount_value: voucher?.discount_value || 10,
     min_order: voucher?.min_order || 0,
     max_uses: voucher?.max_uses || null,
@@ -52,7 +52,7 @@ export const VoucherForm = ({ storeId, voucher, onClose, onSuccess }: VoucherFor
         description_en: formData.description_en || null,
         discount_type: formData.discount_type,
         discount_value: formData.discount_value,
-        min_order: formData.min_order || null,
+        min_order: formData.min_order || null, // Sửa lại key cho khớp DB nếu cần (min_order_value) nhưng hook đã map
         max_uses: formData.max_uses || null,
         is_active: formData.is_active,
         start_date: formData.start_date ? new Date(formData.start_date).toISOString() : null,
@@ -157,7 +157,8 @@ export const VoucherForm = ({ storeId, voucher, onClose, onSuccess }: VoucherFor
             <Label className="text-xs">{language === 'vi' ? 'Loại giảm giá' : 'Discount Type'}</Label>
             <Select
               value={formData.discount_type}
-              onValueChange={value => setFormData(prev => ({ ...prev, discount_type: value }))}
+              // --- ĐÃ SỬA LỖI Ở ĐÂY ---
+              onValueChange={value => setFormData(prev => ({ ...prev, discount_type: value as "percent" | "fixed" }))}
             >
               <SelectTrigger className="h-9">
                 <SelectValue />
