@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Plus, Store, Edit2, Trash2, UtensilsCrossed, Tag, ChevronDown, ChevronUp, MapPin, Phone } from 'lucide-react';
+import { X, Plus, Store, Edit2, Trash2, UtensilsCrossed, Tag, ChevronDown, ChevronUp, MapPin, Lock, Crown, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { useUserStores, UserStore, StoreMenuItem, StoreVoucher } from '@/hooks/useUserStores';
@@ -8,6 +8,7 @@ import { StoreFormModal } from './StoreFormModal';
 import { MenuItemForm } from './MenuItemForm'; 
 import { VoucherForm } from './VoucherForm';   
 import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client'; // Thêm import supabase để thanh toán
 
 interface StoreManagementPanelProps {
   isOpen: boolean;
@@ -31,7 +32,6 @@ export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreMan
   const { language } = useLanguage();
   const { session } = useAuth(); 
   
-  // Lưu ý: Không cần lấy createStore/updateStore ra vì Modal đã tự làm việc đó
   const { 
     stores, isLoading, fetchStores, 
     deleteStore, 
@@ -50,6 +50,8 @@ export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreMan
   const [showVoucherForm, setShowVoucherForm] = useState(false);
   const [editingMenuItem, setEditingMenuItem] = useState<StoreMenuItem | null>(null);
   const [editingVoucher, setEditingVoucher] = useState<StoreVoucher | null>(null);
+  
+  const [isUpgrading, setIsUpgrading] = useState(false); // State loading khi bấm mua
 
   useEffect(() => {
     if (expandedStoreId) {
@@ -66,23 +68,15 @@ export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreMan
     setVouchers(voucherList);
   };
 
-  // --- 🔥 SỬA LỖI QUAN TRỌNG TẠI ĐÂY 🔥 ---
   const handleStoreSubmit = async (formData: any) => {
-    // Modal đã tự lưu vào Supabase rồi.
-    // Tại đây, ta CHỈ CẦN tải lại danh sách mới nhất để hiển thị.
-    // TUYỆT ĐỐI KHÔNG gọi createStore() hay updateStore() ở đây nữa.
-    
     try {
-      await fetchStores(); // <-- Chỉ reload lại danh sách
+      await fetchStores(); 
     } catch (e) {
       console.error(e);
     }
-    
-    // Đóng modal và reset
     setShowStoreForm(false);
     setEditingStore(null);
   };
-  // ----------------------------------------
 
   const handleDeleteStore = async (storeId: string) => {
     if (confirm(language === 'vi' ? 'Bạn có chắc muốn xóa cửa hàng này?' : 'Are you sure you want to delete this store?')) {
@@ -101,6 +95,33 @@ export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreMan
     if (confirm(language === 'vi' ? 'Xóa voucher này?' : 'Delete this voucher?')) {
       await deleteVoucher(voucherId);
       if (expandedStoreId) loadStoreDetails(expandedStoreId); 
+    }
+  };
+  
+  // --- HÀM XỬ LÝ THANH TOÁN NGAY TẠI ĐÂY ---
+  const handleUpgradeStore = async (storeId: string) => {
+    setIsUpgrading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('create-checkout', {
+        body: {
+          storeId: storeId,
+          type: 'vip',
+          categoryId: 1, 
+          returnUrl: window.location.href,
+          cancelUrl: window.location.href
+        }
+      });
+
+      if (error) throw error;
+      if (data && data.checkoutUrl) {
+        window.location.href = data.checkoutUrl;
+      } else {
+        throw new Error("Không lấy được link thanh toán");
+      }
+    } catch (err: any) {
+      alert("Lỗi: " + err.message);
+    } finally {
+      setIsUpgrading(false);
     }
   };
 
@@ -165,8 +186,19 @@ export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreMan
             </div>
           ) : (
             <div className="space-y-4">
-              {stores.map(store => (
-                <div key={store.id} className="border bg-white rounded-xl overflow-hidden shadow-sm">
+              {stores.map(store => {
+                // Kiểm tra trạng thái VIP
+                const isPremium = (store as any).is_premium === true;
+
+                return (
+                <div key={store.id} className="border bg-white rounded-xl overflow-hidden shadow-sm relative">
+                  
+                  {isPremium && (
+                      <div className="absolute top-0 right-0 bg-yellow-400 text-yellow-900 text-[10px] font-bold px-2 py-0.5 rounded-bl-lg z-10 flex items-center gap-1">
+                          <Crown className="w-3 h-3 fill-yellow-900" /> VIP
+                      </div>
+                  )}
+
                   <div className="p-4">
                     <div className="flex gap-3">
                       <div className="w-16 h-16 flex-shrink-0">
@@ -186,12 +218,14 @@ export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreMan
                       
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2">
-                          <h3 className="font-semibold truncate text-gray-900">
+                          <h3 className="font-semibold truncate text-gray-900 pr-8">
                             {language === 'en' && store.name_en ? store.name_en : store.name_vi}
                           </h3>
-                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${STATUS_COLORS[store.status as keyof typeof STATUS_COLORS]}`}>
-                            {STATUS_LABELS[store.status as keyof typeof STATUS_LABELS]?.[language] || store.status}
-                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 mt-1">
+                             <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${STATUS_COLORS[store.status as keyof typeof STATUS_COLORS]}`}>
+                                {STATUS_LABELS[store.status as keyof typeof STATUS_LABELS]?.[language] || store.status}
+                             </span>
                         </div>
                         <div className="flex items-center gap-2 text-xs text-gray-500 mt-1">
                           <MapPin className="w-3 h-3 flex-shrink-0" />
@@ -278,16 +312,28 @@ export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreMan
                                 )}
                               </AnimatePresence>
 
+                              {/* --- KIỂM TRA VIP CHO MENU --- */}
                               {!showMenuForm && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => setShowMenuForm(true)}
-                                  className="w-full mb-3 bg-white border-dashed border-2 hover:border-primary hover:text-primary"
-                                >
-                                  <Plus className="w-4 h-4 mr-1" />
-                                  {language === 'vi' ? 'Thêm món mới' : 'Add Item'}
-                                </Button>
+                                isPremium ? (
+                                    <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setShowMenuForm(true)}
+                                    className="w-full mb-3 bg-white border-dashed border-2 hover:border-primary hover:text-primary"
+                                    >
+                                    <Plus className="w-4 h-4 mr-1" />
+                                    {language === 'vi' ? 'Thêm món mới' : 'Add Item'}
+                                    </Button>
+                                ) : (
+                                    <div className="mb-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-center">
+                                        <Lock className="w-5 h-5 mx-auto text-yellow-600 mb-1" />
+                                        <p className="text-xs font-medium text-yellow-800 mb-2">Tính năng Menu chỉ dành cho VIP</p>
+                                        <Button size="sm" onClick={() => handleUpgradeStore(store.id)} disabled={isUpgrading} className="bg-yellow-500 hover:bg-yellow-600 text-white w-full">
+                                            {isUpgrading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Crown className="w-3 h-3 mr-1" />}
+                                            Nâng cấp ngay (5.000đ)
+                                        </Button>
+                                    </div>
+                                )
                               )}
 
                               <div className="space-y-2">
@@ -306,19 +352,10 @@ export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreMan
                                       <p className="text-xs text-primary font-bold">{formatPrice(item.price)}</p>
                                     </div>
                                     <div className="flex gap-1">
-                                      <button
-                                        onClick={() => {
-                                          setEditingMenuItem(item);
-                                          setShowMenuForm(true);
-                                        }}
-                                        className="p-1.5 hover:bg-gray-100 rounded text-gray-600"
-                                      >
+                                      <button onClick={() => { setEditingMenuItem(item); setShowMenuForm(true); }} className="p-1.5 hover:bg-gray-100 rounded text-gray-600">
                                         <Edit2 className="w-3 h-3" />
                                       </button>
-                                      <button
-                                        onClick={() => handleDeleteMenuItem(item.id)}
-                                        className="p-1.5 hover:bg-red-50 rounded text-red-500"
-                                      >
+                                      <button onClick={() => handleDeleteMenuItem(item.id)} className="p-1.5 hover:bg-red-50 rounded text-red-500">
                                         <Trash2 className="w-3 h-3" />
                                       </button>
                                     </div>
@@ -342,16 +379,28 @@ export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreMan
                                 )}
                               </AnimatePresence>
 
+                              {/* --- KIỂM TRA VIP CHO VOUCHER --- */}
                               {!showVoucherForm && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => setShowVoucherForm(true)}
-                                  className="w-full mb-3 bg-white border-dashed border-2 hover:border-primary hover:text-primary"
-                                >
-                                  <Plus className="w-4 h-4 mr-1" />
-                                  {language === 'vi' ? 'Tạo voucher mới' : 'Create Voucher'}
-                                </Button>
+                                isPremium ? (
+                                    <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setShowVoucherForm(true)}
+                                    className="w-full mb-3 bg-white border-dashed border-2 hover:border-primary hover:text-primary"
+                                    >
+                                    <Plus className="w-4 h-4 mr-1" />
+                                    {language === 'vi' ? 'Tạo voucher mới' : 'Create Voucher'}
+                                    </Button>
+                                ) : (
+                                    <div className="mb-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-center">
+                                        <Lock className="w-5 h-5 mx-auto text-yellow-600 mb-1" />
+                                        <p className="text-xs font-medium text-yellow-800 mb-2">Tính năng Voucher chỉ dành cho VIP</p>
+                                        <Button size="sm" onClick={() => handleUpgradeStore(store.id)} disabled={isUpgrading} className="bg-yellow-500 hover:bg-yellow-600 text-white w-full">
+                                            {isUpgrading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Crown className="w-3 h-3 mr-1" />}
+                                            Nâng cấp ngay (5.000đ)
+                                        </Button>
+                                    </div>
+                                )
                               )}
 
                               <div className="space-y-2">
@@ -375,19 +424,10 @@ export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreMan
                                         </p>
                                       </div>
                                       <div className="flex gap-1">
-                                        <button
-                                          onClick={() => {
-                                            setEditingVoucher(voucher);
-                                            setShowVoucherForm(true);
-                                          }}
-                                          className="p-1.5 hover:bg-gray-100 rounded text-gray-600"
-                                        >
+                                        <button onClick={() => { setEditingVoucher(voucher); setShowVoucherForm(true); }} className="p-1.5 hover:bg-gray-100 rounded text-gray-600">
                                           <Edit2 className="w-3 h-3" />
                                         </button>
-                                        <button
-                                          onClick={() => handleDeleteVoucher(voucher.id)}
-                                          className="p-1.5 hover:bg-red-50 rounded text-red-500"
-                                        >
+                                        <button onClick={() => handleDeleteVoucher(voucher.id)} className="p-1.5 hover:bg-red-50 rounded text-red-500">
                                           <Trash2 className="w-3 h-3" />
                                         </button>
                                       </div>
@@ -402,7 +442,7 @@ export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreMan
                     )}
                   </AnimatePresence>
                 </div>
-              ))}
+              )})}
 
               <Button onClick={() => setShowStoreForm(true)} className="w-full shadow-lg">
                 <Plus className="w-4 h-4 mr-2" />
@@ -422,6 +462,17 @@ export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreMan
         initialData={editingStore}
         onSubmit={handleStoreSubmit}
         isSubmitting={isLoading}
+        // Truyền hàm nâng cấp cho Form sửa dùng luôn
+        onUpgradeClick={() => {
+            // Đóng form lại để hiện Popup thanh toán (nếu cần) hoặc chuyển trang
+            // Nếu muốn giữ form mở thì bỏ dòng setShowStoreForm(false) đi
+            if(editingStore) {
+                // Gọi hàm thanh toán đã viết ở trên
+                handleUpgradeStore(editingStore.id); 
+            } else {
+                alert("Vui lòng lưu cửa hàng trước khi nâng cấp!");
+            }
+        }}
       />
     </>
   );

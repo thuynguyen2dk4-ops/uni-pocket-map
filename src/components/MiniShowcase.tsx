@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   MapPin, Star, ChevronDown, ChevronUp, Store, 
   Utensils, Coffee, Gamepad2, GraduationCap, Building, 
-  Home, Briefcase, Building2, UserCheck
+  Home, Briefcase, Building2, UserCheck, Crown
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { UserStore } from '@/hooks/useUserStores';
@@ -64,40 +64,22 @@ export const MiniShowcase = ({ onSelectLocation }: { onSelectLocation: (loc: any
   const [stores, setStores] = useState<Record<string, UserStore[]>>({});
   const [loading, setLoading] = useState(true);
 
+  // --- GỘP USE EFFECT FETCH DATA ---
   useEffect(() => {
     const fetchData = async () => {
       const results: Record<string, UserStore[]> = {};
-      await Promise.all(CATEGORIES.map(async (cat) => {
-        const { data } = await supabase
-          .from('user_stores')
-          .select('*')
-          .eq('category', cat.id)
-          .eq('status', 'approved')
-          .order('is_premium', { ascending: false })
-          .order('created_at', { ascending: false })
-          .limit(10);
-        if (data) results[cat.id] = data as UserStore[];
-      }));
-      setStores(results);
-      setLoading(false);
-    };
-    fetchData();
-  }, []);
-useEffect(() => {
-    const fetchData = async () => {
-      const results: Record<string, UserStore[]> = {};
-      const now = new Date().toISOString(); // Lấy thời gian hiện tại
+      const now = new Date().toISOString(); 
 
       await Promise.all(CATEGORIES.map(async (cat) => {
+        // Query logic: Lấy VIP và Quảng cáo còn hạn
         const { data } = await supabase
           .from('user_stores')
           .select('*')
           .eq('category', cat.id)
           .eq('status', 'approved')
-          // --- LỌC QUẢNG CÁO ---
-          // Chỉ lấy cửa hàng có hạn quảng cáo > bây giờ
-          .gt('ad_expiry', now) 
-          .order('is_premium', { ascending: false })
+          // Ưu tiên: is_vip (hoặc is_premium) lên đầu
+          .order('is_premium', { ascending: false }) 
+          .order('created_at', { ascending: false })
           .limit(10);
           
         if (data && data.length > 0) {
@@ -108,7 +90,8 @@ useEffect(() => {
       setLoading(false);
     };
     fetchData();
-}, []);
+  }, []);
+
   const handleItemClick = (store: UserStore) => {
     const standardizedLocation = {
       ...store,
@@ -128,7 +111,6 @@ useEffect(() => {
   const currentStores = stores[activeTab] || [];
 
   return (
-    // CẬP NHẬT: top-[112px] để nằm ngay dưới hàng nút lọc
     <div className="absolute top-[112px] left-3 z-[30] flex flex-col items-start gap-2">
       <style>{marqueeStyle}</style>
 
@@ -153,7 +135,7 @@ useEffect(() => {
             exit={{ opacity: 0, scale: 0.95, y: -10, height: 0 }}
             className="w-[320px] max-h-[60vh] bg-white/95 backdrop-blur-md rounded-xl shadow-2xl border overflow-hidden flex flex-col"
           >
-            {/* Header Tabs (Ẩn thanh cuộn) */}
+            {/* Header Tabs */}
             <div className="border-b bg-gray-50/50">
                 <div 
                   className="flex overflow-x-auto p-1.5 gap-1.5"
@@ -204,13 +186,20 @@ useEffect(() => {
                   currentStores.map(store => {
                      const name = language === 'en' && store.name_en ? store.name_en : store.name_vi;
                      const address = language === 'en' && store.address_en ? store.address_en : store.address_vi;
+                     // Kiểm tra VIP (hỗ trợ cả trường is_vip mới và is_premium cũ)
+                     const isVip = (store as any).is_premium;
 
                      return (
                       <motion.div
                         key={store.id}
                         layoutId={store.id}
                         onClick={() => handleItemClick(store)}
-                        className="flex gap-3 p-2 rounded-lg hover:bg-white hover:shadow-md transition-all cursor-pointer border border-transparent hover:border-gray-100 group bg-white/40"
+                        className={cn(
+                          "flex gap-3 p-2 rounded-lg transition-all cursor-pointer border group",
+                          isVip 
+                            ? "bg-yellow-50/50 border-yellow-200 hover:bg-yellow-50" 
+                            : "bg-white/40 border-transparent hover:bg-white hover:shadow-md hover:border-gray-100"
+                        )}
                       >
                         <div className="w-14 h-14 flex-shrink-0 relative">
                           <img 
@@ -218,9 +207,9 @@ useEffect(() => {
                             className="w-full h-full object-cover rounded-md bg-gray-200 border"
                             onError={e => e.currentTarget.src='https://placehold.co/100x100?text=Store'}
                           />
-                          {(store as any).is_premium && (
-                            <div className="absolute -top-1 -right-1 bg-yellow-400 text-yellow-900 p-0.5 rounded-full shadow-sm z-10">
-                              <Star className="w-2 h-2 fill-current" />
+                          {isVip && (
+                            <div className="absolute -top-1.5 -right-1.5 bg-yellow-400 text-yellow-900 p-1 rounded-full shadow-sm z-10 border border-white">
+                              <Crown className="w-2.5 h-2.5 fill-current" />
                             </div>
                           )}
                         </div>
@@ -228,7 +217,10 @@ useEffect(() => {
                         <div className="flex-1 min-w-0 flex flex-col justify-center gap-0.5 overflow-hidden">
                           <ScrollingText 
                              text={name} 
-                             className="text-xs font-bold text-gray-800 group-hover:text-primary transition-colors"
+                             className={cn(
+                               "text-xs font-bold transition-colors",
+                               isVip ? "text-yellow-800" : "text-gray-800 group-hover:text-primary"
+                             )}
                           />
                           
                           <div className="flex items-start gap-1 text-gray-500 overflow-hidden">
@@ -239,10 +231,12 @@ useEffect(() => {
                             />
                           </div>
 
-                          {(store as any).is_premium && (
-                            <span className="text-[9px] text-yellow-600 font-semibold bg-yellow-50 w-fit px-1.5 rounded-full border border-yellow-100 mt-0.5">
-                              VIP
-                            </span>
+                          {isVip && (
+                            <div className="flex gap-1 mt-1">
+                              <span className="text-[9px] text-yellow-700 font-bold bg-yellow-100 px-1.5 rounded-full border border-yellow-200 flex items-center gap-0.5">
+                                VIP Store
+                              </span>
+                            </div>
                           )}
                         </div>
                       </motion.div>

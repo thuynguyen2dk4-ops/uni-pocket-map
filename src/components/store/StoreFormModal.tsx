@@ -6,8 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
-  MapPin, Loader2, ImagePlus, CheckCircle2, X, Trash2, UploadCloud, Lock, Crown,
-  Coffee, GraduationCap, Building, Gamepad2, Home, Briefcase, Utensils, Building2, UserCheck
+  MapPin, Loader2, ImagePlus, UploadCloud, Lock, Crown
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -32,7 +31,7 @@ interface StoreFormModalProps {
   initialData?: any; 
   isSubmitting?: boolean;
   customStoreId?: string;
-  onUpgradeClick?: () => void; // Callback khi ấn nút nâng cấp
+  onUpgradeClick?: () => void; // Callback quan trọng để kích hoạt mua VIP
 }
 
 export const StoreFormModal = ({ 
@@ -47,8 +46,9 @@ export const StoreFormModal = ({
   const { session } = useAuth();
   
   // Xác định quyền hạn: Admin hoặc đã mua gói Premium
+  // (Sửa logic: dùng is_premium thay vì is_vip cũ)
   const isPremium = (initialData as any)?.is_premium === true;
-  const isAdmin = !!customStoreId; // Admin mode
+  const isAdmin = !!customStoreId; // Admin mode (luôn full quyền)
   const canAccessVipFeatures = isPremium || isAdmin;
 
   const [formData, setFormData] = useState<StoreFormState>({
@@ -83,9 +83,11 @@ export const StoreFormModal = ({
         setAvatarPreview(initialData.image_url || initialData.image || '');
         setAvatarFile(null);
         
+        // Chỉ fetch ảnh gallery nếu được phép
         const targetId = customStoreId || initialData.id;
         if(targetId && canAccessVipFeatures) fetchExistingGallery(targetId);
       } else {
+        // Reset form khi thêm mới
         setFormData({
             name_vi: '', address_vi: '', phone: '',
             description_vi: '', category: 'cafe',
@@ -106,7 +108,13 @@ export const StoreFormModal = ({
   };
 
   const fetchExistingGallery = async (storeId: string) => {
-    const cleanId = String(storeId).replace('user-store-', '');
+    // Xử lý ID cũ dạng 'user-store-...' nếu có
+    const cleanId = String(storeId).includes('user-store-') ? String(storeId).replace('user-store-', '') : storeId;
+    
+    // Kiểm tra ID có hợp lệ (UUID) không trước khi gọi
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanId);
+    if (!isUUID) return;
+
     const { data } = await (supabase as any)
       .from('store_gallery')
       .select('*')
@@ -137,26 +145,12 @@ export const StoreFormModal = ({
     }
   };
 
-  const removeNewImage = (idx: number) => {
-    setGalleryFiles(prev => prev.filter((_, i) => i !== idx));
-    setGalleryPreviews(prev => prev.filter((_, i) => i !== idx));
-  };
-
-  const removeExistingImage = async (imageId: string) => {
-    const { error } = await (supabase as any).from('store_gallery').delete().eq('id', imageId);
-    if (!error) {
-        setExistingGallery(prev => prev.filter(img => img.id !== imageId));
-        toast.success("Đã xóa ảnh.");
-    } else {
-        toast.error("Lỗi xóa ảnh.");
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsUploading(true);
     try {
         let finalImageUrl = formData.image_url;
+        // Upload Avatar chính
         if (avatarFile) {
             const fileExt = avatarFile.name.split('.').pop();
             const fileName = `avatars/${Date.now()}_avatar.${fileExt}`;
@@ -169,17 +163,21 @@ export const StoreFormModal = ({
         }
 
         let targetId = customStoreId || initialData?.id;
+        
+        // Chuẩn bị dữ liệu lưu
         const storeDataToSave = {
-            id: targetId,
+            id: targetId, // Nếu có ID thì là update, không thì insert
             user_id: session?.user?.id,
             name_vi: formData.name_vi,
             address_vi: formData.address_vi,
             phone: formData.phone,
-            description_vi: canAccessVipFeatures ? formData.description_vi : null, // Chỉ lưu mô tả nếu là VIP
+            // Chỉ lưu description nếu là VIP
+            description_vi: canAccessVipFeatures ? formData.description_vi : null, 
             category: formData.category,
             image_url: finalImageUrl,
             lat: formData.lat,
             lng: formData.lng,
+            // Giữ nguyên trạng thái premium cũ (không cho tự sửa ở đây)
             is_premium: customStoreId ? true : (initialData?.is_premium || false)
         };
 
@@ -192,20 +190,23 @@ export const StoreFormModal = ({
         if (saveError) throw saveError;
         if (!targetId && savedStore) targetId = savedStore.id;
 
-        // Chỉ upload gallery nếu là VIP
-        if (targetId && galleryFiles.length > 0 && canAccessVipFeatures) {
-            let count = 0;
-            for (const file of galleryFiles) {
-                const fExt = file.name.split('.').pop();
-                const fName = `${targetId}/${Date.now()}_${Math.random()}.${fExt}`;
-                const { error: upErr } = await (supabase.storage as any).from('avatars').upload(fName, file);
-                if (!upErr) {
-                    const { data } = (supabase.storage as any).from('avatars').getPublicUrl(fName);
-                    await (supabase as any).from('store_gallery').insert({ store_id: targetId, image_url: data.publicUrl });
-                    count++;
+        // Xử lý Gallery (Chỉ VIP mới được lưu)
+        if (targetId && canAccessVipFeatures) {
+             // 1. Lưu ảnh mới vào Storage & DB
+             if (galleryFiles.length > 0) {
+                let count = 0;
+                for (const file of galleryFiles) {
+                    const fExt = file.name.split('.').pop();
+                    const fName = `${targetId}/${Date.now()}_${Math.random()}.${fExt}`;
+                    const { error: upErr } = await (supabase.storage as any).from('avatars').upload(fName, file);
+                    if (!upErr) {
+                        const { data } = (supabase.storage as any).from('avatars').getPublicUrl(fName);
+                        await (supabase as any).from('store_gallery').insert({ store_id: targetId, image_url: data.publicUrl });
+                        count++;
+                    }
                 }
-            }
-            if (count > 0) toast.success(`Đã thêm ${count} ảnh vào thư viện!`);
+                if (count > 0) toast.success(`Đã thêm ${count} ảnh vào thư viện!`);
+             }
         }
 
         toast.success(customStoreId ? "Đã cập nhật địa điểm hệ thống!" : "Đã lưu cửa hàng!");
@@ -231,20 +232,20 @@ export const StoreFormModal = ({
             </DialogTitle>
             
             {canAccessVipFeatures ? (
-                 <span className="flex items-center gap-1 text-xs font-bold bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full border border-yellow-200">
-                    <Crown className="w-3 h-3 fill-yellow-500 text-yellow-500"/> VIP MEMBER
+                 <span className="flex items-center gap-1 text-xs font-bold bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full border border-yellow-200 shadow-sm animate-pulse">
+                    <Crown className="w-3 h-3 fill-yellow-500 text-yellow-500"/> PREMIUM STORE
                  </span>
             ) : (
-                 <span className="text-xs font-bold bg-gray-100 text-gray-500 px-2 py-1 rounded-full">Gói Miễn Phí</span>
+                 <span className="text-xs font-bold bg-gray-100 text-gray-500 px-2 py-1 rounded-full border border-gray-200">Gói Miễn Phí</span>
             )}
           </DialogHeader>
 
           <form onSubmit={handleSubmit} className="p-6 space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
               
-              {/* AVATAR (Miễn phí) */}
+              {/* CỘT TRÁI: AVATAR */}
               <div className="md:col-span-4 space-y-3">
-                <Label className="font-semibold">Ảnh đại diện <span className="text-green-600 text-xs">(Miễn phí)</span></Label>
+                <Label className="font-semibold">Ảnh đại diện <span className="text-green-600 text-xs font-normal">(Miễn phí)</span></Label>
                 <div 
                   className="aspect-square w-full rounded-2xl border-2 border-dashed border-gray-300 bg-gray-50 flex flex-col items-center justify-center cursor-pointer hover:border-blue-500 hover:bg-blue-50 transition-all relative overflow-hidden group"
                   onClick={() => document.getElementById('avatar-input')?.click()}
@@ -267,7 +268,7 @@ export const StoreFormModal = ({
                 </div>
               </div>
 
-              {/* THÔNG TIN CƠ BẢN (Miễn phí) */}
+              {/* CỘT PHẢI: THÔNG TIN */}
               <div className="md:col-span-8 space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
@@ -312,7 +313,7 @@ export const StoreFormModal = ({
 
                 {/* --- TÍNH NĂNG VIP: MÔ TẢ --- */}
                 <div className="space-y-2 relative">
-                    <Label className="flex items-center gap-2">
+                    <Label className="flex items-center gap-2 font-semibold">
                         Mô tả / Giới thiệu 
                         {!canAccessVipFeatures && <Lock className="w-3.5 h-3.5 text-yellow-600"/>}
                     </Label>
@@ -327,7 +328,7 @@ export const StoreFormModal = ({
                         />
                         {!canAccessVipFeatures && (
                             <div className="absolute inset-0 flex items-center justify-center z-10">
-                                <Button type="button" size="sm" onClick={onUpgradeClick} className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white hover:from-yellow-500 hover:to-orange-600 shadow-md">
+                                <Button type="button" size="sm" onClick={onUpgradeClick} className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white hover:from-yellow-500 hover:to-orange-600 shadow-md transform hover:scale-105 transition-all">
                                     <Crown className="w-4 h-4 mr-1"/> Mở khóa Mô tả
                                 </Button>
                             </div>
@@ -340,7 +341,7 @@ export const StoreFormModal = ({
               <div className="col-span-full space-y-3 pt-4 border-t relative">
                  <div className="flex justify-between items-center">
                     <Label className="text-base font-semibold flex items-center gap-2">
-                        Thư viện ảnh
+                        Thư viện ảnh VIP
                         {!canAccessVipFeatures && <Lock className="w-4 h-4 text-gray-400"/>}
                     </Label>
                     
@@ -356,23 +357,23 @@ export const StoreFormModal = ({
                             <input id="gallery-input" type="file" multiple accept="image/*" onChange={handleGalleryChange} className="hidden" />
                         </>
                     ) : (
-                        <span className="text-xs text-red-500 font-medium">Tính năng VIP</span>
+                        <span className="text-xs text-red-500 font-medium bg-red-50 px-2 py-1 rounded">Tính năng VIP</span>
                     )}
                  </div>
                  
-                 <div className={`flex gap-4 overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-gray-200 ${!canAccessVipFeatures ? 'opacity-50 pointer-events-none select-none filter blur-[2px]' : ''}`}>
-                    {/* (Giữ nguyên logic hiển thị ảnh cũ/mới) */}
-                    {existingGallery.length === 0 && galleryFiles.length === 0 && (
-                        <div className="w-full h-24 flex items-center justify-center text-gray-400 border-2 border-dashed rounded-lg bg-gray-50 text-sm">
-                            Trống
-                        </div>
-                    )}
-                    {existingGallery.map((img) => (
-                        <div key={img.id} className="relative w-24 h-24 flex-shrink-0 rounded-lg overflow-hidden border">
-                            <img src={img.image_url} className="w-full h-full object-cover" />
+                 <div className={`flex gap-4 overflow-x-auto pb-4 pt-2 scrollbar-thin scrollbar-thumb-gray-200 ${!canAccessVipFeatures ? 'opacity-40 pointer-events-none select-none filter blur-[2px]' : ''}`}>
+                    {/* Placeholder Ảnh mẫu để kích thích mua */}
+                    {!canAccessVipFeatures && [1,2,3,4].map(i => (
+                         <div key={i} className="w-24 h-24 flex-shrink-0 rounded-lg bg-gray-200 animate-pulse"></div>
+                    ))}
+                    
+                    {/* Ảnh thật (nếu có) */}
+                    {canAccessVipFeatures && existingGallery.map((img) => (
+                        <div key={img.id} className="relative w-24 h-24 flex-shrink-0 rounded-lg overflow-hidden border group">
+                            <img src={img.image_url} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
                         </div>
                     ))}
-                    {galleryPreviews.map((src, idx) => (
+                    {canAccessVipFeatures && galleryPreviews.map((src, idx) => (
                          <div key={idx} className="relative w-24 h-24 flex-shrink-0 rounded-lg overflow-hidden border">
                             <img src={src} className="w-full h-full object-cover" />
                          </div>
@@ -382,11 +383,13 @@ export const StoreFormModal = ({
                  {/* OVERLAY KHI KHÔNG PHẢI VIP */}
                  {!canAccessVipFeatures && (
                     <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-white/60 backdrop-blur-sm rounded-xl border border-dashed border-gray-300">
-                        <div className="bg-white p-4 rounded-2xl shadow-xl flex flex-col items-center border border-yellow-100">
-                            <Crown className="w-8 h-8 text-yellow-500 mb-2" />
-                            <h3 className="font-bold text-gray-900 text-sm">Thư viện ảnh VIP</h3>
-                            <p className="text-xs text-gray-500 mb-3 text-center">Đăng tới 10 ảnh để thu hút khách hàng</p>
-                            <Button type="button" size="sm" onClick={onUpgradeClick} className="bg-yellow-500 hover:bg-yellow-600 text-white w-full">
+                        <div className="bg-white p-5 rounded-2xl shadow-xl flex flex-col items-center border border-yellow-100 max-w-xs text-center">
+                            <div className="bg-yellow-100 p-3 rounded-full mb-3">
+                                <Crown className="w-6 h-6 text-yellow-600 fill-yellow-600" />
+                            </div>
+                            <h3 className="font-bold text-gray-900 text-sm mb-1">Thư viện ảnh VIP</h3>
+                            <p className="text-xs text-gray-500 mb-4">Đăng tới 10 ảnh Menu & Không gian để thu hút khách hàng gấp 3 lần!</p>
+                            <Button type="button" size="sm" onClick={onUpgradeClick} className="bg-yellow-500 hover:bg-yellow-600 text-white w-full font-bold shadow-lg shadow-yellow-200">
                                 Nâng cấp ngay
                             </Button>
                         </div>
@@ -397,7 +400,7 @@ export const StoreFormModal = ({
 
             <DialogFooter className="pt-4 border-t sticky bottom-0 bg-white z-20">
                <Button type="button" variant="ghost" onClick={onClose}>Hủy</Button>
-               <Button type="submit" disabled={isUploading || isSubmitting} className="bg-blue-600 hover:bg-blue-700 text-white">
+               <Button type="submit" disabled={isUploading || isSubmitting} className="bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-md">
                  {(isUploading || isSubmitting) && <Loader2 className="w-4 h-4 mr-2 animate-spin"/>}
                  Lưu thông tin
                </Button>
