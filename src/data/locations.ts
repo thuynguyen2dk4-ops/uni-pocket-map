@@ -48,7 +48,10 @@ export const VNU_CENTER = {
   lat: 21.0380,
   lng: 105.7820,
 };
-
+export const HUST_CENTER = {
+  lat: 21.0050,
+  lng: 105.8430,
+};
 export const locations: Location[] = [
   // ========== KHU A ==========
   {
@@ -861,6 +864,254 @@ export const locations: Location[] = [
     image: 'https://images.unsplash.com/photo-1506521781263-d8422e82f27a?w=800',
     tags: ['Đỗ xe', 'Ô tô'],
     tagsEn: ['Parking', 'Car'],
+  },
+  {
+    id: "C1", name: "Building C1", nameVi: "Nhà C1", type: "lecture_hall",
+    lat: 21.006998, lng: 105.843146,
+    description: "Nhà C1 - Đại học Bách Khoa Hà Nội", address: "1 Đại Cồ Việt, Hai Bà Trưng, Hà Nội",
+    image: "https://images.unsplash.com/photo-1541339907198-e08756dedf3f?w=800", tags: ["HUST", "Giảng đường"]
+  },
+  {
+    id: "C2", name: "Building C2", nameVi: "Nhà C2", type: "lecture_hall",
+    lat: 21.006480, lng: 105.842316,
+    description: "Nhà C2 - Đại học Bách Khoa Hà Nội", address: "1 Đại Cồ Việt, Hai Bà Trưng, Hà Nội",
+    image: "https://images.unsplash.com/photo-1562774053-701939374585?w=800", tags: ["HUST", "Giảng đường"]
+  },
+  {
+    id: "C3", name: "Building C3", nameVi: "Nhà C3", type: "lecture_hall",
+    lat: 21.006554, lng: 105.844010,
+    description: "Nhà C3 - Đại học Bách Khoa Hà Nội", address: "1 Đại Cồ Việt, Hai Bà Trưng, Hà Nội",
+    image: "https://images.unsplash.com/photo-1497366216548-37526070297c?w=800", tags: ["HUST", "Giảng đường"]
+  },
+  {
+    id: "C4", name: "Building C4", nameVi: "Nhà C4", type: "lecture_hall",
+    lat: 21.006179, lng: 105.844041,
+    description: "Nhà C4 - Đại học Bách Khoa Hà Nội", address: "1 Đại Cồ Việt, Hai Bà Trưng, Hà Nội",
+    image: "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=800", tags: ["HUST", "Giảng đường"]
+  },
+  {
+    id: "C5", name: "Building C5", nameVi: "Nhà C5", type: "lecture_hall",
+    lat: 21.005763, lng: 105.844036,
+    description: "Nhà C5 - Đại học Bách Khoa Hà Nội", address: "1 Đại Cồ Việt, Hai Bà Trưng, Hà Nội",
+    image: "https://images.unsplash.com/photo-1562774053-701939374585?w=800", tags: ["HUST", "Giảng đường"]
+  },
+  {
+    id: "C6", name: "Building C6", nameVi: "Nhà C6", type: "lecture_hall",
+    lat: 21.006173, lng: 105.845011,
+    description: "Nhà C6 - Đại học Bách Khoa Hà Nội", address: "1 Đại Cồ Việt, Hai Bà Trưng, Hà Nội",
+    image: "https://images.unsplash.com/photo-1541339907198-e08756dedf3f?w=800", tags: ["HUST", "Giảng đường"]
+  },
+  {
+    id: "C7", name: "Building C7", nameVi: "Nhà C7", type: "lecture_hall",
+    lat: 21.005766, lng: 105.844968,
+    description: "Nhà C7 - Đại học Bách Khoa Hà Nội", address: "1 Đại Cồ Việt, Hai Bà Trưng, Hà Nội",
+    image: "https://images.unsplash.com/photo-1497366216548-37526070297c?w=800", tags: ["HUST", "Giảng đường"]
+  },
+  {
+    id: "C8", name: "Building C8", nameVi: "Nhà C8", type: "lecture_hall",
+    lat: 21.005290, lng: 105.844926,
+    description: "Nhà C8 - Đại học Bách Khoa Hà Nội", address: "1 Đại Cồ Việt, Hai Bà Trưng, Hà Nội",
+    image: "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=800", tags: ["HUST", "Giảng đường"]
+  },
+  {
+    id: "C9", name: "Building C9", nameVi: "Nhà C9", type: "lecture_hall",
+    lat: 21.005835, lng: 105.842323,
+    description: "Nhà C9 - Đại học Bách Khoa Hà Nội", address: "1 Đại Cồ Việt, Hai Bà Trưng, Hà Nội",
+    image: "https://images.unsplash.com/photo-1562774053-701939374585?w=800", tags: ["HUST", "Giảng đường"]
+  },
+  {
+    id: "C10", name: "Building C10", nameVi: "Nhà C10", type: "lecture_hall",
+    lat: 21.005441, lng: 105.844081,
+    description: "Nhà C10 - Đại học Bách Khoa Hà Nội", address: "1 Đại Cồ Việt, Hai Bà Trưng, Hà Nội",
+    image: "https://images.unsplash.com/photo-1541339907198-e08756dedf3f?w=800", tags: ["HUST", "Giảng đường"]
+  },
+
+  // ===== KHU D (Giảng đường) =====
+  {
+    id: "D1", name: "Building D1", nameVi: "Nhà D1", type: "lecture_hall",
+    lat: 21.004879, lng: 105.843412,
+    description: "Nhà D1 - Đại học Bách Khoa Hà Nội", address: "1 Đại Cồ Việt, Hai Bà Trưng, Hà Nội",
+    image: "https://images.unsplash.com/photo-1497366216548-37526070297c?w=800", tags: ["HUST", "Giảng đường"]
+  },
+  {
+    id: "D2", name: "Building D2", nameVi: "Nhà D2", type: "lecture_hall",
+    lat: 21.004719, lng: 105.842118,
+    description: "Nhà D2 - Đại học Bách Khoa Hà Nội", address: "1 Đại Cồ Việt, Hai Bà Trưng, Hà Nội",
+    image: "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=800", tags: ["HUST", "Giảng đường"]
+  },
+  {
+    id: "D3", name: "Building D3", nameVi: "Nhà D3", type: "lecture_hall",
+    lat: 21.004750, lng: 105.844982,
+    description: "Nhà D3 - Đại học Bách Khoa Hà Nội", address: "1 Đại Cồ Việt, Hai Bà Trưng, Hà Nội",
+    image: "https://images.unsplash.com/photo-1562774053-701939374585?w=800", tags: ["HUST", "Giảng đường"]
+  },
+  {
+    id: "D4", name: "Building D4", nameVi: "Nhà D4", type: "lecture_hall",
+    lat: 21.004182, lng: 105.842085,
+    description: "Nhà D4 - Đại học Bách Khoa Hà Nội", address: "1 Đại Cồ Việt, Hai Bà Trưng, Hà Nội",
+    image: "https://images.unsplash.com/photo-1541339907198-e08756dedf3f?w=800", tags: ["HUST", "Giảng đường"]
+  },
+  {
+    id: "D5", name: "Building D5", nameVi: "Nhà D5", type: "lecture_hall",
+    lat: 21.004334, lng: 105.844972,
+    description: "Nhà D5 - Đại học Bách Khoa Hà Nội", address: "1 Đại Cồ Việt, Hai Bà Trưng, Hà Nội",
+    image: "https://images.unsplash.com/photo-1497366216548-37526070297c?w=800", tags: ["HUST", "Giảng đường"]
+  },
+  {
+    id: "D6", name: "Building D6", nameVi: "Nhà D6", type: "lecture_hall",
+    lat: 21.004323, lng: 105.842682,
+    description: "Nhà D6 - Đại học Bách Khoa Hà Nội", address: "1 Đại Cồ Việt, Hai Bà Trưng, Hà Nội",
+    image: "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=800", tags: ["HUST", "Giảng đường"]
+  },
+  {
+    id: "D7", name: "Building D7", nameVi: "Nhà D7", type: "lecture_hall",
+    lat: 21.004072, lng: 105.844899,
+    description: "Nhà D7 - Đại học Bách Khoa Hà Nội", address: "1 Đại Cồ Việt, Hai Bà Trưng, Hà Nội",
+    image: "https://images.unsplash.com/photo-1562774053-701939374585?w=800", tags: ["HUST", "Giảng đường"]
+  },
+  {
+    id: "D8", name: "Building D8", nameVi: "Nhà D8", type: "lecture_hall",
+    lat: 21.003964, lng: 105.842679,
+    description: "Nhà D8 - Đại học Bách Khoa Hà Nội", address: "1 Đại Cồ Việt, Hai Bà Trưng, Hà Nội",
+    image: "https://images.unsplash.com/photo-1541339907198-e08756dedf3f?w=800", tags: ["HUST", "Giảng đường"]
+  },
+  {
+    id: "D9", name: "Building D9", nameVi: "Nhà D9", type: "lecture_hall",
+    lat: 21.003806, lng: 105.844114,
+    description: "Nhà D9 - Đại học Bách Khoa Hà Nội", address: "1 Đại Cồ Việt, Hai Bà Trưng, Hà Nội",
+    image: "https://images.unsplash.com/photo-1497366216548-37526070297c?w=800", tags: ["HUST", "Giảng đường"]
+  },
+  {
+    id: "D3_5", name: "Building D3-5", nameVi: "Nhà D3-5", type: "lecture_hall",
+    lat: 21.004583, lng: 105.845289,
+    description: "Nhà D3-5 - Đại học Bách Khoa Hà Nội", address: "1 Đại Cồ Việt, Hai Bà Trưng, Hà Nội",
+    image: "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=800", tags: ["HUST", "Giảng đường"]
+  },
+
+  // ===== KHU B (Giảng đường) =====
+  {
+    id: "B1", name: "Building B1", nameVi: "Nhà B1", type: "lecture_hall",
+    lat: 21.004447, lng: 105.846614,
+    description: "Nhà B1 - Đại học Bách Khoa Hà Nội", address: "1 Đại Cồ Việt, Hai Bà Trưng, Hà Nội",
+    image: "https://images.unsplash.com/photo-1562774053-701939374585?w=800", tags: ["HUST", "Giảng đường"]
+  },
+  {
+    id: "B3", name: "Building B3", nameVi: "Nhà B3", type: "lecture_hall",
+    lat: 21.005613, lng: 105.847615,
+    description: "Nhà B3 - Đại học Bách Khoa Hà Nội", address: "1 Đại Cồ Việt, Hai Bà Trưng, Hà Nội",
+    image: "https://images.unsplash.com/photo-1541339907198-e08756dedf3f?w=800", tags: ["HUST", "Giảng đường"]
+  },
+  {
+    id: "B5", name: "Building B5", nameVi: "Nhà B5", type: "lecture_hall",
+    lat: 21.006424, lng: 105.846885,
+    description: "Nhà B5 - Đại học Bách Khoa Hà Nội", address: "1 Đại Cồ Việt, Hai Bà Trưng, Hà Nội",
+    image: "https://images.unsplash.com/photo-1497366216548-37526070297c?w=800", tags: ["HUST", "Giảng đường"]
+  },
+  {
+    id: "B5b", name: "Building B5b", nameVi: "Nhà B5b", type: "lecture_hall",
+    lat: 21.006584, lng: 105.846902,
+    description: "Nhà B5b - Đại học Bách Khoa Hà Nội", address: "1 Đại Cồ Việt, Hai Bà Trưng, Hà Nội",
+    image: "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=800", tags: ["HUST", "Giảng đường"]
+  },
+  {
+    id: "B6", name: "Building B6", nameVi: "Nhà B6", type: "lecture_hall",
+    lat: 21.006475, lng: 105.846137,
+    description: "Nhà B6 - Đại học Bách Khoa Hà Nội", address: "1 Đại Cồ Việt, Hai Bà Trưng, Hà Nội",
+    image: "https://images.unsplash.com/photo-1562774053-701939374585?w=800", tags: ["HUST", "Giảng đường"]
+  },
+  {
+    id: "B7", name: "Building B7", nameVi: "Nhà B7", type: "lecture_hall",
+    lat: 21.006044, lng: 105.846114,
+    description: "Nhà B7 - Đại học Bách Khoa Hà Nội", address: "1 Đại Cồ Việt, Hai Bà Trưng, Hà Nội",
+    image: "https://images.unsplash.com/photo-1541339907198-e08756dedf3f?w=800", tags: ["HUST", "Giảng đường"]
+  },
+  {
+    id: "B7bis", name: "Building B7bis", nameVi: "Nhà B7bis", type: "lecture_hall",
+    lat: 21.005663, lng: 105.846131,
+    description: "Nhà B7bis - Đại học Bách Khoa Hà Nội", address: "1 Đại Cồ Việt, Hai Bà Trưng, Hà Nội",
+    image: "https://images.unsplash.com/photo-1497366216548-37526070297c?w=800", tags: ["HUST", "Giảng đường"]
+  },
+  {
+    id: "B8", name: "Building B8", nameVi: "Nhà B8", type: "lecture_hall",
+    lat: 21.005223, lng: 105.846116,
+    description: "Nhà B8 - Đại học Bách Khoa Hà Nội", address: "1 Đại Cồ Việt, Hai Bà Trưng, Hà Nội",
+    image: "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=800", tags: ["HUST", "Giảng đường"]
+  },
+  {
+    id: "B9", name: "Building B9", nameVi: "Nhà B9", type: "lecture_hall",
+    lat: 21.006216, lng: 105.847031,
+    description: "Nhà B9 - Đại học Bách Khoa Hà Nội", address: "1 Đại Cồ Việt, Hai Bà Trưng, Hà Nội",
+    image: "https://images.unsplash.com/photo-1562774053-701939374585?w=800", tags: ["HUST", "Giảng đường"]
+  },
+  {
+    id: "B13", name: "Building B13", nameVi: "Nhà B13", type: "lecture_hall",
+    lat: 21.006686, lng: 105.847620,
+    description: "Nhà B13 - Đại học Bách Khoa Hà Nội", address: "1 Đại Cồ Việt, Hai Bà Trưng, Hà Nội",
+    image: "https://images.unsplash.com/photo-1541339907198-e08756dedf3f?w=800", tags: ["HUST", "Giảng đường"]
+  },
+
+  // ===== TIỆN ÍCH (POI) =====
+  {
+    id: "HO_TIEN", name: "Tien Lake", nameVi: "Hồ Tiền", type: "checkin",
+    lat: 21.004088, lng: 105.843347,
+    description: "Hồ Tiền - Khu vực cảnh quan và thư giãn", address: "1 Đại Cồ Việt, Hai Bà Trưng, Hà Nội",
+    image: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800", tags: ["HUST", "Hồ", "Checkin"]
+  },
+  {
+    id: "THU_VIEN", name: "Ta Quang Buu Library", nameVi: "Thư viện Tạ Quang Bửu", type: "building",
+    lat: 21.004454, lng: 105.844135,
+    description: "Thư viện Tạ Quang Bửu - Thư viện lớn nhất Bách Khoa", address: "1 Đại Cồ Việt, Hai Bà Trưng, Hà Nội",
+    image: "https://images.unsplash.com/photo-1507842217121-9e9f1929c5f7?w=800", tags: ["HUST", "Thư viện", "Học tập"]
+  },
+  {
+    id: "KTX_B10", name: "Dormitory B10", nameVi: "KTX B10", type: "housing",
+    lat: 21.005268, lng: 105.847516,
+    description: "Ký túc xá B10 dành cho sinh viên", address: "1 Đại Cồ Việt, Hai Bà Trưng, Hà Nội",
+    image: "https://images.unsplash.com/photo-1555854877-bab0e564b8d5?w=800", tags: ["HUST", "KTX", "Sinh viên"]
+  },
+  {
+    id: "TRAM_XA", name: "Medical Station", nameVi: "Trạm xá", type: "building",
+    lat: 21.006605, lng: 105.847562,
+    description: "Trạm y tế trường Đại học Bách Khoa Hà Nội", address: "1 Đại Cồ Việt, Hai Bà Trưng, Hà Nội",
+    image: "https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?w=800", tags: ["HUST", "Y tế"]
+  },
+  {
+    id: "A15", name: "Canteen A15", nameVi: "Nhà ăn A15", type: "food",
+    lat: 21.004362, lng: 105.847608,
+    description: "Nhà ăn sinh viên A15", address: "1 Đại Cồ Việt, Hai Bà Trưng, Hà Nội",
+    image: "https://images.unsplash.com/photo-1552566626-52f8b828add9?w=800", tags: ["HUST", "Ăn uống"]
+  },
+  {
+    id: "NHA_KHACH", name: "HUST Guesthouse", nameVi: "Nhà khách BK", type: "housing",
+    lat: 21.004091, lng: 105.847900,
+    description: "Nhà khách Đại học Bách Khoa", address: "1 Đại Cồ Việt, Hai Bà Trưng, Hà Nội",
+    image: "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800", tags: ["HUST", "Lưu trú"]
+  },
+  {
+    id: "A17", name: "Building A17", nameVi: "Nhà A17", type: "building",
+    lat: 21.003959, lng: 105.847633,
+    description: "Tòa nhà A17 - Viện Sư phạm kỹ thuật", address: "1 Đại Cồ Việt, Hai Bà Trưng, Hà Nội",
+    image: "https://images.unsplash.com/photo-1562774053-701939374585?w=800", tags: ["HUST", "Văn phòng"]
+  },
+
+  // ===== CỔNG TRƯỜNG =====
+  {
+    id: "G_PARABOL", name: "Parabol Gate", nameVi: "Cổng Parabol", type: "checkin",
+    lat: 21.005082, lng: 105.841626,
+    description: "Cổng Parabol - Biểu tượng của Bách Khoa", address: "Đường Giải Phóng",
+    image: "https://images.unsplash.com/photo-1621644813589-9a22f365922c?w=800", tags: ["HUST", "Cổng", "Checkin"]
+  },
+  {
+    id: "G_B8", name: "B8 Gate", nameVi: "Cổng B8", type: "checkin",
+    lat: 21.004978, lng: 105.845616,
+    description: "Cổng B8 đường Trần Đại Nghĩa", address: "Đường Trần Đại Nghĩa",
+    image: "https://images.unsplash.com/photo-1562774053-701939374585?w=800", tags: ["HUST", "Cổng"]
+  },
+  {
+    id: "G_BAC", name: "North Gate", nameVi: "Cổng Bắc", type: "checkin",
+    lat: 21.007411, lng: 105.843047,
+    description: "Cổng Trần Đại Nghĩa (Cổng Bắc)", address: "Đường Trần Đại Nghĩa",
+    image: "https://images.unsplash.com/photo-1562774053-701939374585?w=800", tags: ["HUST", "Cổng"]
   },
 ];
 
