@@ -269,9 +269,13 @@ const Index = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
           >
-            <div className="w-9 h-9 bg-primary rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
-              <Compass className="w-5 h-5 text-primary-foreground" />
-            </div>
+            <div className="w-12 h-12 bg-white rounded-full shadow-lg flex items-center justify-center overflow-hidden border-2 border-green-700 cursor-pointer hover:scale-105 transition-transform">
+    <img 
+      src="/logo.png" 
+      alt="ThodiaUni Logo" 
+      className="w-full h-full object-cover" 
+    />
+  </div>
             
             <div className="flex-1 min-w-0">
               <SearchBar
