@@ -3,9 +3,11 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Compass, Heart } from 'lucide-react';
 import { toast } from 'sonner';
+import { useNavigate, useParams } from 'react-router-dom'; // <--- 1. Import Router Hooks
+
 import { MiniShowcase } from '@/components/MiniShowcase';
-import { MapView } from '@/components/MapView';
-import { SearchBar } from '@/components/SearchBar'; 
+import { MapView } from '@/components/map/MapView'; // Đã sửa đường dẫn import cho đúng cấu trúc
+import { SearchBar } from '@/components/map/SearchBar'; 
 import { CategoryFilter } from '@/components/CategoryFilter';
 import { BottomSheet } from '@/components/BottomSheet';
 import { DirectionsPanel } from '@/components/DirectionsPanel';
@@ -22,11 +24,15 @@ import { useDirections, TransportMode, RoutePreference } from '@/hooks/useDirect
 import { useMultiStopDirections, Waypoint } from '@/hooks/useMultiStopDirections';
 import { useRealtimeNavigation } from '@/hooks/useRealtimeNavigation';
 import { useFavorites } from '@/hooks/useFavorites';
-import { Location, LocationType, Department } from '@/data/locations';
+import { Location, LocationType, Department, locations } from '@/data/locations'; // Import thêm 'locations' để tìm kiếm
 
 const Index = () => {
   const { t, language } = useLanguage();
   
+  // --- 2. Hooks Router ---
+  const { id } = useParams();
+  const navigate = useNavigate();
+
   // State Locations
   const [currentUserLocation, setCurrentUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const locationRef = useRef<{ lat: number; lng: number } | null>(null);
@@ -51,7 +57,7 @@ const Index = () => {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showFavoritesPanel, setShowFavoritesPanel] = useState(false);
   const [showStorePanel, setShowStorePanel] = useState(false);
-  const [showSponsoredModal, setShowSponsoredModal] = useState(false); // Used implicitly?
+  const [showSponsoredModal, setShowSponsoredModal] = useState(false);
   
   const { favorites } = useFavorites();
 
@@ -66,8 +72,23 @@ const Index = () => {
     getMultiStopDirections, clearRoute: clearMultiStopRoute, setTransportMode: setMultiStopTransportMode,
   } = useMultiStopDirections();
 
-  // --- 1. SINGLE SOURCE OF TRUTH FOR GPS ---
-  // Chỉ Index quản lý việc lấy vị trí và phân phối xuống dưới
+  // --- 3. LOGIC URL SYNC ---
+  // Tự động chọn địa điểm khi URL thay đổi (VD: /place/A15)
+  useEffect(() => {
+    if (id) {
+      const foundLocation = locations.find(loc => loc.id === id);
+      if (foundLocation) {
+        setSelectedLocation(foundLocation);
+        setFlyToLocation(foundLocation); // Bay tới đó luôn
+      }
+    } else {
+      // Nếu về trang chủ -> tắt popup
+      setSelectedLocation(null);
+    }
+  }, [id]);
+
+
+  // --- GPS Tracking ---
   useEffect(() => {
     if (!navigator.geolocation) return;
     const watchId = navigator.geolocation.watchPosition(
@@ -84,7 +105,7 @@ const Index = () => {
 
   const handleOpenDetail = useCallback((location: Location) => {
     setDetailLocation(location);
-    setSelectedLocation(null);
+    // setSelectedLocation(null); // Không cần null vì Popup vẫn nằm dưới
   }, []);
 
   const handleCloseDetail = useCallback(() => {
@@ -98,6 +119,7 @@ const Index = () => {
   }, [language]);
 
   const handleSelectLocation = useCallback((location: Location, department?: Department) => {
+    // Logic Adding Stop / Multi Stop (Giữ nguyên)
     if (isAddingStop || isMultiStopMode) {
       const newWaypoint: Waypoint = {
         coordinates: [location.lng, location.lat],
@@ -107,13 +129,11 @@ const Index = () => {
 
       let calculatedWaypoints: Waypoint[] = [...multiStopWaypoints];
 
-      // Nếu chuyển từ Single Route -> Multi Route, lấy điểm đích cũ làm điểm dừng đầu tiên
       if (calculatedWaypoints.length === 0 && routeDestination) {
           const prevName = navigationDestination || "Điểm dừng 1";
           const firstWaypoint: Waypoint = {
              coordinates: routeDestination,
              name: prevName,
-             // Không có object location đầy đủ ở đây cũng không sao, chỉ cần tọa độ
           };
           calculatedWaypoints.push(firstWaypoint);
           addWaypoint(firstWaypoint);
@@ -131,7 +151,6 @@ const Index = () => {
       }
       setIsMultiStopMode(true);
 
-      // Tính đường ngay
       if (locationRef.current) {
           const originWaypoint: Waypoint = {
             coordinates: [locationRef.current.lng, locationRef.current.lat],
@@ -142,20 +161,24 @@ const Index = () => {
       return;
     }
     
-    // Normal Selection
-    setSelectedLocation(location);
-    setSelectedDepartment(department || null);
-    setFlyToLocation(location);
+    // --- 4. SỬA LOGIC CHỌN ĐỊA ĐIỂM ---
+    // Thay vì setSelectedLocation, ta đổi URL
+    navigate(`/place/${location.id}`);
+    
+    // (Optional) Vẫn setDepartment nếu cần
+    if (department) setSelectedDepartment(department);
 
-  }, [isAddingStop, isMultiStopMode, isNavigating, addWaypoint, multiStopWaypoints, language, getMultiStopDirections, multiStopTransportMode, routeDestination, navigationDestination, clearDirections]);
+  }, [isAddingStop, isMultiStopMode, isNavigating, addWaypoint, multiStopWaypoints, language, getMultiStopDirections, multiStopTransportMode, routeDestination, navigationDestination, clearDirections, navigate]);
 
   const handleCloseSheet = useCallback(() => {
-    setSelectedLocation(null);
+    // --- 5. SỬA LOGIC ĐÓNG POPUP ---
+    navigate('/'); // Quay về trang chủ
     setSelectedDepartment(null);
-  }, []);
+  }, [navigate]);
 
   const handleNavigate = useCallback((location: Location, mode: TransportMode = 'walking') => {
-    setSelectedLocation(null);
+    // Khi bắt đầu dẫn đường -> Đóng popup -> Về trang chủ
+    navigate('/');
     setSelectedDepartment(null);
     setIsMultiStopMode(false);
     clearMultiStopRoute(); 
@@ -170,7 +193,6 @@ const Index = () => {
         setIsNavigating(true);
     } else {
         toast.info(language === 'vi' ? 'Đang lấy vị trí...' : 'Locating...');
-        // Fallback if locationRef is null (rare if GPS is on)
         navigator.geolocation.getCurrentPosition(
             (position) => {
                 const originCoords: [number, number] = [position.coords.longitude, position.coords.latitude];
@@ -180,7 +202,7 @@ const Index = () => {
             }
         );
     }
-  }, [getDirections, language, clearMultiStopRoute]);
+  }, [getDirections, language, clearMultiStopRoute, navigate]);
 
   const handleNavigateWithName = useCallback((location: Location) => {
     const destName = language === 'en' && location.name ? location.name : location.nameVi;
@@ -200,24 +222,21 @@ const Index = () => {
   const handleToggleCategory = useCallback((category: LocationType) => {
     setActiveCategories(prev => {
       if (prev.includes(category)) {
-        // Bỏ đoạn kiểm tra "if (prev.length === 1) return prev;" đi
-        // Để cho phép người dùng tắt hết nếu muốn
         return prev.filter(c => c !== category);
       }
       return [...prev, category];
     });
   }, []);
-  // --- Realtime Nav ---
+  
   const { 
     currentStepIndex, 
     distanceToNextStep, 
     isTracking, 
-    // accuracy, // Có thể dùng nếu cần hiển thị độ chính xác
   } = useRealtimeNavigation({
     steps: route?.steps || [],
     routeGeometry: route?.geometry || null,
     isNavigating,
-    userLocation: currentUserLocation, // TRUYỀN PROPS THAY VÌ TỰ TRACK
+    userLocation: currentUserLocation,
     onOffRoute: () => {
       if (locationRef.current && destination) {
          toast.warning(t('offRouteWarning'));
@@ -232,14 +251,11 @@ const Index = () => {
     setIsAddingStop(true);
     toast.info(language === 'vi' ? 'Chọn điểm dừng tiếp theo trên bản đồ' : 'Select next stop on the map');
   }, [language]);
+
   const handlePromoteLocation = useCallback((location: Location) => {
-    // setPromotingLocation(location); // Giả sử bạn có state này nếu dùng StoreManagement
     setShowSponsoredModal(true);
-    setSelectedLocation(null);
+    // Không set null location để popup vẫn hiện
   }, []);
-  const handleSelectCategory = (categories: LocationType[]) => { 
-  setActiveCategories(categories);
-}
 
   return (
     <div className="relative h-screen w-full overflow-hidden bg-background">
@@ -255,7 +271,6 @@ const Index = () => {
           onClearRoute={handleClearRoute}
           multiStopRoute={multiStopRoute}
           isMultiStopMode={isMultiStopMode}
-          // Không cần onUserLocationUpdate nữa vì Index đã tự lo
         />
       </div>
 
@@ -270,12 +285,12 @@ const Index = () => {
             transition={{ delay: 0.1 }}
           >
             <div className="w-12 h-12 bg-white rounded-full shadow-lg flex items-center justify-center overflow-hidden border-2 border-green-700 cursor-pointer hover:scale-105 transition-transform">
-    <img 
-      src="/logo.png" 
-      alt="ThodiaUni Logo" 
-      className="w-full h-full object-cover" 
-    />
-  </div>
+              <img 
+                src="/logo.png" 
+                alt="ThodiaUni Logo" 
+                className="w-full h-full object-cover" 
+              />
+            </div>
             
             <div className="flex-1 min-w-0">
               <SearchBar
@@ -387,7 +402,7 @@ const Index = () => {
           <BottomSheet
             location={selectedLocation}
             department={selectedDepartment}
-            onClose={handleCloseSheet}
+            onClose={handleCloseSheet} // Đã sửa để quay về Home
             onNavigate={handleNavigateWithName}
             onOpenDetail={handleOpenDetail}
             onLoginClick={() => setShowAuthModal(true)}
@@ -428,7 +443,7 @@ const Index = () => {
           setShowAuthModal(true);
         }}
       />
-      {/* Chỉ hiện khi không đang dẫn đường */}
+      
       {!isNavigating && (
          <MiniShowcase onSelectLocation={handleSelectLocation} />
       )}
