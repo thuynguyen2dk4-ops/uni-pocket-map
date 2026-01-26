@@ -80,6 +80,7 @@ const Index = () => {
       if (foundLocation) {
         setSelectedLocation(foundLocation);
         setFlyToLocation(foundLocation); // Bay tới đó luôn
+        document.title = `${language === 'en' ? foundLocation.name : foundLocation.nameVi} | ThodiaUni`;
       }
     } else {
       // Nếu về trang chủ -> tắt popup
