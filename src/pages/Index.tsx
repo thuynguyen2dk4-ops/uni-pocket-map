@@ -6,8 +6,8 @@ import { toast } from 'sonner';
 import { useNavigate, useParams } from 'react-router-dom'; // <--- 1. Import Router Hooks
 
 import { MiniShowcase } from '@/components/MiniShowcase';
-import { MapView } from '@/components/map/MapView'; // Đã sửa đường dẫn import cho đúng cấu trúc
-import { SearchBar } from '@/components/map/SearchBar'; 
+import { MapView } from '@/components/MapView'; // Đã sửa đường dẫn import cho đúng cấu trúc
+import { SearchBar } from '@/components/SearchBar'; 
 import { CategoryFilter } from '@/components/CategoryFilter';
 import { BottomSheet } from '@/components/BottomSheet';
 import { DirectionsPanel } from '@/components/DirectionsPanel';
