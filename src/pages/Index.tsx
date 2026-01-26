@@ -85,6 +85,7 @@ const Index = () => {
     } else {
       // Nếu về trang chủ -> tắt popup
       setSelectedLocation(null);
+      document.title = 'ThodiaUni - Bản đồ Đại học';
     }
   }, [id]);
 
