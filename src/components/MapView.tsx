@@ -34,67 +34,27 @@ interface MapViewProps {
 
 // --- COMPONENT RENDER ICON MARKER ---
 const MarkerIcon = ({ type, isSelected, isSponsored, hasVoucher }: { type: LocationType, isSelected: boolean, isSponsored: boolean, hasVoucher?: boolean }) => {
-  // Cấu hình Icon và Màu sắc mặc định
+  // Cấu hình Icon và Màu sắc (Giữ nguyên)
   let Icon = MapPin;
   let color = '#64748B'; 
   let bg = '#F8FAFC';
 
   // --- LOGIC CHỌN ICON THEO DANH MỤC ---
   switch (type) {
-    case 'lecture_hall': 
-      Icon = GraduationCap; 
-      color = '#0EA5E9'; // Xanh dương trời (Sky)
-      bg = '#E0F2FE'; 
-      break;
-    case 'office': 
-      Icon = Building; 
-      color = '#475569'; // Xám đậm (Slate)
-      bg = '#F1F5F9'; 
-      break;
-    case 'cafe': 
-      Icon = Coffee; 
-      color = '#D97706'; // Nâu cam (Amber)
-      bg = '#FEF3C7'; 
-      break;
-    case 'entertainment': 
-      Icon = Gamepad2; 
-      color = '#DB2777'; // Hồng đậm (Pink)
-      bg = '#FCE7F3'; 
-      break;
-    case 'food': 
-      Icon = Utensils; 
-      color = '#F97316'; // Cam (Orange)
-      bg = '#FFF7ED'; 
-      break;
-    case 'housing': 
-      Icon = Home; 
-      color = '#3B82F6'; // Xanh dương (Blue)
-      bg = '#EFF6FF'; 
-      break;
-    case 'job': 
-      Icon = Briefcase; 
-      color = '#8B5CF6'; // Tím (Violet)
-      bg = '#F5F3FF'; 
-      break;
-    case 'building': 
-      Icon = Building2; 
-      color = '#10B981'; // Xanh lá (Emerald)
-      bg = '#ECFDF5'; 
-      break;
-    case 'checkin':
-      Icon = UserCheck;
-      color = '#EC4899'; // Hồng (Pink)
-      bg = '#FDF2F8';
-      break;
-    default:
-      Icon = MapPin;
-      color = '#64748B';
-      bg = '#F8FAFC';
+    case 'lecture_hall': Icon = GraduationCap; color = '#0EA5E9'; bg = '#E0F2FE'; break;
+    case 'office': Icon = Building; color = '#475569'; bg = '#F1F5F9'; break;
+    case 'cafe': Icon = Coffee; color = '#D97706'; bg = '#FEF3C7'; break;
+    case 'entertainment': Icon = Gamepad2; color = '#DB2777'; bg = '#FCE7F3'; break;
+    case 'food': Icon = Utensils; color = '#F97316'; bg = '#FFF7ED'; break;
+    case 'housing': Icon = Home; color = '#3B82F6'; bg = '#EFF6FF'; break;
+    case 'job': Icon = Briefcase; color = '#8B5CF6'; bg = '#F5F3FF'; break;
+    case 'building': Icon = Building2; color = '#10B981'; bg = '#ECFDF5'; break;
+    case 'checkin': Icon = UserCheck; color = '#EC4899'; bg = '#FDF2F8'; break;
+    default: Icon = MapPin; color = '#64748B'; bg = '#F8FAFC';
   }
-
-  const size = isSelected ? 48 : (isSponsored ? 42 : 36);
-  const iconSize = isSelected ? 24 : (isSponsored ? 20 : 18);
-
+  const size = isSelected ? 46 : (isSponsored ? 32 : 26);
+  const iconSize = isSelected ? 24 : (isSponsored ? 16 : 14);
+const borderWidth = isSelected ? 3 : 1.5;
   return (
     <div className="relative flex flex-col items-center justify-center transition-all duration-300 group cursor-pointer"
          style={{ transform: isSelected ? 'scale(1.15) translateY(-10px)' : 'scale(1)' }}>
@@ -103,33 +63,32 @@ const MarkerIcon = ({ type, isSelected, isSponsored, hasVoucher }: { type: Locat
       <div style={{
         width: size, height: size,
         backgroundColor: isSelected ? color : 'white',
-        border: `2.5px solid ${isSelected ? 'white' : color}`,
+        border: `${borderWidth}px solid ${isSelected ? 'white' : color}`,
         borderRadius: '50%',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         boxShadow: isSelected 
-          ? `0 10px 25px -5px ${color}90` 
-          : '0 4px 6px -1px rgba(0,0,0,0.15)',
-        zIndex: isSelected ? 50 : 10
+          ? `0 10px 25px -5px ${color}90` // Bóng đổ lớn khi chọn
+          : '0 2px 4px 0 rgba(0,0,0,0.15)', // Bóng đổ nhẹ khi chưa chọn
       }}>
         <Icon size={iconSize} color={isSelected ? 'white' : color} strokeWidth={2.5} />
       </div>
 
       {/* 2. Mũi nhọn (Pin tail) */}
-      {!isSelected && (
+      {(isSelected || isSponsored) && (
         <div style={{
           width: 0, height: 0,
-          borderLeft: '6px solid transparent',
-          borderRight: '6px solid transparent',
-          borderTop: `8px solid ${color}`,
-          marginTop: -1,
+          borderLeft: `${isSelected ? 6 : 4}px solid transparent`,
+          borderRight: `${isSelected ? 6 : 4}px solid transparent`,
+          borderTop: `${isSelected ? 8 : 6}px solid ${color}`, // Màu trùng với viền
+          marginTop: -1, // Kéo lên dính vào vòng tròn
           filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.1))'
         }} />
       )}
 
       {/* 3. Sao Voucher (Nảy nảy) */}
       {hasVoucher && (
-        <div className="absolute -top-2 -right-2 bg-yellow-400 border-2 border-white rounded-full p-0.5 shadow-sm animate-bounce z-[60]">
-          <Star size={12} fill="white" className="text-white" />
+        <div className="absolute -top-1.5 -right-1.5 bg-yellow-400 border border-white rounded-full p-0.5 shadow-sm animate-bounce z-[60]">
+          <Star size={isSelected ? 10 : 8} fill="white" className="text-white" />
         </div>
       )}
     </div>
