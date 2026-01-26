@@ -1,11 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
-import { Search, MapPin, Loader2, Store, Globe, X, Navigation, Coffee } from 'lucide-react';
+import { Search, MapPin, Loader2, Store, Globe, X, Navigation, Coffee, Utensils, GraduationCap, Building, Home, Briefcase, Car, DollarSign } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { locations } from '@/data/locations';
 import { supabase } from '@/integrations/supabase/client';
-import { removeAccents } from '@/utils/stringUtils';
 import { getMapboxToken } from '@/lib/mapboxToken';
+
+// Hàm bỏ dấu (Clean text)
+const removeAccents = (str: string) => {
+  return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D");
+};
 
 interface SearchResult {
   id: string | number;
@@ -28,6 +32,37 @@ interface SearchBarProps {
   resultContainerStyle?: React.CSSProperties;
 }
 
+// 1. TỪ ĐIỂN Ý ĐỊNH (User gõ -> Hệ thống hiểu loại gì)
+const KEYWORD_MAPPING: Record<string, string> = {
+  // Food
+  'an': 'food', 'doi': 'food', 'com': 'food', 'pho': 'food', 'bun': 'food', 'mi': 'food', 'banh': 'food',
+  // Cafe
+  'uong': 'cafe', 'khat': 'cafe', 'nuoc': 'cafe', 'cf': 'cafe', 'cafe': 'cafe', 'coffee': 'cafe', 'tra': 'cafe',
+  // Housing
+  'ngu': 'housing', 'tro': 'housing', 'ktx': 'housing', 'hotel': 'housing', 'nha nghi': 'housing',
+  // Study
+  'hoc': 'lecture_hall', 'giang duong': 'lecture_hall', 'thu vien': 'library',
+  // Utility
+  'xe': 'parking', 'gui': 'parking', 'do': 'parking',
+  'wc': 'wc', 've sinh': 'wc',
+  'tien': 'bank', 'atm': 'bank', 'bank': 'bank',
+  'viec': 'job', 'lam': 'job'
+};
+
+// 2. TỪ KHÓA MAPBOX (Hệ thống hiểu loại gì -> Gửi từ này cho Mapbox)
+// Đây là fix cho lỗi "Khát không ra gì": Gõ khát -> cafe -> Gửi "coffee" cho Mapbox
+const MAPBOX_QUERIES: Record<string, string> = {
+  'food': 'restaurant quán ăn',
+  'cafe': 'coffee cafe',
+  'housing': 'hotel hostel nhà nghỉ',
+  'lecture_hall': 'university school',
+  'parking': 'parking',
+  'wc': 'toilet',
+  'bank': 'atm bank',
+  'job': 'office company',
+  'sport': 'stadium gym'
+};
+
 const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
   const R = 6371; 
   const dLat = (lat2 - lat1) * (Math.PI / 180);
@@ -44,7 +79,7 @@ export const SearchBar = ({
   onLocationSelect, 
   onFocus, 
   onBlur, 
-  placeholder = "Tìm Café, ATM, quán ăn...", 
+  placeholder = "Tìm: Đói, Khát, C1, ATM...", 
   userLocation,
   resultContainerStyle 
 }: SearchBarProps) => {
@@ -53,8 +88,7 @@ export const SearchBar = ({
   const [isLoading, setIsLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null); // Thêm ref cho Input để blur
-  
+  const inputRef = useRef<HTMLInputElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -78,79 +112,113 @@ export const SearchBar = ({
     setIsOpen(true);
     setIsLoading(true);
 
-    const searchTerm = removeAccents(query);
-    
-    // 1. LOCAL SEARCH
-    const localMatches: SearchResult[] = locations
-      .filter(loc => 
-        removeAccents(loc.name).includes(searchTerm) || 
-        removeAccents(loc.nameVi || '').includes(searchTerm) ||
-        removeAccents(loc.type).includes(searchTerm)
-      )
-      .map(loc => ({
-        id: `local-${loc.id}`,
-        name: loc.nameVi || loc.name,
-        address: loc.address || 'Địa điểm có sẵn',
-        lat: loc.lat,
-        lng: loc.lng,
-        source: 'local' as const,
-        type: loc.type,
-        originalData: loc,
-        distance: userLocation ? calculateDistance(userLocation.lat, userLocation.lng, loc.lat, loc.lng) : 0
-      }));
-
-    // 2. API SEARCH
     const timer = setTimeout(async () => {
-      const mapboxToken = getMapboxToken();
-
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
+      // 1. CHUẨN HÓA INPUT
+      const cleanQuery = removeAccents(query).toLowerCase().trim();
+      
+      // 2. PHÁT HIỆN Ý ĐỊNH (INTENT DETECTION)
+      let detectedCategory: string | null = null;
+      
+      // Tìm xem query có chứa từ khóa nào không (VD: "dang doi bung" -> chứa "doi" -> food)
+      for (const key in KEYWORD_MAPPING) {
+        if (cleanQuery.includes(key)) {
+          detectedCategory = KEYWORD_MAPPING[key];
+          break; // Tìm thấy 1 cái là chốt luôn (Ưu tiên từ đầu tiên khớp)
+        }
       }
+
+      // 3. TÌM LOCAL (CHẾ ĐỘ NGHIÊM NGẶT)
+      const localMatches: SearchResult[] = locations
+        .filter(loc => {
+          if (detectedCategory) {
+            // STRICT MODE: Nếu đã hiểu ý định -> CHỈ trả về đúng loại đó.
+            // Tuyệt đối không tìm theo tên để tránh "rác".
+            return loc.type === detectedCategory;
+          } else {
+            // NORMAL MODE: Nếu không hiểu ý định (VD: gõ "C1", "Tạ Quang Bửu") -> Tìm theo tên
+            const name = removeAccents(loc.name).toLowerCase();
+            const nameVi = removeAccents(loc.nameVi || '').toLowerCase();
+            return name.includes(cleanQuery) || nameVi.includes(cleanQuery);
+          }
+        })
+        .map(loc => ({
+          id: `local-${loc.id}`,
+          name: loc.nameVi || loc.name,
+          address: loc.address || 'Đại học Bách Khoa HN',
+          lat: loc.lat,
+          lng: loc.lng,
+          source: 'local' as const,
+          type: loc.type,
+          originalData: loc,
+          distance: userLocation ? calculateDistance(userLocation.lat, userLocation.lng, loc.lat, loc.lng) : 0
+        }));
+
+      // 4. TÌM API (SUPABASE & MAPBOX)
+      const mapboxToken = getMapboxToken();
+      if (abortControllerRef.current) abortControllerRef.current.abort();
       abortControllerRef.current = new AbortController();
       const signal = abortControllerRef.current.signal;
 
       try {
-        const { data: dbMatches } = await supabase
-          .from('user_stores')
-          .select('*')
-          .ilike('name_vi', `%${query}%`)
-          .limit(5);
+        let dbResults: SearchResult[] = [];
+        let mapboxResults: SearchResult[] = [];
 
-        const formattedDbMatches: SearchResult[] = (dbMatches || []).map(store => ({
-          id: `db-${store.id}`,
-          name: store.name_vi,
-          address: store.address_vi,
-          lat: store.lat,
-          lng: store.lng,
-          source: 'database' as const,
-          type: store.category,
-          originalData: store,
-          distance: userLocation ? calculateDistance(userLocation.lat, userLocation.lng, store.lat, store.lng) : 0
-        }));
+        // A. Tìm Supabase
+        // Nếu có category -> tìm theo category trong DB luôn cho chuẩn
+        let dbQuery = supabase.from('user_stores').select('*');
+        if (detectedCategory) {
+           dbQuery = dbQuery.eq('category', detectedCategory);
+        } else {
+           dbQuery = dbQuery.ilike('name_vi', `%${query}%`);
+        }
+        const { data: dbMatches } = await dbQuery.limit(5);
 
-        let mapboxMatches: SearchResult[] = [];
+        if (dbMatches) {
+          dbResults = dbMatches.map(store => ({
+            id: `db-${store.id}`,
+            name: store.name_vi,
+            address: store.address_vi,
+            lat: store.lat,
+            lng: store.lng,
+            source: 'database' as const,
+            type: store.category,
+            originalData: store,
+            distance: userLocation ? calculateDistance(userLocation.lat, userLocation.lng, store.lat, store.lng) : 0
+          }));
+        }
+
+        // B. Tìm Mapbox (Chìa khóa cho vấn đề "Khát")
         if (mapboxToken) {
-          const proximityParam = userLocation ? `&proximity=${userLocation.lng},${userLocation.lat}` : '';
+          const proximity = userLocation ? `&proximity=${userLocation.lng},${userLocation.lat}` : '';
           
+          // QUAN TRỌNG: Chọn từ khóa để gửi cho Mapbox
+          // Nếu hiểu ý định (detectedCategory = 'cafe') -> Gửi "coffee cafe"
+          // Nếu không -> Gửi nguyên văn user nhập
+          let finalQuery = query;
+          if (detectedCategory && MAPBOX_QUERIES[detectedCategory]) {
+            finalQuery = MAPBOX_QUERIES[detectedCategory];
+          }
+
           const res = await fetch(
-            `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${mapboxToken}&country=vn&autocomplete=true&limit=10&language=vi&types=poi,address${proximityParam}`,
+            `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(finalQuery)}.json?access_token=${mapboxToken}&country=vn&autocomplete=true&limit=8&language=vi&types=poi,address${proximity}`,
             { signal }
           );
           const data = await res.json();
           
           if (data.features) {
-            mapboxMatches = data.features.map((feature: any) => ({
+            mapboxResults = data.features.map((feature: any) => ({
               id: feature.id,
               name: feature.text,
               address: feature.place_name,
               lat: feature.center[1],
               lng: feature.center[0],
               source: 'mapbox' as const,
-              type: feature.properties.category || 'place',
+              // Gán type chuẩn nếu đã detect được, để hiện icon đúng
+              type: detectedCategory || feature.properties.category || 'place',
               originalData: {
                  id: feature.id, name: feature.text, nameVi: feature.text,
                  address: feature.place_name, lat: feature.center[1], lng: feature.center[0],
-                 type: 'food',
+                 type: detectedCategory || 'checkin', 
                  isMapboxResult: true
               },
               distance: userLocation ? calculateDistance(userLocation.lat, userLocation.lng, feature.center[1], feature.center[0]) : 0
@@ -158,45 +226,33 @@ export const SearchBar = ({
           }
         }
 
-        const allResults = [...localMatches, ...formattedDbMatches, ...mapboxMatches];
+        // 5. GỘP KẾT QUẢ
+        const allResults = [...localMatches, ...dbResults, ...mapboxResults];
         
+        // Sắp xếp: Ưu tiên khoảng cách gần nhất
         if (userLocation) {
-            allResults.sort((a, b) => (a.distance || 0) - (b.distance || 0));
+          allResults.sort((a, b) => (a.distance || 0) - (b.distance || 0));
         }
 
         setResults(allResults);
       } catch (error: any) {
-        if (error.name !== 'AbortError') {
-          console.error("Lỗi tìm kiếm:", error);
-        }
+        if (error.name !== 'AbortError') console.error("Search Error:", error);
       } finally {
         if (!signal.aborted) setIsLoading(false);
       }
-    }, 200);
+    }, 300); // Debounce 300ms
 
-    return () => {
-      clearTimeout(timer);
-    };
+    return () => clearTimeout(timer);
   }, [query, userLocation]);
 
-  // --- SỬA HÀM NÀY ---
   const handleSelect = (result: SearchResult) => {
-    setQuery(''); // Xóa chữ trong ô tìm kiếm
-    setResults([]); // Xóa danh sách kết quả
-    setIsOpen(false); // Đóng dropdown
-    
-    // Tắt bàn phím ảo (trên điện thoại)
-    if (inputRef.current) {
-        inputRef.current.blur();
-    }
-
+    setQuery(''); setResults([]); setIsOpen(false);
+    if (inputRef.current) inputRef.current.blur();
     onLocationSelect(result.originalData);
   };
 
   const clearSearch = () => {
-    setQuery('');
-    setResults([]);
-    setIsOpen(false);
+    setQuery(''); setResults([]); setIsOpen(false);
     if (onBlur) onBlur();
   };
 
@@ -206,22 +262,29 @@ export const SearchBar = ({
     return `${dist.toFixed(1)}km`;
   };
 
-  const getIcon = (source: string, name: string) => {
-      if (source === 'local') return <MapPin className="w-4 h-4 text-white" />;
-      if (source === 'database') return <Store className="w-4 h-4 text-white" />;
-      
-      const lowerName = name.toLowerCase();
-      if (lowerName.includes('cafe') || lowerName.includes('coffee') || lowerName.includes('cà phê')) {
-          return <Coffee className="w-4 h-4 text-white" />;
-      }
+  // Helper Icon
+  const getIcon = (type: string) => {
+      const t = (type || '').toLowerCase();
+      if (t.includes('food')) return <Utensils className="w-4 h-4 text-white" />;
+      if (t.includes('cafe') || t.includes('coffee')) return <Coffee className="w-4 h-4 text-white" />;
+      if (t.includes('lecture') || t.includes('school')) return <GraduationCap className="w-4 h-4 text-white" />;
+      if (t.includes('housing') || t.includes('hotel')) return <Home className="w-4 h-4 text-white" />;
+      if (t.includes('job') || t.includes('office')) return <Briefcase className="w-4 h-4 text-white" />;
+      if (t.includes('bank') || t.includes('atm')) return <DollarSign className="w-4 h-4 text-white" />;
+      if (t.includes('parking')) return <Car className="w-4 h-4 text-white" />;
       return <Globe className="w-4 h-4 text-white" />;
   };
 
-  const getIconBg = (source: string, name: string) => {
-      const lowerName = name.toLowerCase();
-      if (lowerName.includes('cafe') || lowerName.includes('coffee')) return 'bg-brown-500';
-      if (source === 'local') return 'bg-blue-500';
-      if (source === 'database') return 'bg-orange-500';
+  const getIconBg = (type: string, source: string) => {
+      const t = (type || '').toLowerCase();
+      if (t.includes('food')) return 'bg-orange-500';
+      if (t.includes('cafe')) return 'bg-amber-600';
+      if (t.includes('lecture')) return 'bg-blue-600';
+      if (t.includes('housing')) return 'bg-indigo-500';
+      if (t.includes('bank')) return 'bg-emerald-600';
+      
+      if (source === 'local') return 'bg-blue-500'; 
+      if (source === 'database') return 'bg-green-600';
       return 'bg-gray-400';
   };
 
@@ -230,7 +293,7 @@ export const SearchBar = ({
       <div className="relative flex items-center bg-white rounded-xl shadow-lg border border-gray-200 h-11 overflow-hidden transition-all duration-200 focus-within:ring-2 focus-within:ring-blue-500/20">
         <Search className="ml-3 h-5 w-5 text-gray-400 shrink-0" />
         <Input 
-          ref={inputRef} // Gắn ref vào đây
+          ref={inputRef}
           className="border-none shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 h-full bg-transparent text-base px-3 placeholder:text-gray-400 w-full"
           placeholder={placeholder}
           value={query}
@@ -268,8 +331,8 @@ export const SearchBar = ({
                   onClick={() => handleSelect(result)}
                   className="w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors flex items-center gap-3 border-b last:border-0 border-gray-50 group"
                 >
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${getIconBg(result.source, result.name)}`}>
-                      {getIcon(result.source, result.name)}
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${getIconBg(result.type, result.source)}`}>
+                      {getIcon(result.type)}
                   </div>
                   
                   <div className="min-w-0 flex-1">

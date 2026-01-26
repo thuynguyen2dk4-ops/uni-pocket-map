@@ -3,10 +3,10 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Compass, Heart } from 'lucide-react';
 import { toast } from 'sonner';
-import { useNavigate, useParams } from 'react-router-dom'; // <--- 1. Import Router Hooks
+import { useNavigate, useParams } from 'react-router-dom';
 
 import { MiniShowcase } from '@/components/MiniShowcase';
-import { MapView } from '@/components/MapView'; // Đã sửa đường dẫn import cho đúng cấu trúc
+import { MapView } from '@/components/MapView'; 
 import { SearchBar } from '@/components/SearchBar'; 
 import { CategoryFilter } from '@/components/CategoryFilter';
 import { BottomSheet } from '@/components/BottomSheet';
@@ -24,12 +24,12 @@ import { useDirections, TransportMode, RoutePreference } from '@/hooks/useDirect
 import { useMultiStopDirections, Waypoint } from '@/hooks/useMultiStopDirections';
 import { useRealtimeNavigation } from '@/hooks/useRealtimeNavigation';
 import { useFavorites } from '@/hooks/useFavorites';
-import { Location, LocationType, Department, locations } from '@/data/locations'; // Import thêm 'locations' để tìm kiếm
+import { Location, LocationType, Department, locations } from '@/data/locations'; 
 
 const Index = () => {
   const { t, language } = useLanguage();
   
-  // --- 2. Hooks Router ---
+  // Router Hooks
   const { id } = useParams();
   const navigate = useNavigate();
 
@@ -72,23 +72,36 @@ const Index = () => {
     getMultiStopDirections, clearRoute: clearMultiStopRoute, setTransportMode: setMultiStopTransportMode,
   } = useMultiStopDirections();
 
-  // --- 3. LOGIC URL SYNC ---
-  // Tự động chọn địa điểm khi URL thay đổi (VD: /place/A15)
+  // --- 1. LOGIC URL SYNC (ĐÃ NÂNG CẤP) ---
   useEffect(() => {
-    if (id) {
-      const foundLocation = locations.find(loc => loc.id === id);
-      if (foundLocation) {
-        setSelectedLocation(foundLocation);
-        setFlyToLocation(foundLocation); // Bay tới đó luôn
-        document.title = `${language === 'en' ? foundLocation.name : foundLocation.nameVi} | ThodiaUni`;
-      }
-    } else {
-      // Nếu về trang chủ -> tắt popup
+    // Nếu không có ID (về trang chủ) -> Đóng Popup
+    if (!id) {
       setSelectedLocation(null);
       document.title = 'ThodiaUni - Bản đồ Đại học';
+      return;
     }
-  }, [id]);
 
+    // Trường hợp 1: Tìm trong file tĩnh (locations.ts)
+    // Dùng String(loc.id) để so sánh an toàn với id từ URL (string)
+    const foundLocation = locations.find(loc => String(loc.id) === id);
+    
+    if (foundLocation) {
+      setSelectedLocation(foundLocation);
+      setFlyToLocation(foundLocation);
+      document.title = `${language === 'en' ? foundLocation.name : foundLocation.nameVi} | ThodiaUni`;
+      return;
+    }
+
+    // Trường hợp 2: ID lạ (Database hoặc Mapbox)
+    // Kiểm tra: Nếu State đang giữ địa điểm có ID khớp với URL -> GIỮ NGUYÊN (Không đóng popup)
+    if (selectedLocation && String(selectedLocation.id) === id) {
+       const name = language === 'en' && selectedLocation.name ? selectedLocation.name : selectedLocation.nameVi;
+       document.title = `${name} | ThodiaUni`;
+    } 
+    // Nếu không khớp (ví dụ F5 trang với ID lạ), hiện tại ta chưa fetch lại được từ DB nên popup sẽ không hiện.
+    // (Để fix vụ F5 cần thêm logic fetch từ Supabase, nhưng tạm thời thế này là đủ cho luồng click)
+
+  }, [id, language]); // Lưu ý: KHÔNG cho selectedLocation vào dependency để tránh vòng lặp
 
   // --- GPS Tracking ---
   useEffect(() => {
@@ -107,7 +120,6 @@ const Index = () => {
 
   const handleOpenDetail = useCallback((location: Location) => {
     setDetailLocation(location);
-    // setSelectedLocation(null); // Không cần null vì Popup vẫn nằm dưới
   }, []);
 
   const handleCloseDetail = useCallback(() => {
@@ -133,10 +145,7 @@ const Index = () => {
 
       if (calculatedWaypoints.length === 0 && routeDestination) {
           const prevName = navigationDestination || "Điểm dừng 1";
-          const firstWaypoint: Waypoint = {
-             coordinates: routeDestination,
-             name: prevName,
-          };
+          const firstWaypoint: Waypoint = { coordinates: routeDestination, name: prevName };
           calculatedWaypoints.push(firstWaypoint);
           addWaypoint(firstWaypoint);
       }
@@ -163,24 +172,26 @@ const Index = () => {
       return;
     }
     
-    // --- 4. SỬA LOGIC CHỌN ĐỊA ĐIỂM ---
-    // Thay vì setSelectedLocation, ta đổi URL
-    navigate(`/place/${location.id}`);
+    // --- 2. SỬA LOGIC CHỌN ĐỊA ĐIỂM (QUAN TRỌNG) ---
     
-    // (Optional) Vẫn setDepartment nếu cần
+    // Bước A: Set State trước (Để useEffect nhận diện được "người quen")
+    setSelectedLocation(location);
+    setFlyToLocation(location);
     if (department) setSelectedDepartment(department);
+
+    // Bước B: Đổi URL (Bất kể nguồn nào: Local, DB, Mapbox)
+    // ID từ SearchBar đã được format (db-..., mapbox-...) nên là duy nhất
+    navigate(`/place/${location.id}`);
 
   }, [isAddingStop, isMultiStopMode, isNavigating, addWaypoint, multiStopWaypoints, language, getMultiStopDirections, multiStopTransportMode, routeDestination, navigationDestination, clearDirections, navigate]);
 
   const handleCloseSheet = useCallback(() => {
-    // --- 5. SỬA LOGIC ĐÓNG POPUP ---
-    navigate('/'); // Quay về trang chủ
+    navigate('/'); // Quay về trang chủ -> useEffect sẽ tự đóng popup
     setSelectedDepartment(null);
   }, [navigate]);
 
   const handleNavigate = useCallback((location: Location, mode: TransportMode = 'walking') => {
-    // Khi bắt đầu dẫn đường -> Đóng popup -> Về trang chủ
-    navigate('/');
+    navigate('/'); // Reset URL về trang chủ khi bắt đầu đi
     setSelectedDepartment(null);
     setIsMultiStopMode(false);
     clearMultiStopRoute(); 
@@ -256,7 +267,6 @@ const Index = () => {
 
   const handlePromoteLocation = useCallback((location: Location) => {
     setShowSponsoredModal(true);
-    // Không set null location để popup vẫn hiện
   }, []);
 
   return (
@@ -404,7 +414,7 @@ const Index = () => {
           <BottomSheet
             location={selectedLocation}
             department={selectedDepartment}
-            onClose={handleCloseSheet} // Đã sửa để quay về Home
+            onClose={handleCloseSheet} 
             onNavigate={handleNavigateWithName}
             onOpenDetail={handleOpenDetail}
             onLoginClick={() => setShowAuthModal(true)}
