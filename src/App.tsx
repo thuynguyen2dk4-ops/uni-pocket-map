@@ -12,7 +12,7 @@ import Index from "./pages/Index";
 import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
 const queryClient = new QueryClient();
-
+import { JobsPage } from "./pages/JobsPage";
 // --- COMPONENT THEO DÕI CHUYỂN TRANG ---
 // Cái này giúp Google Analytics đếm được khi bạn chuyển trang trong React
 const RouteTracker = () => {
@@ -52,6 +52,7 @@ const App = () => (
               <Route path="/about" element={<AboutPage />} />
               <Route path="/admin" element={<Admin />} />
               <Route path="*" element={<NotFound />} />
+              <Route path="/jobs" element={<JobsPage />} />
             </Routes>
           </BrowserRouter>
           

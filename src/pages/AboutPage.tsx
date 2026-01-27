@@ -160,7 +160,7 @@ export const AboutPage = () => {
           <div className="text-sm flex flex-col md:flex-row gap-4 md:gap-8 items-center font-medium">
              <div className="flex items-center gap-2 hover:text-white transition-colors cursor-default">
                 <Mail size={16} className="text-gray-500" />
-                <span>contact@thodiauni.space</span>
+                <span>contact@thodiauni.com</span>
              </div>
              <div className="flex items-center gap-2 hover:text-white transition-colors cursor-default">
                 <Phone size={16} className="text-gray-500" />

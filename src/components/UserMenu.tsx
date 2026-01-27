@@ -185,7 +185,7 @@ export const UserMenu = ({ onLoginClick, onFavoritesClick, onStoresClick }: User
               className="w-full flex items-center gap-2 text-xs font-semibold text-yellow-700 bg-yellow-100 hover:bg-yellow-200 p-2 rounded mb-2 transition-colors"
             >
               {isLoading ? <Loader2 className="w-3 h-3 animate-spin"/> : <Crown className="w-3 h-3 fill-yellow-600" />}
-              VIP (5.000đ/tháng)
+              VIP 
             </button>
 
             {/* Nút Quảng Cáo */}

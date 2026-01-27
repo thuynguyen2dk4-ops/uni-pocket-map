@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  MapPin, Star, ChevronDown, ChevronUp, Store, 
+  MapPin, ChevronDown, ChevronUp, Store, 
   Utensils, Coffee, Gamepad2, GraduationCap, Building, 
-  Home, Briefcase, Building2, UserCheck, Crown
+  Home, Briefcase, Building2, UserCheck, Crown, Navigation
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { UserStore } from '@/hooks/useUserStores';
@@ -11,6 +11,18 @@ import { useLanguage } from '@/i18n/LanguageContext';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
+
+// --- HÀM TÍNH KHOẢNG CÁCH (Haversine Formula) ---
+const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+  const R = 6371; // Bán kính trái đất (km)
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a = 
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c; // Trả về km
+};
 
 // --- STYLE CHO CHỮ CHẠY ---
 const marqueeStyle = `
@@ -55,44 +67,81 @@ const CATEGORIES = [
   { id: 'checkin', icon: <UserCheck className="w-3.5 h-3.5"/>, label: 'Check-in' },
 ];
 
-export const MiniShowcase = ({ onSelectLocation }: { onSelectLocation: (loc: any) => void }) => {
+// --- CẬP NHẬT PROPS: THÊM USER LOCATION ---
+interface MiniShowcaseProps {
+  onSelectLocation: (loc: any) => void;
+  userLocation?: { lat: number; lng: number } | null; // Thêm dòng này
+}
+
+export const MiniShowcase = ({ onSelectLocation, userLocation }: MiniShowcaseProps) => {
   const { language } = useLanguage();
   
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('food'); 
   
-  const [stores, setStores] = useState<Record<string, UserStore[]>>({});
+  const [stores, setStores] = useState<Record<string, (UserStore & { distance?: number })[]>>({});
   const [loading, setLoading] = useState(true);
 
-  // --- GỘP USE EFFECT FETCH DATA ---
+  // --- THUẬT TOÁN MỚI ---
   useEffect(() => {
     const fetchData = async () => {
-      const results: Record<string, UserStore[]> = {};
-      const now = new Date().toISOString(); 
+      setLoading(true);
+      
+      // 1. Lấy TẤT CẢ các cửa hàng đã duyệt (không limit ở đây để tính khoảng cách chính xác)
+      const { data, error } = await supabase
+        .from('user_stores')
+        .select('*')
+        .eq('status', 'approved');
 
-      await Promise.all(CATEGORIES.map(async (cat) => {
-        // Query logic: Lấy VIP và Quảng cáo còn hạn
-        const { data } = await supabase
-          .from('user_stores')
-          .select('*')
-          .eq('category', cat.id)
-          .eq('status', 'approved')
-          // Ưu tiên: is_vip (hoặc is_premium) lên đầu
-          .order('is_premium', { ascending: false }) 
-          .order('created_at', { ascending: false })
-          .limit(10);
-          
-        if (data && data.length > 0) {
-            results[cat.id] = data as UserStore[];
+      if (error || !data) {
+        console.error("Error fetching stores:", error);
+        setLoading(false);
+        return;
+      }
+
+      // 2. Tính khoảng cách và gán vào từng store
+      let processedData = data.map((store: any) => {
+        let distance = 0;
+        if (userLocation) {
+          distance = calculateDistance(userLocation.lat, userLocation.lng, store.lat, store.lng);
         }
-      }));
+        return { ...store, distance };
+      });
+
+      // 3. Sắp xếp: Ưu tiên VIP trước -> Sau đó đến Gần Nhất
+      processedData.sort((a, b) => {
+        // Nếu a là VIP mà b không phải -> a lên trước
+        if (a.is_premium && !b.is_premium) return -1;
+        // Nếu b là VIP mà a không phải -> b lên trước
+        if (!a.is_premium && b.is_premium) return 1;
+        
+        // Nếu cùng là VIP hoặc cùng là thường -> Ai gần hơn lên trước
+        return (a.distance || 0) - (b.distance || 0);
+      });
+
+      // 4. Phân loại về các nhóm danh mục & Cắt lấy top 10 mỗi nhóm
+      const results: Record<string, any[]> = {};
+      
+      // Khởi tạo mảng rỗng cho các cate để tránh lỗi undefined
+      CATEGORIES.forEach(cat => results[cat.id] = []);
+
+      processedData.forEach(store => {
+        if (results[store.category]) {
+          // Chỉ push nếu danh sách chưa đủ 10 (hoặc số lượng bạn muốn hiển thị)
+          if (results[store.category].length < 10) {
+            results[store.category].push(store);
+          }
+        }
+      });
+
       setStores(results);
       setLoading(false);
     };
-    fetchData();
-  }, []);
 
-  const handleItemClick = (store: UserStore) => {
+    fetchData();
+  }, [userLocation]); // Chạy lại khi vị trí người dùng thay đổi
+
+  const handleItemClick = (store: any) => {
     const standardizedLocation = {
       ...store,
       id: store.id,
@@ -186,21 +235,28 @@ export const MiniShowcase = ({ onSelectLocation }: { onSelectLocation: (loc: any
                   currentStores.map(store => {
                      const name = language === 'en' && store.name_en ? store.name_en : store.name_vi;
                      const address = language === 'en' && store.address_en ? store.address_en : store.address_vi;
-                     // Kiểm tra VIP (hỗ trợ cả trường is_vip mới và is_premium cũ)
-                     const isVip = (store as any).is_premium;
+                     const isVip = store.is_premium;
+                     
+                     // Format khoảng cách
+                     const distanceText = store.distance 
+                        ? (store.distance < 1 
+                            ? `${(store.distance * 1000).toFixed(0)}m` 
+                            : `${store.distance.toFixed(1)}km`)
+                        : '';
 
                      return (
                       <motion.div
                         key={store.id}
-                        layoutId={store.id}
+                        layoutId={String(store.id)}
                         onClick={() => handleItemClick(store)}
                         className={cn(
-                          "flex gap-3 p-2 rounded-lg transition-all cursor-pointer border group",
+                          "flex gap-3 p-2 rounded-lg transition-all cursor-pointer border group relative",
                           isVip 
-                            ? "bg-yellow-50/50 border-yellow-200 hover:bg-yellow-50" 
+                            ? "bg-gradient-to-r from-yellow-50 to-white border-yellow-200 hover:border-yellow-300" 
                             : "bg-white/40 border-transparent hover:bg-white hover:shadow-md hover:border-gray-100"
                         )}
                       >
+                        {/* ẢNH */}
                         <div className="w-14 h-14 flex-shrink-0 relative">
                           <img 
                             src={store.image_url || 'https://placehold.co/100x100?text=Store'} 
@@ -208,20 +264,32 @@ export const MiniShowcase = ({ onSelectLocation }: { onSelectLocation: (loc: any
                             onError={e => e.currentTarget.src='https://placehold.co/100x100?text=Store'}
                           />
                           {isVip && (
-                            <div className="absolute -top-1.5 -right-1.5 bg-yellow-400 text-yellow-900 p-1 rounded-full shadow-sm z-10 border border-white">
-                              <Crown className="w-2.5 h-2.5 fill-current" />
+                            <div className="absolute -top-2 -left-2">
+                                <span className="relative flex h-3 w-3">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
+                                  <span className="relative inline-flex rounded-full h-3 w-3 bg-yellow-500"></span>
+                                </span>
                             </div>
                           )}
                         </div>
 
+                        {/* TEXT */}
                         <div className="flex-1 min-w-0 flex flex-col justify-center gap-0.5 overflow-hidden">
-                          <ScrollingText 
-                             text={name} 
-                             className={cn(
-                               "text-xs font-bold transition-colors",
-                               isVip ? "text-yellow-800" : "text-gray-800 group-hover:text-primary"
+                          <div className="flex justify-between items-start">
+                             <ScrollingText 
+                               text={name} 
+                               className={cn(
+                                 "text-xs font-bold transition-colors w-[85%]",
+                                 isVip ? "text-yellow-800" : "text-gray-800 group-hover:text-primary"
+                               )}
+                             />
+                             {/* Hiển thị khoảng cách ở góc */}
+                             {distanceText && (
+                                <span className="text-[9px] font-bold text-blue-500 bg-blue-50 px-1 rounded flex items-center whitespace-nowrap">
+                                   {distanceText}
+                                </span>
                              )}
-                          />
+                          </div>
                           
                           <div className="flex items-start gap-1 text-gray-500 overflow-hidden">
                             <MapPin className="w-2.5 h-2.5 mt-0.5 flex-shrink-0" />
@@ -233,8 +301,9 @@ export const MiniShowcase = ({ onSelectLocation }: { onSelectLocation: (loc: any
 
                           {isVip && (
                             <div className="flex gap-1 mt-1">
-                              <span className="text-[9px] text-yellow-700 font-bold bg-yellow-100 px-1.5 rounded-full border border-yellow-200 flex items-center gap-0.5">
-                                VIP Store
+                              <span className="text-[9px] text-yellow-700 font-bold bg-yellow-100 px-1.5 rounded-full border border-yellow-200 flex items-center gap-1 shadow-sm">
+                                <Crown className="w-2 h-2 fill-yellow-700" />
+                                Được đề xuất
                               </span>
                             </div>
                           )}

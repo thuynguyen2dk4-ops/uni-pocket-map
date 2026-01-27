@@ -3,7 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 // @ts-ignore
-import PayOSLib from "npm:@payos/node";
+import { createHmac } from "https://deno.land/std@0.168.0/node/crypto.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,57 +14,82 @@ serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
+    const CLIENT_ID = Deno.env.get("PAYOS_CLIENT_ID");
+    const API_KEY = Deno.env.get("PAYOS_API_KEY");
+    const CHECKSUM_KEY = Deno.env.get("PAYOS_CHECKSUM_KEY");
+    
+    // Kết nối Supabase
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    const body = await req.json();
-    const verifiedData = body.data; 
-    if (!verifiedData) throw new Error("No data");
+    const { storeId, type, packageType, returnUrl, cancelUrl } = await req.json();
+    if (!storeId) throw new Error("Thiếu Store ID");
 
-    const { orderCode } = verifiedData;
-    console.log(`Nhận thanh toán đơn: ${orderCode}`);
+    // Tạo mã đơn hàng
+    const orderCode = Number(String(Date.now()).slice(-9)); 
+    let amount = 2000;
+    let description = "";
 
-    // 1. Tìm Store có mã đơn hàng khớp
-    const { data: store, error } = await supabase
-      .from("user_stores")
-      .select("id")
-      .eq("last_order_code", orderCode)
-      .maybeSingle();
-
-    if (store) {
-      console.log(`Kích hoạt Premium cho Store: ${store.id}`);
-      
-      // --- SỬA LOGIC Ở ĐÂY: DÙNG CỘT IS_PREMIUM ---
-      await supabase.from("user_stores").update({
-        is_premium: true, // <--- Đã sửa
-        premium_expiry: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // <--- Đã sửa
-        last_order_code: null 
-      }).eq("id", store.id);
-
-    } else {
-      // Logic cho Quảng cáo (Giữ nguyên)
-      const { data: adRecord } = await supabase
-        .from("sponsored_listings")
-        .select("*")
-        .eq("transaction_code", orderCode.toString())
-        .maybeSingle();
-
-      if (adRecord) {
-        const now = new Date();
-        const startDate = new Date(adRecord.start_date);
-        const newStatus = (startDate <= now) ? 'active' : 'scheduled';
-        await supabase.from("sponsored_listings")
-          .update({ payment_status: 'paid', status: newStatus })
-          .eq("id", adRecord.id);
+    // --- THUẬT TOÁN TÍNH TIỀN Ở ĐÂY ---
+    
+    if (type === "vip") {
+      // VIP: 100k dùng mãi mãi
+      amount = 100000; 
+      description = `VIP ${orderCode}`;
+    } 
+    else if (type === "ad") {
+      // Quảng cáo: Tùy theo gói tuần/tháng
+      if (packageType === 'month') {
+        amount = 150000; // Giá QC Tháng (30 ngày)
+        description = `QC Thang ${orderCode}`;
+      } else {
+        amount = 50000;  // Giá QC Tuần (7 ngày)
+        description = `QC Tuan ${orderCode}`;
       }
     }
 
-    return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    // --- CẬP NHẬT MÃ ĐƠN HÀNG VÀO DATABASE ---
+    // Để lát nữa Webhook biết đơn hàng này mua gói gì
+    const { error: updateError } = await supabase
+      .from("user_stores")
+      .update({ 
+        last_order_code: orderCode,
+        // Lưu tạm loại gói khách đang mua để Webhook xử lý ngày hết hạn
+        pending_package_type: type === 'vip' ? 'vip_lifetime' : (packageType === 'month' ? 'ad_month' : 'ad_week')
+      })
+      .eq("id", storeId);
+
+    if (updateError) console.error("Lỗi update orderCode:", updateError);
+
+    // --- GỌI QUA PAYOS ---
+    const signData = `amount=${amount}&cancelUrl=${cancelUrl}&description=${description}&orderCode=${orderCode}&returnUrl=${returnUrl}`;
+    const hmac = createHmac("sha256", CHECKSUM_KEY);
+    hmac.update(signData);
+    const signature = hmac.digest("hex");
+
+    const payload = {
+      orderCode, amount, description, 
+      buyerName: "User", buyerEmail: "user@example.com",
+      cancelUrl, returnUrl, signature,
+      items: [{ name: description, quantity: 1, price: amount }]
+    };
+
+    const response = await fetch("https://api-merchant.payos.vn/v2/payment-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-client-id": CLIENT_ID, "x-api-key": API_KEY },
+        body: JSON.stringify(payload)
+    });
+
+    const result = await response.json();
+    if (!response.ok || result.code !== "00") throw new Error(result.desc);
+
+    return new Response(JSON.stringify({ checkoutUrl: result.data.checkoutUrl }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
 
   } catch (error: any) {
-    console.error("Error:", error);
-    return new Response(JSON.stringify({ success: false, error: error.message }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 });

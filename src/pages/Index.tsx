@@ -1,9 +1,11 @@
 // src/pages/Index.tsx
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Compass, Heart } from 'lucide-react';
+import { Heart } from 'lucide-react';
 import { toast } from 'sonner';
 import { useNavigate, useParams } from 'react-router-dom';
+
+// --- COMPONENTS ---
 import { MiniShowcase } from '@/components/MiniShowcase';
 import { MapView } from '@/components/MapView'; 
 import { SearchBar } from '@/components/SearchBar'; 
@@ -17,11 +19,13 @@ import { StoreManagementPanel } from '@/components/store/StoreManagementPanel';
 import { UserMenu } from '@/components/UserMenu';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { StoreDetailModal } from '@/components/store/StoreDetailModal';
-// --- 1. IMPORT MODAL CLAIM ---
 import { ClaimStoreModal } from '@/components/store/ClaimStoreModal';
+// 1. IMPORT MAIN MENU
+import { MainMenu } from '@/components/MainMenu'; 
 
+// --- HOOKS & DATA ---
 import { useLanguage } from '@/i18n/LanguageContext';
-import { useDirections, TransportMode, RoutePreference } from '@/hooks/useDirections';
+import { useDirections, TransportMode } from '@/hooks/useDirections';
 import { useMultiStopDirections, Waypoint } from '@/hooks/useMultiStopDirections';
 import { useRealtimeNavigation } from '@/hooks/useRealtimeNavigation';
 import { useFavorites } from '@/hooks/useFavorites';
@@ -60,7 +64,7 @@ const Index = () => {
   const [showStorePanel, setShowStorePanel] = useState(false);
   const [showSponsoredModal, setShowSponsoredModal] = useState(false);
 
-  // --- 2. STATE CHO MODAL CLAIM ---
+  // State Modal Claim
   const [showClaimModal, setShowClaimModal] = useState(false);
   const [claimData, setClaimData] = useState<{mapboxId: string, name: string, address?: string, lat: number, lng: number} | null>(null);
   
@@ -178,7 +182,6 @@ const Index = () => {
 
   }, [isAddingStop, isMultiStopMode, isNavigating, addWaypoint, multiStopWaypoints, language, getMultiStopDirections, multiStopTransportMode, routeDestination, navigationDestination, clearDirections, navigate]);
 
-  // --- 3. HÀM XỬ LÝ KHI BẤM CLAIM TỪ BOTTOM SHEET ---
   const handleClaimLocation = useCallback((location: Location) => {
     setClaimData({
       mapboxId: String(location.id),
@@ -301,12 +304,19 @@ const Index = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
           >
-            <div 
-  className="w-12 h-12 bg-white rounded-full shadow-lg flex items-center justify-center overflow-hidden border-2 border-green-700 cursor-pointer hover:scale-105 transition-transform" 
-  onClick={() => navigate('/about')}
->
-  <img src="/logo.png" alt="ThodiaUni Logo" className="w-full h-full object-cover" />
-</div>
+            {/* 2. SỬ DỤNG MAIN MENU THAY CHO NÚT LOGO CŨ */}
+            <MainMenu>
+               <div className="flex flex-col items-center justify-center cursor-pointer mr-2 group">
+                 {/* Khung Logo */}
+                 <div className="w-12 h-12 bg-white rounded-xl shadow-lg flex items-center justify-center overflow-hidden border-2 border-green-700 group-hover:scale-105 transition-transform z-10">
+                   <img src="/logo.png" alt="ThodiaUni Logo" className="w-full h-full object-cover" />
+                 </div>
+                 {/* Chữ MENU nhỏ xíu ở dưới */}
+                 <span className="text-[9px] font-black text-white bg-green-700 px-2 py-[1px] rounded-sm -mt-2 z-20 shadow-sm tracking-wider border border-white uppercase">
+                   Menu
+                 </span>
+               </div>
+            </MainMenu>
             
             <div className="flex-1 min-w-0">
               <SearchBar
@@ -345,6 +355,7 @@ const Index = () => {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ delay: 0.2 }}
+                className="ml-2" // 3. THÊM MARGIN ĐỂ TRÁNH LOGO
               >
                 <CategoryFilter
                   activeCategories={activeCategories}
@@ -423,7 +434,7 @@ const Index = () => {
             onOpenDetail={handleOpenDetail}
             onLoginClick={() => setShowAuthModal(true)}
             onPromoteClick={handlePromoteLocation}
-            onClaim={handleClaimLocation} // --- 4. TRUYỀN HÀM NÀY VÀO BOTTOM SHEET ---
+            onClaim={handleClaimLocation} 
           />
         )}
       </AnimatePresence>
@@ -439,7 +450,6 @@ const Index = () => {
         )}
       </AnimatePresence>
       
-      {/* --- 5. RENDER MODAL TẠI ĐÂY --- */}
       <ClaimStoreModal 
         isOpen={showClaimModal} 
         onClose={() => setShowClaimModal(false)} 
@@ -469,7 +479,11 @@ const Index = () => {
       />
       
       {!isNavigating && (
-         <MiniShowcase onSelectLocation={handleSelectLocation} />
+         // 4. TRUYỀN USER LOCATION CHO MINI SHOWCASE (THUẬT TOÁN MỚI)
+         <MiniShowcase 
+            onSelectLocation={handleSelectLocation} 
+            userLocation={currentUserLocation}
+         />
       )}
     </div>
   );

@@ -27,29 +27,38 @@ serve(async (req: Request) => {
     const { storeId, type, packageType, categoryId, returnUrl, cancelUrl } = await req.json();
     if (!storeId) throw new Error("Thiếu Store ID");
 
-    // Tạo mã đơn hàng số (nhỏ hơn 15 ký tự để vừa với BIGINT)
+    // Tạo mã đơn hàng số (nhỏ hơn 15 ký tự)
     const orderCode = Number(String(Date.now()).slice(-9)); 
     let amount = 2000;
     let description = "";
 
-    // --- LƯU MÃ ĐƠN HÀNG VÀO STORE TRƯỚC ---
+    // --- 1. XỬ LÝ GIÁ TIỀN ---
     if (type === "vip") {
-      amount = 5000; // Giá 5.000đ
-      description = `VIP ${orderCode}`; // Nội dung ngắn gọn
-      
-      // Cập nhật orderCode vào bảng user_stores để Webhook đối chiếu sau này
-      await supabase.from("user_stores")
-        .update({ last_order_code: orderCode })
-        .eq("id", storeId);
+      amount = 100000; // Giá VIP: 5.000đ
+      description = `VIP ${orderCode}`;
     } 
     else if (type === "ad") {
-      // Logic quảng cáo giữ nguyên, nhưng cập nhật thêm orderCode nếu cần
-      // ... (Phần code quảng cáo cũ của bạn giữ nguyên ở đây) ...
-      amount = 50000; // Ví dụ
-      description = `QC ${orderCode}`;
+      // Kiểm tra gói tuần hay tháng
+      if (packageType === 'month') {
+        amount = 150000; // Giá QC Tháng: 150.000đ
+        description = `QC Thang ${orderCode}`;
+      } else {
+        amount = 50000;  // Giá QC Tuần: 50.000đ
+        description = `QC Tuan ${orderCode}`;
+      }
     }
 
-    // TẠO SIGNATURE & GỌI PAYOS
+    // --- 2. QUAN TRỌNG: CẬP NHẬT MÃ ĐƠN HÀNG VÀO STORE ---
+    // (Phải lưu lại thì lát nữa thanh toán xong Webhook mới biết update cho shop nào)
+    const { error: updateError } = await supabase
+      .from("user_stores")
+      .update({ last_order_code: orderCode })
+      .eq("id", storeId);
+
+    if (updateError) throw new Error("Lỗi cập nhật đơn hàng: " + updateError.message);
+
+    // --- 3. TẠO SIGNATURE & GỌI PAYOS ---
+    // (Phần này giữ nguyên)
     const signData = `amount=${amount}&cancelUrl=${cancelUrl}&description=${description}&orderCode=${orderCode}&returnUrl=${returnUrl}`;
     const hmac = createHmac("sha256", CHECKSUM_KEY);
     hmac.update(signData);
@@ -76,6 +85,7 @@ serve(async (req: Request) => {
     });
 
   } catch (error: any) {
+    console.error(error);
     return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 });
