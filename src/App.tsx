@@ -6,12 +6,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { LanguageProvider } from "@/i18n/LanguageContext";
 import { AuthProvider } from "@/hooks/useAuth";
-
+import { AboutPage } from "./pages/AboutPage"; // Import trang vừa tạo
 // Import các trang (Pages)
 import Index from "./pages/Index";
 import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
-
 const queryClient = new QueryClient();
 
 // --- COMPONENT THEO DÕI CHUYỂN TRANG ---
@@ -50,7 +49,7 @@ const App = () => (
               {/* CẢ 2 ĐƯỜNG DẪN NÀY ĐỀU TRỎ VỀ INDEX (BẢN ĐỒ) */}
               <Route path="/" element={<Index />} />
               <Route path="/place/:id" element={<Index />} /> 
-              
+              <Route path="/about" element={<AboutPage />} />
               <Route path="/admin" element={<Admin />} />
               <Route path="*" element={<NotFound />} />
             </Routes>

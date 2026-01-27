@@ -4,7 +4,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Compass, Heart } from 'lucide-react';
 import { toast } from 'sonner';
 import { useNavigate, useParams } from 'react-router-dom';
-
 import { MiniShowcase } from '@/components/MiniShowcase';
 import { MapView } from '@/components/MapView'; 
 import { SearchBar } from '@/components/SearchBar'; 
@@ -302,13 +301,12 @@ const Index = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
           >
-            <div className="w-12 h-12 bg-white rounded-full shadow-lg flex items-center justify-center overflow-hidden border-2 border-green-700 cursor-pointer hover:scale-105 transition-transform">
-              <img 
-                src="/logo.png" 
-                alt="ThodiaUni Logo" 
-                className="w-full h-full object-cover" 
-              />
-            </div>
+            <div 
+  className="w-12 h-12 bg-white rounded-full shadow-lg flex items-center justify-center overflow-hidden border-2 border-green-700 cursor-pointer hover:scale-105 transition-transform" 
+  onClick={() => navigate('/about')}
+>
+  <img src="/logo.png" alt="ThodiaUni Logo" className="w-full h-full object-cover" />
+</div>
             
             <div className="flex-1 min-w-0">
               <SearchBar

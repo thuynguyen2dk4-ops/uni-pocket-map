@@ -1,73 +1,69 @@
-# Welcome to your Lovable project
+# 🗺️ ThodiaUni - Bản Đồ & Tiện Ích Dành Cho Sinh Viên
 
-## Project info
+**ThodiaUni** là nền tảng bản đồ số và khám phá địa điểm được thiết kế riêng cho sinh viên đại học. Ứng dụng giúp sinh viên dễ dàng tìm kiếm giảng đường, quán ăn ngon - bổ - rẻ, nhà trọ, việc làm thêm và các tiện ích thiết yếu xung quanh khu vực làng đại học.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+![ThodiaUni Banner](https://placehold.co/1200x400?text=ThodiaUni+App+Screenshot)
 
-## How can I edit this code?
+## 🌟 Tính Năng Nổi Bật
 
-There are several ways of editing your application.
+* **📍 Bản Đồ Thông Minh:** Tích hợp Mapbox với giao diện trực quan, hiển thị các địa điểm quan trọng (Giảng đường, ATM, Cây xăng, Trạm sạc xe điện...).
+* **🔍 Tìm Kiếm Thông Minh (AI-based):**
+    * Hiểu ý định người dùng (Ví dụ: Gõ "đói" -> Gợi ý quán ăn, gõ "hết tiền" -> Gợi ý ATM).
+    * Hỗ trợ tìm kiếm địa điểm ngoại vi (Landmark 72, Marriott...) kết hợp dữ liệu nội bộ.
+* **⭐ Đánh Giá & Review:** Hệ thống đánh giá địa điểm minh bạch từ cộng đồng sinh viên.
+* **🎁 Săn Voucher:** Tính năng lưu và sử dụng mã giảm giá độc quyền từ các cửa hàng liên kết.
+* **🛣️ Chỉ Đường:** Tích hợp định vị và dẫn đường tối ưu cho người đi bộ và xe máy.
+* **💼 Dành Cho Chủ Cửa Hàng:** Tính năng "Xác nhận chủ sở hữu" (Claim Store) để quản lý thông tin, menu và khuyến mãi.
 
-**Use Lovable**
+## 🛠️ Công Nghệ Sử Dụng
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+Dự án được xây dựng dựa trên các công nghệ hiện đại:
 
-Changes made via Lovable will be committed automatically to this repo.
+* **Frontend:** [React](https://reactjs.org/) (Vite), [TypeScript](https://www.typescriptlang.org/)
+* **Styling:** [Tailwind CSS](https://tailwindcss.com/), [Shadcn UI](https://ui.shadcn.com/)
+* **Map Provider:** [Mapbox GL JS](https://www.mapbox.com/)
+* **Backend & Database:** [Supabase](https://supabase.com/) (PostgreSQL)
+* **Icons:** Lucide React
+* **Animations:** Framer Motion
 
-**Use your preferred IDE**
+## 🚀 Cài Đặt & Chạy Dự Án
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+### Yêu cầu
+* Node.js (v16 trở lên)
+* Tài khoản Mapbox (để lấy Access Token)
+* Tài khoản Supabase
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+### Các bước cài đặt
 
-Follow these steps:
+1.  **Clone repository:**
+    ```bash
+    git clone [https://github.com/username/thodiauni.git](https://github.com/username/thodiauni.git)
+    cd thodiauni
+    ```
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+2.  **Cài đặt dependencies:**
+    ```bash
+    npm install
+    # hoặc
+    yarn install
+    ```
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+3.  **Cấu hình biến môi trường:**
+    Tạo file `.env` tại thư mục gốc và điền các thông tin sau:
+    ```env
+    VITE_MAPBOX_TOKEN=pk.eyJ... (Token Mapbox của bạn)
+    VITE_SUPABASE_URL=https://...
+    VITE_SUPABASE_ANON_KEY=...
+    ```
 
-# Step 3: Install the necessary dependencies.
-npm i
+4.  **Chạy ứng dụng (Development):**
+    ```bash
+    npm run dev
+    ```
+    Truy cập `http://localhost:8080` (hoặc port hiển thị trên terminal).
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
+## 🤝 Đóng Góp
+Mọi đóng góp đều được hoan nghênh! Vui lòng tạo Pull Request hoặc mở Issue nếu bạn phát hiện lỗi.
 
-**Edit a file directly in GitHub**
-
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
-
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+## 📄 Bản Quyền
+Dự án thuộc về đội ngũ phát triển ThodiaUni.
