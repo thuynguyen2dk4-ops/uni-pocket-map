@@ -5,7 +5,7 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 
 // --- IMPORT ICON TỪ LUCIDE ---
 import { 
-  School, Utensils, Home, Briefcase, MapPin, Star, 
+  Utensils, Home, Briefcase, MapPin, Star, 
   Coffee, GraduationCap, Building, Gamepad2, Building2, UserCheck
 } from 'lucide-react';
 
@@ -18,6 +18,7 @@ import { MapboxTokenPrompt } from '@/components/map/MapboxTokenPrompt';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { NearbyVoucherBanner } from './NearbyVoucherBanner';
 
+// --- MAIN MAP VIEW COMPONENT ---
 interface MapViewProps {
   selectedLocation: Location | null;
   onSelectLocation: (location: Location) => void;
@@ -32,63 +33,54 @@ interface MapViewProps {
   isMultiStopMode: boolean;
 }
 
-// --- COMPONENT RENDER ICON MARKER ---
+// --- MARKER ICON COMPONENT ---
 const MarkerIcon = ({ type, isSelected, isSponsored, hasVoucher }: { type: LocationType, isSelected: boolean, isSponsored: boolean, hasVoucher?: boolean }) => {
-  // Cấu hình Icon và Màu sắc (Giữ nguyên)
   let Icon = MapPin;
   let color = '#64748B'; 
-  let bg = '#F8FAFC';
-
-  // --- LOGIC CHỌN ICON THEO DANH MỤC ---
+  
   switch (type) {
-    case 'lecture_hall': Icon = GraduationCap; color = '#0EA5E9'; bg = '#E0F2FE'; break;
-    case 'office': Icon = Building; color = '#475569'; bg = '#F1F5F9'; break;
-    case 'cafe': Icon = Coffee; color = '#D97706'; bg = '#FEF3C7'; break;
-    case 'entertainment': Icon = Gamepad2; color = '#DB2777'; bg = '#FCE7F3'; break;
-    case 'food': Icon = Utensils; color = '#F97316'; bg = '#FFF7ED'; break;
-    case 'housing': Icon = Home; color = '#3B82F6'; bg = '#EFF6FF'; break;
-    case 'job': Icon = Briefcase; color = '#8B5CF6'; bg = '#F5F3FF'; break;
-    case 'building': Icon = Building2; color = '#10B981'; bg = '#ECFDF5'; break;
-    case 'checkin': Icon = UserCheck; color = '#EC4899'; bg = '#FDF2F8'; break;
-    default: Icon = MapPin; color = '#64748B'; bg = '#F8FAFC';
+    case 'lecture_hall': Icon = GraduationCap; color = '#0EA5E9'; break;
+    case 'office': Icon = Building; color = '#475569'; break;
+    case 'cafe': Icon = Coffee; color = '#D97706'; break;
+    case 'entertainment': Icon = Gamepad2; color = '#DB2777'; break;
+    case 'food': Icon = Utensils; color = '#F97316'; break;
+    case 'housing': Icon = Home; color = '#3B82F6'; break;
+    case 'job': Icon = Briefcase; color = '#8B5CF6'; break;
+    case 'building': Icon = Building2; color = '#10B981'; break;
+    case 'checkin': Icon = UserCheck; color = '#EC4899'; break;
+    default: Icon = MapPin; color = '#64748B';
   }
   
-  // Cấu hình kích thước (Đã chỉnh nhỏ gọn)
   const size = isSelected ? 46 : (isSponsored ? 32 : 26);
   const iconSize = isSelected ? 24 : (isSponsored ? 16 : 14);
   const borderWidth = isSelected ? 3 : 1.5;
 
   return (
     <div className="relative flex flex-col items-center justify-center transition-all duration-300 group cursor-pointer"
-         style={{ transform: isSelected ? 'scale(1.15) translateY(-10px)' : 'scale(1)' }}>
+         style={{ transform: isSelected ? 'scale(1.15) translateY(-10px)' : 'scale(1)', zIndex: isSelected ? 50 : 10 }}>
       
-      {/* 1. Vòng tròn Icon */}
       <div style={{
         width: size, height: size,
         backgroundColor: isSelected ? color : 'white',
         border: `${borderWidth}px solid ${isSelected ? 'white' : color}`,
         borderRadius: '50%',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        boxShadow: isSelected 
-          ? `0 10px 25px -5px ${color}90` // Bóng đổ lớn khi chọn
-          : '0 2px 4px 0 rgba(0,0,0,0.15)', // Bóng đổ nhẹ khi chưa chọn
+        boxShadow: isSelected ? `0 10px 25px -5px ${color}90` : '0 2px 4px 0 rgba(0,0,0,0.15)',
       }}>
         <Icon size={iconSize} color={isSelected ? 'white' : color} strokeWidth={2.5} />
       </div>
 
-      {/* 2. Mũi nhọn (Pin tail) */}
       {(isSelected || isSponsored) && (
         <div style={{
           width: 0, height: 0,
           borderLeft: `${isSelected ? 6 : 4}px solid transparent`,
           borderRight: `${isSelected ? 6 : 4}px solid transparent`,
-          borderTop: `${isSelected ? 8 : 6}px solid ${color}`, // Màu trùng với viền
-          marginTop: -1, // Kéo lên dính vào vòng tròn
+          borderTop: `${isSelected ? 8 : 6}px solid ${color}`,
+          marginTop: -1,
           filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.1))'
         }} />
       )}
 
-      {/* 3. Sao Voucher (Nảy nảy) */}
       {hasVoucher && (
         <div className="absolute -top-1.5 -right-1.5 bg-yellow-400 border border-white rounded-full p-0.5 shadow-sm animate-bounce z-[60]">
           <Star size={isSelected ? 10 : 8} fill="white" className="text-white" />
@@ -119,7 +111,9 @@ export const MapView = ({
   const markersRef = useRef<{ marker: mapboxgl.Marker, root: Root }[]>([]);
   const originMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const destinationMarkerRef = useRef<mapboxgl.Marker | null>(null);
-  const tempMarkerRef = useRef<mapboxgl.Marker | null>(null);
+  
+  // Marker tạm thời cho địa điểm Mapbox (Cái nhảy nhảy màu đỏ)
+  const tempPoiMarkerRef = useRef<mapboxgl.Marker | null>(null);
   
   const [mapLoaded, setMapLoaded] = useState(false);
   const [mapboxToken, setMapboxTokenState] = useState<string | null>(null);
@@ -140,7 +134,7 @@ export const MapView = ({
     setMapboxTokenState(token);
   };
 
-  // 1. KHỞI TẠO MAP
+  // 1. KHỞI TẠO MAP & SỰ KIỆN CLICK
   useEffect(() => {
     if (!mapContainer.current || map.current || !mapboxToken) return;
 
@@ -174,36 +168,98 @@ export const MapView = ({
       geolocateControl.trigger(); 
     });
 
+    // --- QUAN TRỌNG: CLICK VÀO ĐỊA ĐIỂM MAPBOX (POI) ---
+    map.current.on('click', (e) => {
+      // 1. Dọn dẹp marker tạm cũ (nếu có)
+      if (tempPoiMarkerRef.current) {
+        tempPoiMarkerRef.current.remove();
+        tempPoiMarkerRef.current = null;
+      }
+
+      // 2. Tìm xem có click vào layer 'poi-label' không
+      const features = map.current?.queryRenderedFeatures(e.point, {
+        layers: ['poi-label'] 
+      });
+
+      if (features && features.length > 0) {
+        const poi = features[0];
+        const name = poi.properties?.name || "Địa điểm chưa có tên";
+        const coordinates = (poi.geometry as any).coordinates.slice();
+        
+        // 3. TẠO MARKER VISUAL (Màu đỏ nhảy lên)
+        const el = document.createElement('div');
+        el.className = 'poi-highlight-marker';
+        const root = createRoot(el);
+        root.render(
+            <div className="relative -top-4 animate-bounce">
+                <MapPin size={46} className="text-red-600 fill-white drop-shadow-2xl" strokeWidth={2.5} />
+                <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-4 h-2 bg-black/20 blur-[3px] rounded-full"></div>
+            </div>
+        );
+
+        const marker = new mapboxgl.Marker({ element: el, anchor: 'bottom' })
+            .setLngLat(coordinates)
+            .addTo(map.current!);
+        tempPoiMarkerRef.current = marker;
+
+        // 4. DI CHUYỂN CAMERA
+        map.current?.flyTo({
+            center: coordinates,
+            zoom: 17,
+            pitch: 50,
+            duration: 1000,
+            offset: [0, 150] // Dịch xuống nhiều hơn chút để BottomSheet không che mất Marker
+        });
+
+        // 5. GỌI HÀM SELECT ĐỂ BẬT BOTTOM SHEET
+        // Chúng ta tạo một object "Location giả" từ thông tin Mapbox
+        const mapboxLocation: any = {
+            id: String(poi.id), // ID dạng string (vd: "poi.123...")
+            name: name,
+            nameVi: name,
+            address: "Địa điểm trên bản đồ",
+            description: "Địa điểm tìm thấy từ Mapbox",
+            lat: coordinates[1],
+            lng: coordinates[0],
+            type: 'checkin', // Gán loại mặc định
+            category: 'checkin',
+            image: null, 
+            is_premium: false 
+        };
+
+        // Bắn tín hiệu ra ngoài -> Index.tsx sẽ nhận và mở BottomSheet
+        onSelectLocation(mapboxLocation);
+      }
+    });
+
+    // Đổi con trỏ chuột
+    map.current.on('mouseenter', 'poi-label', () => {
+      if (map.current) map.current.getCanvas().style.cursor = 'pointer';
+    });
+    map.current.on('mouseleave', 'poi-label', () => {
+      if (map.current) map.current.getCanvas().style.cursor = '';
+    });
+
     return () => {
       map.current?.remove();
       map.current = null;
     };
   }, [mapboxToken]);
 
-  // 2. VẼ MARKER ICON (ĐÃ SỬA: Ẩn khi chỉ đường)
+  // 2. VẼ MARKER ICON (Ẩn khi chỉ đường)
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
 
-    // Clear markers cũ
     markersRef.current.forEach(({ marker, root }) => {
       root.unmount();
       marker.remove();
     });
     markersRef.current = [];
 
-    // --- LOGIC MỚI: KIỂM TRA CHẾ ĐỘ DẪN ĐƯỜNG ---
     const isNavigating = !!routeInfo || !!multiStopRoute;
+    if (isNavigating) return;
 
-    // Nếu đang dẫn đường -> DỪNG LẠI, không vẽ các icon địa điểm xung quanh nữa
-    // (Chỉ để lại đường đi do useEffect số 4 vẽ)
-    if (isNavigating) {
-      return; 
-    }
-    // ---------------------------------------------
-
-    // Gộp dữ liệu có sẵn + cửa hàng người dùng
     const allLocations = [...locations, ...storesAsLocations];
-    // Lọc theo danh mục đang chọn
     const filteredLocations = allLocations.filter(loc => activeCategories.includes(loc.type));
 
     filteredLocations.forEach((location) => {
@@ -213,7 +269,6 @@ export const MapView = ({
       const root = createRoot(el);
       const isSelected = selectedLocation?.id === location.id;
       
-      // Render React Component vào Marker
       root.render(
         <MarkerIcon 
           type={location.type} 
@@ -223,7 +278,7 @@ export const MapView = ({
         />
       );
 
-      // Label tên địa điểm (khi chọn hoặc là Tòa nhà)
+      // Label tên địa điểm
       if (location.type === 'building' || isSelected) {
         const nameEl = document.createElement('div');
         const nameText = language === 'en' && location.name ? location.name : location.nameVi;
@@ -250,11 +305,11 @@ export const MapView = ({
     onSelectLocation, 
     language, 
     storesAsLocations, 
-    routeInfo,       // Thêm dependency này để useEffect chạy lại khi có đường
-    multiStopRoute   // Thêm dependency này
+    routeInfo,
+    multiStopRoute
   ]);
 
-  // 3. FLY TO KHI CHỌN
+  // 3. FLY TO
   useEffect(() => {
     if (!map.current || !flyToLocation) return;
     map.current.flyTo({
@@ -265,11 +320,10 @@ export const MapView = ({
     });
   }, [flyToLocation]);
 
-  // 4. VẼ ĐƯỜNG ĐI (ROUTE)
+  // 4. VẼ ĐƯỜNG ĐI
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
     
-    // Cleanup Layers cũ
     if (map.current.getLayer(routeArrowLayerId)) map.current.removeLayer(routeArrowLayerId);
     if (map.current.getLayer(routeLayerId)) map.current.removeLayer(routeLayerId);
     if (map.current.getSource(routeSourceId)) map.current.removeSource(routeSourceId);

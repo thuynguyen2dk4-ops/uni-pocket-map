@@ -10,7 +10,6 @@ import { useFavorites } from '@/hooks/useFavorites';
 import { toast } from 'sonner';
 import { StoreDetailModal } from '@/components/store/StoreDetailModal';
 
-// Bảng dịch danh mục sang Tiếng Việt hiển thị cho đẹp
 const CATEGORY_LABELS: Record<string, string> = {
   food: 'Ẩm thực',
   cafe: 'Café',
@@ -31,37 +30,87 @@ interface BottomSheetProps {
   onLoginClick?: () => void;
   onPromoteClick?: (location: Location) => void;
   onOpenDetail?: (location: Location) => void;
+  onClaim?: (location: Location) => void;
 }
 
 export const BottomSheet = ({ 
   location, 
   onClose, 
   onNavigate,
-  onOpenDetail
+  onOpenDetail,
+  onClaim
 }: BottomSheetProps) => {
   const { language } = useLanguage();
   const { session } = useAuth();
   const { isFavorite, toggleFavorite } = useFavorites();
   const isFav = isFavorite(location.id);
 
-  // Kiểm tra VIP (Dùng cột is_premium mới)
   const isVip = (location as any).is_premium;
+  const isMapboxLocation = !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(location.id));
 
-  // Logic tính điểm đánh giá (SỬA LỖI: Không default 4.5 nữa)
-  const { rating, count } = useMemo(() => {
-    if (location.reviews && location.reviews.length > 0) {
-       const total = location.reviews.reduce((acc: number, rev: any) => acc + rev.rating, 0);
-       return {
-         rating: (total / location.reviews.length).toFixed(1),
-         count: location.reviews.length
-       };
-    }
-    // Nếu có rating sẵn trong DB thì lấy, không thì trả về 0 (Mới)
-    return { 
-      rating: location.rating || 0, 
-      count: location.reviews?.length || 0 
+  // --- QUAN TRỌNG: LÀM SẠCH ID ĐỂ KHỚP VỚI DATABASE ---
+  // (Giống hệt logic trong StoreDetailModal)
+  const rawId = String(location.id).replace('user-store-', '');
+  // ----------------------------------------------------
+
+  const [ratingData, setRatingData] = useState({ rating: 0, count: 0 });
+  const [isFetchingRating, setIsFetchingRating] = useState(false);
+
+  useEffect(() => {
+    // Thêm tham số forceUpdate
+    const fetchRealRating = async (forceUpdate = false) => {
+      
+      // 1. Dùng review local (Nếu không phải forceUpdate)
+      if (!forceUpdate && location.reviews && location.reviews.length > 0) {
+        const total = location.reviews.reduce((acc: number, rev: any) => acc + rev.rating, 0);
+        setRatingData({
+          rating: Number((total / location.reviews.length).toFixed(1)),
+          count: location.reviews.length
+        });
+        return;
+      }
+
+      // 2. Fetch từ Supabase (Dùng rawId đã làm sạch)
+      setIsFetchingRating(true);
+      const { data, error } = await supabase
+        .from('location_reviews') // Đảm bảo tên bảng đúng (reviews hoặc location_reviews)
+        .select('rating')
+        .eq('store_id', rawId); // <--- DÙNG rawId THAY VÌ location.id
+
+      if (!error && data && data.length > 0) {
+         const total = data.reduce((a: any, b: any) => a + b.rating, 0);
+         setRatingData({
+             rating: Number((total / data.length).toFixed(1)),
+             count: data.length
+         });
+      } else {
+         if (!forceUpdate && location.rating) {
+             setRatingData({ rating: location.rating, count: location.reviews?.length || 0 });
+         } else {
+             setRatingData({ rating: 0, count: 0 });
+         }
+      }
+      setIsFetchingRating(false);
     };
-  }, [location]);
+
+    fetchRealRating(); 
+
+    // --- LẮNG NGHE SỰ KIỆN ---
+    const handleReviewUpdate = (event: any) => {
+      // So sánh ID trong sự kiện với rawId (ID sạch)
+      if (String(event.detail) === String(rawId)) {
+        console.log("♻️ BottomSheet: Nhận tín hiệu update (ID khớp) -> Tải lại!");
+        fetchRealRating(true); // Ép tải lại
+      }
+    };
+
+    window.addEventListener('review_updated', handleReviewUpdate);
+
+    return () => {
+      window.removeEventListener('review_updated', handleReviewUpdate);
+    };
+
+  }, [location.id, rawId]); // Thêm rawId vào dependency
 
   const [storeVouchers, setStoreVouchers] = useState<any[]>([]);
   const [savedVoucherIds, setSavedVoucherIds] = useState<Set<string>>(new Set());
@@ -71,12 +120,10 @@ export const BottomSheet = ({
 
   useEffect(() => {
     const fetchVouchers = async () => {
-      // Kiểm tra xem ID có phải UUID không (để tránh lỗi với dữ liệu fake cũ)
-      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(location.id));
-      if (!isUUID) { setStoreVouchers([]); return; }
-
+      if (isMapboxLocation) { setStoreVouchers([]); return; }
       setLoadingVouchers(true);
-      const { data: vouchers } = await supabase.from('store_vouchers').select('*').eq('store_id', location.id).eq('is_active', true);
+      // Dùng rawId để fetch voucher luôn cho chuẩn
+      const { data: vouchers } = await supabase.from('store_vouchers').select('*').eq('store_id', rawId).eq('is_active', true);
       if (vouchers && vouchers.length > 0) {
         setStoreVouchers(vouchers);
         if (session?.user) {
@@ -88,7 +135,7 @@ export const BottomSheet = ({
       setLoadingVouchers(false);
     };
     fetchVouchers();
-  }, [location.id, session]);
+  }, [location.id, rawId, session, isMapboxLocation]);
 
   const handleSaveVoucher = async (voucher: any) => {
     if (!session?.user) { toast.error("Đăng nhập để lưu!"); return; }
@@ -109,10 +156,6 @@ export const BottomSheet = ({
   
   const locationName = language === 'en' && location.name ? location.name : location.nameVi;
   const description = language === 'en' && location.descriptionEn ? location.descriptionEn : location.description;
-  
-  // Xác định tên danh mục hiển thị
-  // location.category thường là 'lecture_hall', 'food'... -> Tra bảng CATEGORY_LABELS
-  // Nếu không tìm thấy trong bảng thì hiển thị mặc định 'Địa điểm'
   const categoryLabel = CATEGORY_LABELS[location.category || location.type] || 'Địa điểm';
 
   return (
@@ -136,12 +179,9 @@ export const BottomSheet = ({
           <button onClick={(e) => { e.stopPropagation(); onClose(); }} className="absolute top-4 right-4 w-8 h-8 bg-black/50 hover:bg-black/70 rounded-full flex items-center justify-center text-white backdrop-blur-sm"><X className="w-5 h-5" /></button>
           
           <div className="absolute bottom-4 left-4 flex gap-2">
-             {/* LABEL DANH MỤC ĐÃ SỬA */}
              <div className="px-3 py-1 bg-white/90 backdrop-blur text-xs font-bold rounded-full uppercase tracking-wider text-gray-800 shadow-sm border border-white/50">
                 {categoryLabel}
              </div>
-
-             {/* HUY HIỆU VIP */}
              {isVip && (
                 <div className="px-2 py-1 bg-yellow-400 text-yellow-900 text-xs font-bold rounded-full flex items-center gap-1 shadow-sm animate-pulse border border-white">
                    <Crown className="w-3 h-3 fill-yellow-900" />
@@ -158,12 +198,17 @@ export const BottomSheet = ({
             </h2>
             
             <div className="flex flex-col items-end gap-2 shrink-0">
-               {/* SỬA LOGIC HIỂN THỊ SAO */}
-               {Number(rating) > 0 ? (
+               {/* HIỂN THỊ ĐIỂM ĐÁNH GIÁ */}
+               {isFetchingRating ? (
+                 <div className="flex items-center gap-1 bg-gray-50 px-2 py-1 rounded-lg border border-gray-100">
+                    <Loader2 className="w-3 h-3 animate-spin text-gray-400"/>
+                    <span className="text-[10px] text-gray-400">Đang tải...</span>
+                 </div>
+               ) : Number(ratingData.rating) > 0 ? (
                  <div className="flex items-center gap-1 bg-yellow-50 px-2 py-1 rounded-lg border border-yellow-100">
                     <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
-                    <span className="font-bold text-sm text-yellow-700">{rating}</span>
-                    <span className="text-[10px] text-gray-400">({count})</span>
+                    <span className="font-bold text-sm text-yellow-700">{ratingData.rating}</span>
+                    <span className="text-[10px] text-gray-400">({ratingData.count})</span>
                  </div>
                ) : (
                  <div className="flex items-center gap-1 bg-gray-50 px-2 py-1 rounded-lg border border-gray-100">
@@ -182,7 +227,7 @@ export const BottomSheet = ({
           
           <div className="flex items-start gap-2 text-gray-600 mb-6"><MapPin className="w-4 h-4 mt-1 flex-shrink-0 text-primary" /><p className="text-sm">{location.address || 'Đang cập nhật địa chỉ...'}</p></div>
 
-          <div className="mb-6">
+          <div className="mb-4">
             <Button 
               className="w-full h-12 text-base font-bold bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20 rounded-xl" 
               onClick={handleDirectionClick}
@@ -193,7 +238,25 @@ export const BottomSheet = ({
             </Button>
           </div>
 
-          {/* VOUCHERS */}
+          {isMapboxLocation && (
+            <div className="mb-6 p-3 bg-blue-50 border border-blue-100 rounded-xl flex flex-col gap-2">
+              <div className="flex items-start gap-2">
+                <div className="p-1 bg-blue-100 rounded-full text-blue-600"><Crown size={14} /></div>
+                <div>
+                  <p className="text-sm font-bold text-blue-900">Bạn là chủ địa điểm này?</p>
+                  <p className="text-xs text-blue-600">Xác minh ngay để quản lý thông tin và hình ảnh.</p>
+                </div>
+              </div>
+              <Button 
+                variant="outline" 
+                className="w-full bg-white text-blue-600 border-blue-200 hover:bg-blue-100 h-9 text-xs font-bold"
+                onClick={() => onClaim?.(location)}
+              >
+                Xác nhận chủ sở hữu
+              </Button>
+            </div>
+          )}
+
           {loadingVouchers ? (
              <div className="h-16 bg-gray-50 rounded-xl mb-6 flex items-center justify-center"><Loader2 className="w-4 h-4 animate-spin text-gray-300"/></div>
           ) : storeVouchers.length > 0 && (

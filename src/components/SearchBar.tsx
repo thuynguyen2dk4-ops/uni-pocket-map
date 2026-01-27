@@ -1,14 +1,26 @@
 import { useState, useEffect, useRef } from 'react';
-import { Search, MapPin, Loader2, Store, Globe, X, Navigation, Coffee, Utensils, GraduationCap, Building, Home, Briefcase, Car, DollarSign } from 'lucide-react';
+import { Search, Loader2, X, Navigation, MapPin, Building2, AlertCircle } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { locations } from '@/data/locations';
 import { supabase } from '@/integrations/supabase/client';
 import { getMapboxToken } from '@/lib/mapboxToken';
 
-// Hàm bỏ dấu (Clean text)
+// --- HÀM BỎ DẤU ---
 const removeAccents = (str: string) => {
   return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D");
+};
+
+// --- TÍNH KHOẢNG CÁCH ---
+const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+  const R = 6371; 
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c; 
 };
 
 interface SearchResult {
@@ -32,54 +44,11 @@ interface SearchBarProps {
   resultContainerStyle?: React.CSSProperties;
 }
 
-// 1. TỪ ĐIỂN Ý ĐỊNH (User gõ -> Hệ thống hiểu loại gì)
-const KEYWORD_MAPPING: Record<string, string> = {
-  // Food
-  'an': 'food', 'doi': 'food', 'com': 'food', 'pho': 'food', 'bun': 'food', 'mi': 'food', 'banh': 'food',
-  // Cafe
-  'uong': 'cafe', 'khat': 'cafe', 'nuoc': 'cafe', 'cf': 'cafe', 'cafe': 'cafe', 'coffee': 'cafe', 'tra': 'cafe',
-  // Housing
-  'ngu': 'housing', 'tro': 'housing', 'ktx': 'housing', 'hotel': 'housing', 'nha nghi': 'housing',
-  // Study
-  'hoc': 'lecture_hall', 'giang duong': 'lecture_hall', 'thu vien': 'library',
-  // Utility
-  'xe': 'parking', 'gui': 'parking', 'do': 'parking',
-  'wc': 'wc', 've sinh': 'wc',
-  'tien': 'bank', 'atm': 'bank', 'bank': 'bank',
-  'viec': 'job', 'lam': 'job'
-};
-
-// 2. TỪ KHÓA MAPBOX (Hệ thống hiểu loại gì -> Gửi từ này cho Mapbox)
-// Đây là fix cho lỗi "Khát không ra gì": Gõ khát -> cafe -> Gửi "coffee" cho Mapbox
-const MAPBOX_QUERIES: Record<string, string> = {
-  'food': 'restaurant quán ăn',
-  'cafe': 'coffee cafe',
-  'housing': 'hotel hostel nhà nghỉ',
-  'lecture_hall': 'university school',
-  'parking': 'parking',
-  'wc': 'toilet',
-  'bank': 'atm bank',
-  'job': 'office company',
-  'sport': 'stadium gym'
-};
-
-const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-  const R = 6371; 
-  const dLat = (lat2 - lat1) * (Math.PI / 180);
-  const dLon = (lon2 - lon1) * (Math.PI / 180);
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
-    Math.sin(dLon / 2) * Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c; 
-};
-
 export const SearchBar = ({ 
   onLocationSelect, 
   onFocus, 
   onBlur, 
-  placeholder = "Tìm: Đói, Khát, C1, ATM...", 
+  placeholder = "Tìm địa điểm...", 
   userLocation,
   resultContainerStyle 
 }: SearchBarProps) => {
@@ -87,10 +56,15 @@ export const SearchBar = ({
   const [results, setResults] = useState<SearchResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  
+  // State để báo lỗi nếu thiếu token
+  const [tokenError, setTokenError] = useState<boolean>(false);
+
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
+  // Đóng dropdown khi click ra ngoài
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
@@ -102,44 +76,28 @@ export const SearchBar = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [onBlur]);
 
+  // Logic tìm kiếm
   useEffect(() => {
     if (!query) {
       setResults([]);
-      setIsOpen(false);
+      setTokenError(false);
       return;
     }
 
     setIsOpen(true);
     setIsLoading(true);
+    setTokenError(false);
 
     const timer = setTimeout(async () => {
-      // 1. CHUẨN HÓA INPUT
       const cleanQuery = removeAccents(query).toLowerCase().trim();
-      
-      // 2. PHÁT HIỆN Ý ĐỊNH (INTENT DETECTION)
-      let detectedCategory: string | null = null;
-      
-      // Tìm xem query có chứa từ khóa nào không (VD: "dang doi bung" -> chứa "doi" -> food)
-      for (const key in KEYWORD_MAPPING) {
-        if (cleanQuery.includes(key)) {
-          detectedCategory = KEYWORD_MAPPING[key];
-          break; // Tìm thấy 1 cái là chốt luôn (Ưu tiên từ đầu tiên khớp)
-        }
-      }
+      console.log("🔍 Bắt đầu tìm kiếm:", cleanQuery);
 
-      // 3. TÌM LOCAL (CHẾ ĐỘ NGHIÊM NGẶT)
+      // 1. TÌM LOCAL (Ưu tiên số 1)
       const localMatches: SearchResult[] = locations
         .filter(loc => {
-          if (detectedCategory) {
-            // STRICT MODE: Nếu đã hiểu ý định -> CHỈ trả về đúng loại đó.
-            // Tuyệt đối không tìm theo tên để tránh "rác".
-            return loc.type === detectedCategory;
-          } else {
-            // NORMAL MODE: Nếu không hiểu ý định (VD: gõ "C1", "Tạ Quang Bửu") -> Tìm theo tên
-            const name = removeAccents(loc.name).toLowerCase();
-            const nameVi = removeAccents(loc.nameVi || '').toLowerCase();
-            return name.includes(cleanQuery) || nameVi.includes(cleanQuery);
-          }
+          const name = removeAccents(loc.name).toLowerCase();
+          const nameVi = removeAccents(loc.nameVi || '').toLowerCase();
+          return name.includes(cleanQuery) || nameVi.includes(cleanQuery);
         })
         .map(loc => ({
           id: `local-${loc.id}`,
@@ -153,8 +111,13 @@ export const SearchBar = ({
           distance: userLocation ? calculateDistance(userLocation.lat, userLocation.lng, loc.lat, loc.lng) : 0
         }));
 
-      // 4. TÌM API (SUPABASE & MAPBOX)
+      // Chuẩn bị gọi API
       const mapboxToken = getMapboxToken();
+      if (!mapboxToken) {
+        console.warn("⚠️ Không tìm thấy Mapbox Token!");
+        setTokenError(true);
+      }
+
       if (abortControllerRef.current) abortControllerRef.current.abort();
       abortControllerRef.current = new AbortController();
       const signal = abortControllerRef.current.signal;
@@ -163,15 +126,12 @@ export const SearchBar = ({
         let dbResults: SearchResult[] = [];
         let mapboxResults: SearchResult[] = [];
 
-        // A. Tìm Supabase
-        // Nếu có category -> tìm theo category trong DB luôn cho chuẩn
-        let dbQuery = supabase.from('user_stores').select('*');
-        if (detectedCategory) {
-           dbQuery = dbQuery.eq('category', detectedCategory);
-        } else {
-           dbQuery = dbQuery.ilike('name_vi', `%${query}%`);
-        }
-        const { data: dbMatches } = await dbQuery.limit(5);
+        // 2. TÌM DATABASE (Ưu tiên số 2)
+        const { data: dbMatches } = await supabase
+          .from('user_stores')
+          .select('*')
+          .ilike('name_vi', `%${query}%`)
+          .limit(5);
 
         if (dbMatches) {
           dbResults = dbMatches.map(store => ({
@@ -187,73 +147,83 @@ export const SearchBar = ({
           }));
         }
 
-        // B. Tìm Mapbox (Chìa khóa cho vấn đề "Khát")
+        // 3. TÌM MAPBOX (JW Marriott nằm ở đây)
         if (mapboxToken) {
           const proximity = userLocation ? `&proximity=${userLocation.lng},${userLocation.lat}` : '';
+          // Tìm cả POI và Address để đảm bảo ra kết quả
+          const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${mapboxToken}&country=vn&autocomplete=true&limit=10&language=vi&types=poi,address${proximity}`;
           
-          // QUAN TRỌNG: Chọn từ khóa để gửi cho Mapbox
-          // Nếu hiểu ý định (detectedCategory = 'cafe') -> Gửi "coffee cafe"
-          // Nếu không -> Gửi nguyên văn user nhập
-          let finalQuery = query;
-          if (detectedCategory && MAPBOX_QUERIES[detectedCategory]) {
-            finalQuery = MAPBOX_QUERIES[detectedCategory];
-          }
+          console.log("🌍 Gọi Mapbox API:", url); // <--- BẠN KIỂM TRA LINK NÀY TRONG CONSOLE
 
-          const res = await fetch(
-            `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(finalQuery)}.json?access_token=${mapboxToken}&country=vn&autocomplete=true&limit=8&language=vi&types=poi,address${proximity}`,
-            { signal }
-          );
-          const data = await res.json();
+          const res = await fetch(url, { signal });
           
-          if (data.features) {
-            mapboxResults = data.features.map((feature: any) => ({
-              id: feature.id,
-              name: feature.text,
-              address: feature.place_name,
-              lat: feature.center[1],
-              lng: feature.center[0],
-              source: 'mapbox' as const,
-              // Gán type chuẩn nếu đã detect được, để hiện icon đúng
-              type: detectedCategory || feature.properties.category || 'place',
-              originalData: {
-                 id: feature.id, name: feature.text, nameVi: feature.text,
-                 address: feature.place_name, lat: feature.center[1], lng: feature.center[0],
-                 type: detectedCategory || 'checkin', 
-                 isMapboxResult: true
-              },
-              distance: userLocation ? calculateDistance(userLocation.lat, userLocation.lng, feature.center[1], feature.center[0]) : 0
-            }));
+          if (res.ok) {
+            const data = await res.json();
+            console.log("✅ Kết quả Mapbox:", data.features?.length || 0);
+            
+            if (data.features) {
+              mapboxResults = data.features.map((feature: any) => ({
+                id: feature.id,
+                name: feature.text, // Tên địa điểm (JW Marriott...)
+                address: feature.place_name?.replace(feature.text + ', ', '').replace(', Vietnam', ''),
+                lat: feature.center[1],
+                lng: feature.center[0],
+                source: 'mapbox' as const,
+                type: 'checkin', 
+                originalData: {
+                   id: feature.id, 
+                   name: feature.text, 
+                   nameVi: feature.text,
+                   address: feature.place_name, 
+                   lat: feature.center[1], 
+                   lng: feature.center[0],
+                   type: 'checkin', 
+                   isMapboxResult: true
+                },
+                distance: userLocation ? calculateDistance(userLocation.lat, userLocation.lng, feature.center[1], feature.center[0]) : 0
+              }));
+            }
+          } else {
+            console.error("❌ Lỗi Mapbox:", res.status);
           }
         }
 
-        // 5. GỘP KẾT QUẢ
+        // 4. GỘP KẾT QUẢ (Không lọc, chỉ sắp xếp)
         const allResults = [...localMatches, ...dbResults, ...mapboxResults];
         
-        // Sắp xếp: Ưu tiên khoảng cách gần nhất
-        if (userLocation) {
-          allResults.sort((a, b) => (a.distance || 0) - (b.distance || 0));
-        }
+        // Nếu tìm thấy kết quả khớp chính xác tên, đưa lên đầu
+        allResults.sort((a, b) => {
+           const aExact = removeAccents(a.name).toLowerCase() === cleanQuery;
+           const bExact = removeAccents(b.name).toLowerCase() === cleanQuery;
+           if (aExact && !bExact) return -1;
+           if (!aExact && bExact) return 1;
+           // Nếu không khớp tên thì ưu tiên khoảng cách
+           return (a.distance || 0) - (b.distance || 0);
+        });
 
         setResults(allResults);
+
       } catch (error: any) {
-        if (error.name !== 'AbortError') console.error("Search Error:", error);
+        if (error.name !== 'AbortError') console.error("Lỗi tìm kiếm:", error);
       } finally {
         if (!signal.aborted) setIsLoading(false);
       }
-    }, 300); // Debounce 300ms
+    }, 400); // Tăng thời gian chờ một chút để gõ xong hẳn mới tìm
 
     return () => clearTimeout(timer);
   }, [query, userLocation]);
 
   const handleSelect = (result: SearchResult) => {
-    setQuery(''); setResults([]); setIsOpen(false);
+    setQuery(result.name);
+    setResults([]); 
+    setIsOpen(false);
     if (inputRef.current) inputRef.current.blur();
     onLocationSelect(result.originalData);
   };
 
   const clearSearch = () => {
-    setQuery(''); setResults([]); setIsOpen(false);
-    if (onBlur) onBlur();
+    setQuery(''); setResults([]); 
+    if (inputRef.current) inputRef.current.focus();
   };
 
   const formatDistance = (dist?: number) => {
@@ -262,65 +232,53 @@ export const SearchBar = ({
     return `${dist.toFixed(1)}km`;
   };
 
-  // Helper Icon
-  const getIcon = (type: string) => {
-      const t = (type || '').toLowerCase();
-      if (t.includes('food')) return <Utensils className="w-4 h-4 text-white" />;
-      if (t.includes('cafe') || t.includes('coffee')) return <Coffee className="w-4 h-4 text-white" />;
-      if (t.includes('lecture') || t.includes('school')) return <GraduationCap className="w-4 h-4 text-white" />;
-      if (t.includes('housing') || t.includes('hotel')) return <Home className="w-4 h-4 text-white" />;
-      if (t.includes('job') || t.includes('office')) return <Briefcase className="w-4 h-4 text-white" />;
-      if (t.includes('bank') || t.includes('atm')) return <DollarSign className="w-4 h-4 text-white" />;
-      if (t.includes('parking')) return <Car className="w-4 h-4 text-white" />;
-      return <Globe className="w-4 h-4 text-white" />;
-  };
-
-  const getIconBg = (type: string, source: string) => {
-      const t = (type || '').toLowerCase();
-      if (t.includes('food')) return 'bg-orange-500';
-      if (t.includes('cafe')) return 'bg-amber-600';
-      if (t.includes('lecture')) return 'bg-blue-600';
-      if (t.includes('housing')) return 'bg-indigo-500';
-      if (t.includes('bank')) return 'bg-emerald-600';
-      
-      if (source === 'local') return 'bg-blue-500'; 
-      if (source === 'database') return 'bg-green-600';
-      return 'bg-gray-400';
-  };
-
   return (
     <div ref={containerRef} className="relative w-full pointer-events-auto">
-      <div className="relative flex items-center bg-white rounded-xl shadow-lg border border-gray-200 h-11 overflow-hidden transition-all duration-200 focus-within:ring-2 focus-within:ring-blue-500/20">
-        <Search className="ml-3 h-5 w-5 text-gray-400 shrink-0" />
+      {/* THANH INPUT */}
+      <div className="relative flex items-center bg-white rounded-full shadow-md border border-gray-200 h-12 overflow-hidden transition-all duration-200 focus-within:shadow-lg">
+        <div className="pl-4 pr-2 text-gray-400">
+           {isLoading ? <Loader2 className="w-5 h-5 animate-spin text-blue-500"/> : <Search className="w-5 h-5"/>}
+        </div>
+
         <Input 
           ref={inputRef}
-          className="border-none shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 h-full bg-transparent text-base px-3 placeholder:text-gray-400 w-full"
+          className="border-none shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 h-full bg-transparent text-base px-2 placeholder:text-gray-500 w-full"
           placeholder={placeholder}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          onFocus={() => { 
-            if (onFocus) onFocus();
-            if (results.length > 0 || query.length > 0) setIsOpen(true);
-          }}
+          onFocus={() => setIsOpen(true)}
           style={{ fontSize: '16px' }}
         />
-        {isLoading ? (
-          <Loader2 className="mr-3 h-5 w-5 animate-spin text-blue-500 shrink-0" />
-        ) : query && (
-          <Button variant="ghost" size="icon" className="h-8 w-8 mr-2 hover:bg-gray-100 rounded-full" onClick={clearSearch}>
+
+        {query && (
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="h-8 w-8 mr-2 hover:bg-gray-100 rounded-full" 
+            onMouseDown={(e) => { e.preventDefault(); clearSearch(); }}
+          >
             <X className="h-4 w-4 text-gray-500" />
           </Button>
         )}
       </div>
 
-      {isOpen && (results.length > 0 || isLoading) && (
+      {/* DROPDOWN KẾT QUẢ */}
+      {isOpen && (results.length > 0 || (isLoading && query) || tokenError) && (
         <div 
-          className="absolute left-0 right-0 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden z-[100] max-h-[60vh] overflow-y-auto"
-          style={resultContainerStyle || { top: '100%', marginTop: '8px' }}
+          className="absolute left-0 right-0 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden z-[100] max-h-[60vh] overflow-y-auto mt-2"
+          style={resultContainerStyle || { top: '100%' }}
         >
-            {isLoading && results.length === 0 && (
+            {/* BÁO LỖI TOKEN */}
+            {tokenError && (
+              <div className="p-3 bg-red-50 text-red-600 text-sm flex items-center gap-2 border-b border-red-100">
+                <AlertCircle className="w-4 h-4" />
+                <span>Lỗi cấu hình: Chưa nhập Mapbox Token!</span>
+              </div>
+            )}
+
+            {isLoading && results.length === 0 && !tokenError && (
                 <div className="p-4 text-center text-gray-400 text-sm flex items-center justify-center gap-2">
-                    <Loader2 className="w-4 h-4 animate-spin"/> Đang tìm quanh đây...
+                    <Loader2 className="w-4 h-4 animate-spin"/> Đang tìm...
                 </div>
             )}
 
@@ -328,13 +286,19 @@ export const SearchBar = ({
               {results.map((result) => (
                 <button
                   key={`${result.source}-${result.id}`}
-                  onClick={() => handleSelect(result)}
+                  onMouseDown={(e) => { e.preventDefault(); handleSelect(result); }}
                   className="w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors flex items-center gap-3 border-b last:border-0 border-gray-50 group"
                 >
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${getIconBg(result.type, result.source)}`}>
-                      {getIcon(result.type)}
+                  {/* ICON */}
+                  <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${
+                    result.source === 'local' ? 'bg-blue-100 text-blue-600' :
+                    result.source === 'database' ? 'bg-purple-100 text-purple-600' :
+                    'bg-gray-100 text-gray-600'
+                  }`}>
+                      {result.source === 'local' || result.source === 'database' ? <Building2 className="w-4 h-4" /> : <MapPin className="w-4 h-4" />}
                   </div>
                   
+                  {/* CONTENT */}
                   <div className="min-w-0 flex-1">
                     <div className="flex justify-between items-center">
                         <h4 className="font-semibold text-gray-800 text-sm truncate group-hover:text-blue-600 transition-colors">
@@ -342,13 +306,17 @@ export const SearchBar = ({
                         </h4>
                         
                         {userLocation && (
-                            <div className="flex items-center text-[11px] text-blue-600 font-medium bg-blue-50 px-1.5 py-0.5 rounded ml-2 flex-shrink-0">
+                            <div className="flex items-center text-[11px] text-blue-600 font-medium bg-blue-50 px-2 py-0.5 rounded-full ml-2 flex-shrink-0">
                                 <Navigation className="w-3 h-3 mr-0.5" />
                                 {formatDistance(result.distance)}
                             </div>
                         )}
                     </div>
-                    <p className="text-xs text-gray-500 truncate mt-0.5">{result.address}</p>
+                    <p className="text-xs text-gray-500 truncate mt-0.5 flex items-center gap-1">
+                       {result.source === 'local' && <span className="bg-blue-100 text-blue-700 px-1 rounded text-[10px] font-bold">Nội bộ</span>}
+                       {result.source === 'database' && <span className="bg-purple-100 text-purple-700 px-1 rounded text-[10px] font-bold">Đối tác</span>}
+                       <span className="truncate">{result.address}</span>
+                    </p>
                   </div>
                 </button>
               ))}
@@ -356,12 +324,13 @@ export const SearchBar = ({
         </div>
       )}
       
-      {isOpen && !isLoading && query && results.length === 0 && (
+      {/* TRẠNG THÁI KHÔNG TÌM THẤY */}
+      {isOpen && !isLoading && query && results.length === 0 && !tokenError && (
           <div 
-            className="absolute left-0 right-0 bg-white rounded-xl shadow-lg p-4 text-center text-gray-500 text-sm z-[100]"
-            style={resultContainerStyle || { top: '100%', marginTop: '8px' }}
+            className="absolute left-0 right-0 bg-white rounded-xl shadow-lg p-4 text-center text-gray-500 text-sm z-[100] mt-2"
+            style={resultContainerStyle || { top: '100%' }}
           >
-             Không tìm thấy địa điểm nào.
+             Không tìm thấy địa điểm nào phù hợp.
           </div>
       )}
     </div>

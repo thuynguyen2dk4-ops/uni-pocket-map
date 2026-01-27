@@ -18,6 +18,8 @@ import { StoreManagementPanel } from '@/components/store/StoreManagementPanel';
 import { UserMenu } from '@/components/UserMenu';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { StoreDetailModal } from '@/components/store/StoreDetailModal';
+// --- 1. IMPORT MODAL CLAIM ---
+import { ClaimStoreModal } from '@/components/store/ClaimStoreModal';
 
 import { useLanguage } from '@/i18n/LanguageContext';
 import { useDirections, TransportMode, RoutePreference } from '@/hooks/useDirections';
@@ -58,6 +60,10 @@ const Index = () => {
   const [showFavoritesPanel, setShowFavoritesPanel] = useState(false);
   const [showStorePanel, setShowStorePanel] = useState(false);
   const [showSponsoredModal, setShowSponsoredModal] = useState(false);
+
+  // --- 2. STATE CHO MODAL CLAIM ---
+  const [showClaimModal, setShowClaimModal] = useState(false);
+  const [claimData, setClaimData] = useState<{mapboxId: string, name: string, address?: string, lat: number, lng: number} | null>(null);
   
   const { favorites } = useFavorites();
 
@@ -72,17 +78,14 @@ const Index = () => {
     getMultiStopDirections, clearRoute: clearMultiStopRoute, setTransportMode: setMultiStopTransportMode,
   } = useMultiStopDirections();
 
-  // --- 1. LOGIC URL SYNC (ĐÃ NÂNG CẤP) ---
+  // --- LOGIC URL SYNC ---
   useEffect(() => {
-    // Nếu không có ID (về trang chủ) -> Đóng Popup
     if (!id) {
       setSelectedLocation(null);
       document.title = 'ThodiaUni - Bản đồ Đại học';
       return;
     }
 
-    // Trường hợp 1: Tìm trong file tĩnh (locations.ts)
-    // Dùng String(loc.id) để so sánh an toàn với id từ URL (string)
     const foundLocation = locations.find(loc => String(loc.id) === id);
     
     if (foundLocation) {
@@ -92,16 +95,12 @@ const Index = () => {
       return;
     }
 
-    // Trường hợp 2: ID lạ (Database hoặc Mapbox)
-    // Kiểm tra: Nếu State đang giữ địa điểm có ID khớp với URL -> GIỮ NGUYÊN (Không đóng popup)
     if (selectedLocation && String(selectedLocation.id) === id) {
        const name = language === 'en' && selectedLocation.name ? selectedLocation.name : selectedLocation.nameVi;
        document.title = `${name} | ThodiaUni`;
     } 
-    // Nếu không khớp (ví dụ F5 trang với ID lạ), hiện tại ta chưa fetch lại được từ DB nên popup sẽ không hiện.
-    // (Để fix vụ F5 cần thêm logic fetch từ Supabase, nhưng tạm thời thế này là đủ cho luồng click)
 
-  }, [id, language]); // Lưu ý: KHÔNG cho selectedLocation vào dependency để tránh vòng lặp
+  }, [id, language]);
 
   // --- GPS Tracking ---
   useEffect(() => {
@@ -133,7 +132,6 @@ const Index = () => {
   }, [language]);
 
   const handleSelectLocation = useCallback((location: Location, department?: Department) => {
-    // Logic Adding Stop / Multi Stop (Giữ nguyên)
     if (isAddingStop || isMultiStopMode) {
       const newWaypoint: Waypoint = {
         coordinates: [location.lng, location.lat],
@@ -172,26 +170,34 @@ const Index = () => {
       return;
     }
     
-    // --- 2. SỬA LOGIC CHỌN ĐỊA ĐIỂM (QUAN TRỌNG) ---
-    
-    // Bước A: Set State trước (Để useEffect nhận diện được "người quen")
+    // Chọn địa điểm
     setSelectedLocation(location);
     setFlyToLocation(location);
     if (department) setSelectedDepartment(department);
 
-    // Bước B: Đổi URL (Bất kể nguồn nào: Local, DB, Mapbox)
-    // ID từ SearchBar đã được format (db-..., mapbox-...) nên là duy nhất
     navigate(`/place/${location.id}`);
 
   }, [isAddingStop, isMultiStopMode, isNavigating, addWaypoint, multiStopWaypoints, language, getMultiStopDirections, multiStopTransportMode, routeDestination, navigationDestination, clearDirections, navigate]);
 
+  // --- 3. HÀM XỬ LÝ KHI BẤM CLAIM TỪ BOTTOM SHEET ---
+  const handleClaimLocation = useCallback((location: Location) => {
+    setClaimData({
+      mapboxId: String(location.id),
+      name: location.nameVi || location.name || "Địa điểm",
+      address: location.address,
+      lat: location.lat,
+      lng: location.lng
+    });
+    setShowClaimModal(true);
+  }, []);
+
   const handleCloseSheet = useCallback(() => {
-    navigate('/'); // Quay về trang chủ -> useEffect sẽ tự đóng popup
+    navigate('/'); 
     setSelectedDepartment(null);
   }, [navigate]);
 
   const handleNavigate = useCallback((location: Location, mode: TransportMode = 'walking') => {
-    navigate('/'); // Reset URL về trang chủ khi bắt đầu đi
+    navigate('/');
     setSelectedDepartment(null);
     setIsMultiStopMode(false);
     clearMultiStopRoute(); 
@@ -419,6 +425,7 @@ const Index = () => {
             onOpenDetail={handleOpenDetail}
             onLoginClick={() => setShowAuthModal(true)}
             onPromoteClick={handlePromoteLocation}
+            onClaim={handleClaimLocation} // --- 4. TRUYỀN HÀM NÀY VÀO BOTTOM SHEET ---
           />
         )}
       </AnimatePresence>
@@ -433,6 +440,13 @@ const Index = () => {
            />
         )}
       </AnimatePresence>
+      
+      {/* --- 5. RENDER MODAL TẠI ĐÂY --- */}
+      <ClaimStoreModal 
+        isOpen={showClaimModal} 
+        onClose={() => setShowClaimModal(false)} 
+        data={claimData}
+      />
 
       <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} />
 

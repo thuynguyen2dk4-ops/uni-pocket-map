@@ -26,13 +26,12 @@ export const ReviewSection = ({ storeId }: { storeId: string }) => {
   const fetchReviews = async () => {
     if (!storeId) return;
     
-    // Ép kiểu ID về string để chắc chắn
     const targetId = String(storeId);
 
     const { data, error } = await supabase
-      .from('location_reviews' as any)
+      .from('location_reviews' as any) // Đảm bảo bảng này đúng tên trong DB của bạn (reviews hoặc location_reviews)
       .select('*')
-      .eq('store_id', targetId) // Text ID hoạt động bình thường
+      .eq('store_id', targetId) 
       .order('created_at', { ascending: false });
     
     if (data) {
@@ -55,15 +54,12 @@ export const ReviewSection = ({ storeId }: { storeId: string }) => {
       return;
     }
 
-    // --- ĐÃ XÓA ĐOẠN KIỂM TRA UUID Ở ĐÂY ---
-    // Giờ đây P_Car hay bất kỳ ID nào cũng được chấp nhận
-
     setIsSubmitting(true);
     try {
-      const targetId = String(storeId); // Đảm bảo là chuỗi
+      const targetId = String(storeId); 
 
       const { error } = await supabase.from('location_reviews' as any).insert({
-        store_id: targetId, // Gửi "P_Car" lên DB (DB đã đổi sang TEXT nên nhận tốt)
+        store_id: targetId, 
         user_id: session.user.id,
         rating: rating,
         comment: comment
@@ -72,6 +68,12 @@ export const ReviewSection = ({ storeId }: { storeId: string }) => {
       if (error) throw error;
 
       toast.success("Cảm ơn đánh giá của bạn!");
+
+      // --- QUAN TRỌNG: BẮN TÍN HIỆU CẬP NHẬT ---
+      // Dòng này giúp Bottom Sheet bên ngoài biết là vừa có đánh giá mới để load lại sao
+      window.dispatchEvent(new CustomEvent('review_updated', { detail: targetId }));
+      // ------------------------------------------
+
       setComment('');
       setRating(5);
       fetchReviews(); 
