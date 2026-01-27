@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { ArrowLeft, Map, Search, Ticket, Star, Heart, Mail, MapPin, Globe, Facebook } from 'lucide-react'; // Thêm Facebook
+import { ArrowLeft, Map, Search, Ticket, Star, Heart, Mail, MapPin, Globe, Facebook, Phone } from 'lucide-react'; // Đã thêm Phone
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
 
@@ -59,7 +59,8 @@ export const AboutPage = () => {
       <nav className="fixed top-0 left-0 right-0 bg-white/80 backdrop-blur-md z-50 border-b border-gray-100">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate('/')}>
-            <div className="w-8 h-8 bg-green-600 rounded-lg flex items-center justify-center text-white font-bold text-xl">T</div>
+            {/* LOGO TRÊN HEADER */}
+            <img src="/logo.png" alt="ThodiaUni" className="w-8 h-8 object-contain rounded" />
             <span className="font-bold text-xl tracking-tight text-green-700">ThodiaUni</span>
           </div>
           <Button variant="ghost" onClick={() => navigate('/')} className="gap-2 hover:bg-green-50 text-green-700">
@@ -144,20 +145,32 @@ export const AboutPage = () => {
         </div>
       </section>
 
-      {/* FOOTER - NƠI CHỨA LINK LIÊN HỆ */}
+      {/* FOOTER - ĐÃ CẬP NHẬT */}
       <footer className="bg-gray-900 text-gray-400 py-12 px-4">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
+          
+          {/* 1. LOGO & TÊN (Cột trái) */}
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-green-600 rounded-lg flex items-center justify-center text-white font-bold">T</div>
+            {/* Thay thế div chữ T cũ bằng thẻ img */}
+            <img src="/logo.png" alt="ThodiaUni" className="w-8 h-8 object-contain rounded" />
             <span className="text-white font-bold text-xl">ThodiaUni</span>
           </div>
           
-          <div className="text-sm">
-            © 2026 ThodiaUni Project. Built with passion.
+          {/* 2. THÔNG TIN LIÊN HỆ HIỆN RÕ CHỮ (Cột giữa) */}
+          <div className="text-sm flex flex-col md:flex-row gap-4 md:gap-8 items-center font-medium">
+             <div className="flex items-center gap-2 hover:text-white transition-colors cursor-default">
+                <Mail size={16} className="text-gray-500" />
+                <span>contact@thodiauni.space</span>
+             </div>
+             <div className="flex items-center gap-2 hover:text-white transition-colors cursor-default">
+                <Phone size={16} className="text-gray-500" />
+                <span>086 299 3382</span>
+             </div>
           </div>
 
+          {/* 3. MẠNG XÃ HỘI (Cột phải) */}
           <div className="flex gap-6 items-center">
-            {/* 1. FACEBOOK */}
+            {/* Facebook */}
             <a 
               href="https://facebook.com/thodiauni" 
               target="_blank" 
@@ -168,7 +181,7 @@ export const AboutPage = () => {
               <Facebook size={24} className="group-hover:scale-110 transition-transform" />
             </a>
 
-            {/* 2. TIKTOK */}
+            {/* TikTok */}
             <a 
               href="https://tiktok.com/@thodiauni" 
               target="_blank" 
@@ -178,16 +191,11 @@ export const AboutPage = () => {
             >
               <TiktokIcon size={22} className="group-hover:scale-110 transition-transform" />
             </a>
-
-            {/* 3. EMAIL */}
-            <a 
-              href="mailto:contact@thodiauni.com" 
-              className="hover:text-red-500 transition-colors flex items-center gap-1 group"
-              title="Gửi Email"
-            >
-              <Mail size={24} className="group-hover:scale-110 transition-transform" />
-            </a>
           </div>
+        </div>
+        
+        <div className="max-w-6xl mx-auto mt-8 pt-8 border-t border-gray-800 text-center text-xs text-gray-600">
+             © 2026 ThodiaUni Project. Built with passion.
         </div>
       </footer>
     </div>

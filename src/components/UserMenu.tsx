@@ -9,11 +9,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { User, LogOut, MapPin, Store, ShieldCheck, Crown, Megaphone, Loader2, X, Check } from "lucide-react"; 
+import { User, LogOut, MapPin, Store, ShieldCheck, Crown, Megaphone, Loader2, X, UserCircle2, Heart } from "lucide-react"; 
 import { useAuth } from "@/hooks/useAuth";
 import { useLanguage } from "@/i18n/LanguageContext";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client"; // Đã sửa đường dẫn chuẩn
+import { supabase } from "@/integrations/supabase/client";
 
 interface UserMenuProps {
   onLoginClick: () => void;
@@ -25,9 +25,9 @@ export const UserMenu = ({ onLoginClick, onFavoritesClick, onStoresClick }: User
   const { session, signOut } = useAuth();
   const { language } = useLanguage();
   const navigate = useNavigate();
-  
+   
   const [isLoading, setIsLoading] = useState(false);
-  
+   
   // State quản lý danh sách cửa hàng và popup chọn
   const [myStores, setMyStores] = useState<any[]>([]);
   const [showStoreSelector, setShowStoreSelector] = useState(false);
@@ -65,7 +65,7 @@ export const UserMenu = ({ onLoginClick, onFavoritesClick, onStoresClick }: User
     }
   };
 
-  // Bước 2: Gọi API thanh toán (đã biết chính xác storeId)
+  // Bước 2: Gọi API thanh toán
   const handleBuyService = async (storeId: string, type: 'vip' | 'ad', packageType?: 'week' | 'month') => {
     setIsLoading(true);
     setShowStoreSelector(false); // Đóng popup nếu đang mở
@@ -74,7 +74,7 @@ export const UserMenu = ({ onLoginClick, onFavoritesClick, onStoresClick }: User
       const { data, error } = await supabase.functions.invoke('create-checkout', {
         body: {
           storeId: storeId,
-          type: type,             
+          type: type,              
           packageType: packageType, 
           categoryId: 1,          
           returnUrl: window.location.href, 
@@ -98,21 +98,49 @@ export const UserMenu = ({ onLoginClick, onFavoritesClick, onStoresClick }: User
     }
   };
 
+  // --- HÀM XỬ LÝ ĐĂNG XUẤT (FIX LỖI KHÔNG ĐĂNG XUẤT ĐƯỢC) ---
+  const handleLogout = async () => {
+    try {
+      await signOut(); // Thử đăng xuất chuẩn
+    } catch (error) {
+      console.warn("Lỗi API đăng xuất:", error);
+    } finally {
+      // Bắt buộc xóa cache và reload trang để thoát hoàn toàn
+      localStorage.clear(); 
+      window.location.reload(); 
+    }
+  };
+
   // --- RENDERING ---
 
+  // 1. CHƯA ĐĂNG NHẬP
   if (!session) {
     return (
-      <Button 
-        onClick={onLoginClick}
-        variant="default" 
-        className="gap-2 shadow-lg rounded-xl font-semibold bg-white text-black hover:bg-gray-100"
-      >
-        <User className="w-4 h-4" />
-        {language === 'vi' ? 'Đăng nhập' : 'Login'}
-      </Button>
+      <>
+        {/* MOBILE: Nút tròn nhỏ */}
+        <Button 
+          variant="outline" 
+          size="icon"
+          onClick={onLoginClick}
+          className="md:hidden w-10 h-10 rounded-full border-gray-200 bg-white shadow-sm active:scale-95 transition-all text-gray-700 hover:text-green-600 hover:border-green-600"
+        >
+          <UserCircle2 className="w-6 h-6" />
+        </Button>
+
+        {/* DESKTOP: Nút to đầy đủ */}
+        <Button 
+          onClick={onLoginClick}
+          variant="default" 
+          className="hidden md:flex gap-2 shadow-lg rounded-xl font-semibold bg-white text-black hover:bg-gray-100 border border-gray-200"
+        >
+          <User className="w-4 h-4" />
+          {language === 'vi' ? 'Đăng nhập' : 'Login'}
+        </Button>
+      </>
     );
   }
 
+  // 2. ĐÃ ĐĂNG NHẬP
   const email = session.user.email;
   const firstLetter = email ? email[0].toUpperCase() : 'U';
 
@@ -120,7 +148,7 @@ export const UserMenu = ({ onLoginClick, onFavoritesClick, onStoresClick }: User
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="secondary" className="relative w-10 h-10 rounded-full p-0 overflow-hidden shadow-lg border-2 border-white cursor-pointer">
+          <Button variant="secondary" className="relative w-10 h-10 rounded-full p-0 overflow-hidden shadow-lg border-2 border-white cursor-pointer hover:ring-2 hover:ring-green-500 transition-all">
             <Avatar className="h-full w-full">
               <AvatarImage src={session.user.user_metadata.avatar_url} />
               <AvatarFallback className="bg-green-600 text-white font-bold">
@@ -130,7 +158,7 @@ export const UserMenu = ({ onLoginClick, onFavoritesClick, onStoresClick }: User
           </Button>
         </DropdownMenuTrigger>
         
-        <DropdownMenuContent align="end" className="w-64 rounded-xl p-2 mt-2 bg-white shadow-xl border border-gray-100">
+        <DropdownMenuContent align="end" className="w-64 rounded-xl p-2 mt-2 bg-white shadow-xl border border-gray-100 z-[200]">
           <DropdownMenuLabel>
             <div className="flex flex-col space-y-1">
               <p className="text-sm font-medium leading-none">
@@ -153,7 +181,6 @@ export const UserMenu = ({ onLoginClick, onFavoritesClick, onStoresClick }: User
             {/* Nút VIP */}
             <button
               disabled={isLoading}
-              // Gọi hàm kiểm tra số lượng cửa hàng trước
               onClick={() => handleInitiateBuy('vip')}
               className="w-full flex items-center gap-2 text-xs font-semibold text-yellow-700 bg-yellow-100 hover:bg-yellow-200 p-2 rounded mb-2 transition-colors"
             >
@@ -181,8 +208,8 @@ export const UserMenu = ({ onLoginClick, onFavoritesClick, onStoresClick }: User
               </button>
             </div>
           </div>
-          {/* ----------------------------- */}
 
+          {/* MENU ADMIN */}
           {email === 'admin@gmail.com' && (
             <>
               <DropdownMenuItem 
@@ -197,7 +224,7 @@ export const UserMenu = ({ onLoginClick, onFavoritesClick, onStoresClick }: User
           )}
           
           <DropdownMenuItem onClick={onFavoritesClick} className="cursor-pointer rounded-lg hover:bg-gray-50 p-2">
-            <MapPin className="mr-2 h-4 w-4 text-green-600" />
+            <Heart className="mr-2 h-4 w-4 text-red-500" />
             <span>{language === 'vi' ? 'Địa điểm yêu thích' : 'Favorite Locations'}</span>
           </DropdownMenuItem>
           
@@ -208,14 +235,15 @@ export const UserMenu = ({ onLoginClick, onFavoritesClick, onStoresClick }: User
           
           <DropdownMenuSeparator className="my-1 bg-gray-100" />
           
-          <DropdownMenuItem onClick={() => signOut()} className="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50 rounded-lg p-2">
+          {/* NÚT ĐĂNG XUẤT (Đã dùng hàm handleLogout) */}
+          <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50 rounded-lg p-2">
             <LogOut className="mr-2 h-4 w-4" />
             <span>{language === 'vi' ? 'Đăng xuất' : 'Log out'}</span>
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {/* --- POPUP CHỌN CỬA HÀNG (HIỆN KHI CÓ > 1 STORE) --- */}
+      {/* --- POPUP CHỌN CỬA HÀNG --- */}
       {showStoreSelector && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-200">
@@ -225,7 +253,7 @@ export const UserMenu = ({ onLoginClick, onFavoritesClick, onStoresClick }: User
                         <X className="w-5 h-5 text-gray-500" />
                     </button>
                 </div>
-                
+              
                 <div className="p-4 max-h-[60vh] overflow-y-auto space-y-2">
                     {myStores.map(store => (
                         <button
@@ -235,8 +263,7 @@ export const UserMenu = ({ onLoginClick, onFavoritesClick, onStoresClick }: User
                         >
                             <div className="font-bold text-gray-900 group-hover:text-blue-700">{store.name_vi}</div>
                             <div className="text-xs text-gray-500 truncate">{store.address_vi}</div>
-                            
-                            {/* Nếu store đã VIP thì hiện thông báo */}
+                           
                             {store.is_premium && pendingService?.type === 'vip' && (
                                 <span className="absolute top-3 right-3 text-[10px] bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full font-bold">
                                     Đã VIP

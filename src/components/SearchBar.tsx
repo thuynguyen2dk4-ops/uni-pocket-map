@@ -56,8 +56,6 @@ export const SearchBar = ({
   const [results, setResults] = useState<SearchResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
-  
-  // State để báo lỗi nếu thiếu token
   const [tokenError, setTokenError] = useState<boolean>(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -90,9 +88,8 @@ export const SearchBar = ({
 
     const timer = setTimeout(async () => {
       const cleanQuery = removeAccents(query).toLowerCase().trim();
-      console.log("🔍 Bắt đầu tìm kiếm:", cleanQuery);
 
-      // 1. TÌM LOCAL (Ưu tiên số 1)
+      // 1. TÌM LOCAL
       const localMatches: SearchResult[] = locations
         .filter(loc => {
           const name = removeAccents(loc.name).toLowerCase();
@@ -111,10 +108,8 @@ export const SearchBar = ({
           distance: userLocation ? calculateDistance(userLocation.lat, userLocation.lng, loc.lat, loc.lng) : 0
         }));
 
-      // Chuẩn bị gọi API
       const mapboxToken = getMapboxToken();
       if (!mapboxToken) {
-        console.warn("⚠️ Không tìm thấy Mapbox Token!");
         setTokenError(true);
       }
 
@@ -126,7 +121,7 @@ export const SearchBar = ({
         let dbResults: SearchResult[] = [];
         let mapboxResults: SearchResult[] = [];
 
-        // 2. TÌM DATABASE (Ưu tiên số 2)
+        // 2. TÌM DATABASE
         const { data: dbMatches } = await supabase
           .from('user_stores')
           .select('*')
@@ -147,57 +142,41 @@ export const SearchBar = ({
           }));
         }
 
-        // 3. TÌM MAPBOX (JW Marriott nằm ở đây)
+        // 3. TÌM MAPBOX
         if (mapboxToken) {
           const proximity = userLocation ? `&proximity=${userLocation.lng},${userLocation.lat}` : '';
-          // Tìm cả POI và Address để đảm bảo ra kết quả
           const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${mapboxToken}&country=vn&autocomplete=true&limit=10&language=vi&types=poi,address${proximity}`;
           
-          console.log("🌍 Gọi Mapbox API:", url); // <--- BẠN KIỂM TRA LINK NÀY TRONG CONSOLE
-
           const res = await fetch(url, { signal });
-          
           if (res.ok) {
             const data = await res.json();
-            console.log("✅ Kết quả Mapbox:", data.features?.length || 0);
-            
             if (data.features) {
               mapboxResults = data.features.map((feature: any) => ({
                 id: feature.id,
-                name: feature.text, // Tên địa điểm (JW Marriott...)
+                name: feature.text,
                 address: feature.place_name?.replace(feature.text + ', ', '').replace(', Vietnam', ''),
                 lat: feature.center[1],
                 lng: feature.center[0],
                 source: 'mapbox' as const,
                 type: 'checkin', 
                 originalData: {
-                   id: feature.id, 
-                   name: feature.text, 
-                   nameVi: feature.text,
-                   address: feature.place_name, 
-                   lat: feature.center[1], 
-                   lng: feature.center[0],
-                   type: 'checkin', 
-                   isMapboxResult: true
+                   id: feature.id, name: feature.text, nameVi: feature.text,
+                   address: feature.place_name, lat: feature.center[1], lng: feature.center[0],
+                   type: 'checkin', isMapboxResult: true
                 },
                 distance: userLocation ? calculateDistance(userLocation.lat, userLocation.lng, feature.center[1], feature.center[0]) : 0
               }));
             }
-          } else {
-            console.error("❌ Lỗi Mapbox:", res.status);
           }
         }
 
-        // 4. GỘP KẾT QUẢ (Không lọc, chỉ sắp xếp)
+        // 4. GỘP & SẮP XẾP
         const allResults = [...localMatches, ...dbResults, ...mapboxResults];
-        
-        // Nếu tìm thấy kết quả khớp chính xác tên, đưa lên đầu
         allResults.sort((a, b) => {
            const aExact = removeAccents(a.name).toLowerCase() === cleanQuery;
            const bExact = removeAccents(b.name).toLowerCase() === cleanQuery;
            if (aExact && !bExact) return -1;
            if (!aExact && bExact) return 1;
-           // Nếu không khớp tên thì ưu tiên khoảng cách
            return (a.distance || 0) - (b.distance || 0);
         });
 
@@ -208,7 +187,7 @@ export const SearchBar = ({
       } finally {
         if (!signal.aborted) setIsLoading(false);
       }
-    }, 400); // Tăng thời gian chờ một chút để gõ xong hẳn mới tìm
+    }, 400);
 
     return () => clearTimeout(timer);
   }, [query, userLocation]);
@@ -233,102 +212,122 @@ export const SearchBar = ({
   };
 
   return (
-    <div ref={containerRef} className="relative w-full pointer-events-auto">
+    <div ref={containerRef} className="relative w-full pointer-events-auto z-[50]">
+      {/* MÀN HÌNH ĐEN MỜ (BACKDROP) CHO MOBILE 
+        Chỉ hiện khi đang tìm kiếm (isOpen) để tập trung sự chú ý
+      */}
+      {isOpen && (
+        <div 
+          className="fixed inset-0 bg-black/20 backdrop-blur-[1px] z-[-1] md:hidden" 
+          onClick={() => setIsOpen(false)}
+        />
+      )}
+
       {/* THANH INPUT */}
-      <div className="relative flex items-center bg-white rounded-full shadow-md border border-gray-200 h-12 overflow-hidden transition-all duration-200 focus-within:shadow-lg">
+      <div className="relative flex items-center bg-white rounded-full shadow-md border border-gray-200 h-12 overflow-hidden transition-all duration-200 focus-within:shadow-lg focus-within:border-blue-300">
         <div className="pl-4 pr-2 text-gray-400">
            {isLoading ? <Loader2 className="w-5 h-5 animate-spin text-blue-500"/> : <Search className="w-5 h-5"/>}
         </div>
 
         <Input 
           ref={inputRef}
-          className="border-none shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 h-full bg-transparent text-base px-2 placeholder:text-gray-500 w-full"
+          className="border-none shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 h-full bg-transparent text-base px-2 placeholder:text-gray-400 w-full"
           placeholder={placeholder}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onFocus={() => setIsOpen(true)}
-          style={{ fontSize: '16px' }}
+          style={{ fontSize: '16px' }} // Ngăn iOS zoom khi nhập liệu
         />
 
         {query && (
           <Button 
             variant="ghost" 
             size="icon" 
-            className="h-8 w-8 mr-2 hover:bg-gray-100 rounded-full" 
+            className="h-9 w-9 mr-1 hover:bg-gray-100 rounded-full active:scale-95 transition-transform" 
             onMouseDown={(e) => { e.preventDefault(); clearSearch(); }}
           >
-            <X className="h-4 w-4 text-gray-500" />
+            <X className="h-5 w-5 text-gray-500" />
           </Button>
         )}
       </div>
 
-      {/* DROPDOWN KẾT QUẢ */}
+      {/* DROPDOWN KẾT QUẢ - XỬ LÝ RIÊNG CHO MOBILE & DESKTOP */}
       {isOpen && (results.length > 0 || (isLoading && query) || tokenError) && (
         <div 
-          className="absolute left-0 right-0 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden z-[100] max-h-[60vh] overflow-y-auto mt-2"
-          style={resultContainerStyle || { top: '100%' }}
+          className={`
+            bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden 
+            flex flex-col
+            /* MOBILE: Fixed tràn màn hình, nằm dưới thanh search một chút */
+            fixed top-[70px] left-2 right-2 max-h-[50vh]
+            /* DESKTOP: Absolute nằm ngay dưới thanh search */
+            md:absolute md:top-full md:left-0 md:right-0 md:mt-2 md:max-h-[60vh]
+            z-[100]
+          `}
         >
-            {/* BÁO LỖI TOKEN */}
-            {tokenError && (
-              <div className="p-3 bg-red-50 text-red-600 text-sm flex items-center gap-2 border-b border-red-100">
-                <AlertCircle className="w-4 h-4" />
-                <span>Lỗi cấu hình: Chưa nhập Mapbox Token!</span>
-              </div>
-            )}
-
-            {isLoading && results.length === 0 && !tokenError && (
-                <div className="p-4 text-center text-gray-400 text-sm flex items-center justify-center gap-2">
-                    <Loader2 className="w-4 h-4 animate-spin"/> Đang tìm...
+            {/* Scrollable Area */}
+            <div className="overflow-y-auto overscroll-contain">
+              {tokenError && (
+                <div className="p-3 bg-red-50 text-red-600 text-sm flex items-center gap-2 border-b border-red-100">
+                  <AlertCircle className="w-4 h-4" />
+                  <span>Chưa nhập Mapbox Token!</span>
                 </div>
-            )}
+              )}
 
-            <div className="py-1">
-              {results.map((result) => (
-                <button
-                  key={`${result.source}-${result.id}`}
-                  onMouseDown={(e) => { e.preventDefault(); handleSelect(result); }}
-                  className="w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors flex items-center gap-3 border-b last:border-0 border-gray-50 group"
-                >
-                  {/* ICON */}
-                  <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${
-                    result.source === 'local' ? 'bg-blue-100 text-blue-600' :
-                    result.source === 'database' ? 'bg-purple-100 text-purple-600' :
-                    'bg-gray-100 text-gray-600'
-                  }`}>
-                      {result.source === 'local' || result.source === 'database' ? <Building2 className="w-4 h-4" /> : <MapPin className="w-4 h-4" />}
+              {isLoading && results.length === 0 && !tokenError && (
+                  <div className="p-4 text-center text-gray-400 text-sm flex items-center justify-center gap-2 py-8">
+                      <Loader2 className="w-5 h-5 animate-spin"/> Đang tìm kiếm...
                   </div>
-                  
-                  {/* CONTENT */}
-                  <div className="min-w-0 flex-1">
-                    <div className="flex justify-between items-center">
-                        <h4 className="font-semibold text-gray-800 text-sm truncate group-hover:text-blue-600 transition-colors">
-                            {result.name}
-                        </h4>
-                        
-                        {userLocation && (
-                            <div className="flex items-center text-[11px] text-blue-600 font-medium bg-blue-50 px-2 py-0.5 rounded-full ml-2 flex-shrink-0">
-                                <Navigation className="w-3 h-3 mr-0.5" />
-                                {formatDistance(result.distance)}
-                            </div>
-                        )}
+              )}
+
+              <div className="py-1">
+                {results.map((result) => (
+                  <button
+                    key={`${result.source}-${result.id}`}
+                    onMouseDown={(e) => { e.preventDefault(); handleSelect(result); }}
+                    className="w-full text-left px-4 py-3 hover:bg-blue-50 active:bg-blue-100 transition-colors flex items-start gap-3 border-b border-gray-50 last:border-0 group"
+                  >
+                    <div className={`mt-0.5 w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm ${
+                      result.source === 'local' ? 'bg-blue-100 text-blue-600' :
+                      result.source === 'database' ? 'bg-purple-100 text-purple-600' :
+                      'bg-gray-100 text-gray-600'
+                    }`}>
+                        {result.source === 'local' || result.source === 'database' ? <Building2 className="w-4 h-4" /> : <MapPin className="w-4 h-4" />}
                     </div>
-                    <p className="text-xs text-gray-500 truncate mt-0.5 flex items-center gap-1">
-                       {result.source === 'local' && <span className="bg-blue-100 text-blue-700 px-1 rounded text-[10px] font-bold">Nội bộ</span>}
-                       {result.source === 'database' && <span className="bg-purple-100 text-purple-700 px-1 rounded text-[10px] font-bold">Đối tác</span>}
-                       <span className="truncate">{result.address}</span>
-                    </p>
-                  </div>
-                </button>
-              ))}
+                    
+                    <div className="min-w-0 flex-1">
+                      <div className="flex justify-between items-start gap-2">
+                          <h4 className="font-semibold text-gray-800 text-sm line-clamp-1 group-hover:text-blue-700">
+                              {result.name}
+                          </h4>
+                          
+                          {userLocation && (
+                              <div className="flex items-center text-[10px] text-blue-600 font-bold bg-blue-50 px-1.5 py-0.5 rounded-md flex-shrink-0 whitespace-nowrap">
+                                  <Navigation className="w-3 h-3 mr-0.5" />
+                                  {formatDistance(result.distance)}
+                              </div>
+                          )}
+                      </div>
+                      <p className="text-xs text-gray-500 line-clamp-1 mt-0.5 flex items-center gap-1.5">
+                         {result.source === 'local' && <span className="bg-blue-100 text-blue-700 px-1 rounded-[3px] text-[9px] font-bold uppercase tracking-wider">Trường</span>}
+                         <span className="truncate">{result.address}</span>
+                      </p>
+                    </div>
+                  </button>
+                ))}
+              </div>
             </div>
         </div>
       )}
       
-      {/* TRẠNG THÁI KHÔNG TÌM THẤY */}
+      {/* KHÔNG TÌM THẤY */}
       {isOpen && !isLoading && query && results.length === 0 && !tokenError && (
           <div 
-            className="absolute left-0 right-0 bg-white rounded-xl shadow-lg p-4 text-center text-gray-500 text-sm z-[100] mt-2"
-            style={resultContainerStyle || { top: '100%' }}
+            className={`
+              bg-white rounded-xl shadow-lg p-4 text-center text-gray-500 text-sm 
+              fixed top-[70px] left-2 right-2 
+              md:absolute md:top-full md:left-0 md:right-0 md:mt-2
+              z-[100]
+            `}
           >
              Không tìm thấy địa điểm nào phù hợp.
           </div>
