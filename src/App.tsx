@@ -1,8 +1,9 @@
+import { useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { LanguageProvider } from "@/i18n/LanguageContext";
 import { AuthProvider } from "@/hooks/useAuth";
 
@@ -10,9 +11,26 @@ import { AuthProvider } from "@/hooks/useAuth";
 import Index from "./pages/Index";
 import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
-import LocationDetail from "./pages/LocationDetail"; // <-- Nhớ import trang mới này
 
 const queryClient = new QueryClient();
+
+// --- COMPONENT THEO DÕI CHUYỂN TRANG ---
+// Cái này giúp Google Analytics đếm được khi bạn chuyển trang trong React
+const RouteTracker = () => {
+  const location = useLocation();
+
+  useEffect(() => {
+    // Kiểm tra xem mã Google đã được cài trong index.html chưa
+    if ((window as any).gtag) {
+      // Gửi sự kiện page_view với đường dẫn mới
+      (window as any).gtag('config', 'G-ZCMPN5RBRS', { // <--- THAY MÃ CỦA BẠN VÀO ĐÂY
+        page_path: location.pathname + location.search
+      });
+    }
+  }, [location]);
+
+  return null;
+};
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -24,7 +42,10 @@ const App = () => (
           <Sonner />
           
           {/* Định tuyến (Router) */}
-         <BrowserRouter>
+          <BrowserRouter>
+            {/* Đặt bộ theo dõi ngay dưới BrowserRouter */}
+            <RouteTracker /> 
+
             <Routes>
               {/* CẢ 2 ĐƯỜNG DẪN NÀY ĐỀU TRỎ VỀ INDEX (BẢN ĐỒ) */}
               <Route path="/" element={<Index />} />

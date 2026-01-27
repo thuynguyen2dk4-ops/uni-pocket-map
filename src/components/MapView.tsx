@@ -52,9 +52,12 @@ const MarkerIcon = ({ type, isSelected, isSponsored, hasVoucher }: { type: Locat
     case 'checkin': Icon = UserCheck; color = '#EC4899'; bg = '#FDF2F8'; break;
     default: Icon = MapPin; color = '#64748B'; bg = '#F8FAFC';
   }
+  
+  // Cấu hình kích thước (Đã chỉnh nhỏ gọn)
   const size = isSelected ? 46 : (isSponsored ? 32 : 26);
   const iconSize = isSelected ? 24 : (isSponsored ? 16 : 14);
-const borderWidth = isSelected ? 3 : 1.5;
+  const borderWidth = isSelected ? 3 : 1.5;
+
   return (
     <div className="relative flex flex-col items-center justify-center transition-all duration-300 group cursor-pointer"
          style={{ transform: isSelected ? 'scale(1.15) translateY(-10px)' : 'scale(1)' }}>
@@ -177,7 +180,7 @@ export const MapView = ({
     };
   }, [mapboxToken]);
 
-  // 2. VẼ MARKER ICON
+  // 2. VẼ MARKER ICON (ĐÃ SỬA: Ẩn khi chỉ đường)
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
 
@@ -187,6 +190,16 @@ export const MapView = ({
       marker.remove();
     });
     markersRef.current = [];
+
+    // --- LOGIC MỚI: KIỂM TRA CHẾ ĐỘ DẪN ĐƯỜNG ---
+    const isNavigating = !!routeInfo || !!multiStopRoute;
+
+    // Nếu đang dẫn đường -> DỪNG LẠI, không vẽ các icon địa điểm xung quanh nữa
+    // (Chỉ để lại đường đi do useEffect số 4 vẽ)
+    if (isNavigating) {
+      return; 
+    }
+    // ---------------------------------------------
 
     // Gộp dữ liệu có sẵn + cửa hàng người dùng
     const allLocations = [...locations, ...storesAsLocations];
@@ -230,7 +243,16 @@ export const MapView = ({
       markersRef.current.push({ marker, root });
     });
 
-  }, [activeCategories, mapLoaded, selectedLocation, onSelectLocation, language, storesAsLocations]);
+  }, [
+    activeCategories, 
+    mapLoaded, 
+    selectedLocation, 
+    onSelectLocation, 
+    language, 
+    storesAsLocations, 
+    routeInfo,       // Thêm dependency này để useEffect chạy lại khi có đường
+    multiStopRoute   // Thêm dependency này
+  ]);
 
   // 3. FLY TO KHI CHỌN
   useEffect(() => {
