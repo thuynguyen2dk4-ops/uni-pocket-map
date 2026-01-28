@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, Upload, Loader2, CheckCircle } from 'lucide-react';
+import { X, Upload, Loader2, CheckCircle, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -19,67 +19,105 @@ interface ClaimStoreModalProps {
 
 export const ClaimStoreModal = ({ isOpen, onClose, data }: ClaimStoreModalProps) => {
   const [isLoading, setIsLoading] = useState(false);
-  const [message, setMessage] = useState('');
-  const [proofFile, setProofFile] = useState<File | null>(null);
+  
+  // Form nhập liệu mới
+  const [formData, setFormData] = useState({
+    phone: '',
+    email: '',
+    role: 'Chủ sở hữu',
+    message: ''
+  });
+  
+  // Quản lý nhiều file ảnh
+  const [proofFiles, setProofFiles] = useState<File[]>([]);
 
   if (!isOpen || !data) return null;
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const filesArray = Array.from(e.target.files);
+      if (proofFiles.length + filesArray.length > 5) {
+        toast.error("Chỉ được tải tối đa 5 ảnh");
+        return;
+      }
+      setProofFiles(prev => [...prev, ...filesArray]);
+    }
+  };
+
+  const removeFile = (index: number) => {
+    setProofFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (proofFiles.length === 0) {
+      toast.error("Vui lòng tải lên ít nhất 1 ảnh bằng chứng!");
+      return;
+    }
+
     setIsLoading(true);
 
     try {
-      // 1. Kiểm tra Login
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        toast.error("Vui lòng đăng nhập để thực hiện chức năng này!");
+        toast.error("Vui lòng đăng nhập!");
         setIsLoading(false);
         return;
       }
 
-      // 2. Upload ảnh (Nếu có) - Cần tạo Bucket 'store-proofs' trên Supabase trước
-      let proofUrl = null;
-      if (proofFile) {
-        const fileName = `${user.id}/${Date.now()}-${proofFile.name}`;
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('store-proofs') // Bạn cần tạo bucket này trên Supabase Storage
-          .upload(fileName, proofFile);
+      // 1. Upload từng ảnh lên Storage
+      const uploadPromises = proofFiles.map(async (file) => {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${user.id}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from('store-proofs')
+          .upload(fileName, file);
 
         if (uploadError) throw uploadError;
-        
-        // Lấy public URL
+
         const { data: { publicUrl } } = supabase.storage
           .from('store-proofs')
           .getPublicUrl(fileName);
-        
-        proofUrl = publicUrl;
-      }
+          
+        return publicUrl;
+      });
 
-      // 3. Gửi yêu cầu vào bảng store_claims
+      const uploadedUrls = await Promise.all(uploadPromises);
+
+      // 2. Gửi dữ liệu vào DB
       const { error } = await supabase
         .from('store_claims')
         .insert({
           user_id: user.id,
-          mapbox_id: data.mapboxId,
+          mapbox_id: String(data.mapboxId), // Lưu ID để check trùng
           mapbox_name: data.name,
           mapbox_address: data.address || '',
           lat: data.lat,
           lng: data.lng,
-          message: message,
-          proof_image_url: proofUrl,
-          status: 'pending' // Chờ duyệt
+          
+          // Các cột mới
+          phone: formData.phone,
+          email: formData.email,
+          role: formData.role,
+          proof_images: uploadedUrls, // Lưu mảng ảnh
+          
+          // Cột cũ (giữ lại để tương thích code cũ nếu cần)
+          message: formData.message,
+          proof_image_url: uploadedUrls[0], 
+          
+          status: 'pending'
         });
 
       if (error) throw error;
 
-      toast.success("Đã gửi yêu cầu xác minh!", {
-        description: "Admin sẽ xem xét và phản hồi sớm nhất."
-      });
+      toast.success("Đã gửi yêu cầu xác minh!");
       onClose();
 
     } catch (error: any) {
       console.error(error);
-      toast.error("Có lỗi xảy ra", { description: error.message });
+      toast.error("Lỗi: " + error.message);
     } finally {
       setIsLoading(false);
     }
@@ -87,87 +125,69 @@ export const ClaimStoreModal = ({ isOpen, onClose, data }: ClaimStoreModalProps)
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
         
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+        <div className="px-6 py-4 border-b bg-gray-50 flex justify-between items-center shrink-0">
           <div>
             <h3 className="font-bold text-lg text-gray-800">Xác nhận chủ sở hữu</h3>
-            <p className="text-xs text-gray-500">Cung cấp bằng chứng để quản lý địa điểm này</p>
+            <p className="text-xs text-gray-500">Cung cấp thông tin quản lý: <span className="font-bold">{data.name}</span></p>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition-colors">
-            <X size={20} className="text-gray-500" />
-          </button>
+          <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full"><X size={20} className="text-gray-500" /></button>
         </div>
 
-        {/* Body */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          
-          {/* Thông tin địa điểm (Readonly) */}
-          <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
-            <p className="text-xs font-semibold text-blue-600 uppercase mb-1">Địa điểm chọn</p>
-            <h4 className="font-bold text-gray-800">{data.name}</h4>
-            <p className="text-xs text-gray-600">{data.address || "Chưa có địa chỉ cụ thể"}</p>
+        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-sm font-medium text-gray-700">Vai trò <span className="text-red-500">*</span></label>
+              <select className="w-full mt-1 p-2 border rounded-lg text-sm bg-white" value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})}>
+                <option>Chủ sở hữu</option>
+                <option>Quản lý</option>
+                <option>Nhân viên</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700">SĐT <span className="text-red-500">*</span></label>
+              <input type="tel" required className="w-full mt-1 p-2 border rounded-lg text-sm" placeholder="09xxxxxxxx" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
+            </div>
           </div>
 
-          {/* Upload Ảnh */}
+          <div>
+            <label className="text-sm font-medium text-gray-700">Email <span className="text-red-500">*</span></label>
+            <input type="email" required className="w-full mt-1 p-2 border rounded-lg text-sm" placeholder="email@cuahang.com" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Ảnh bằng chứng (Menu, Giấy phép, Biển hiệu...)
+              Ảnh bằng chứng (Giấy phép, CCCD...) <span className="text-red-500">*</span>
             </label>
-            <div className="border-2 border-dashed border-gray-300 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer hover:border-blue-500 hover:bg-blue-50 transition-colors relative">
-              <input 
-                type="file" 
-                accept="image/*"
-                onChange={(e) => setProofFile(e.target.files?.[0] || null)}
-                className="absolute inset-0 opacity-0 cursor-pointer"
-              />
-              {proofFile ? (
-                <div className="flex items-center text-green-600 gap-2">
-                  <CheckCircle size={20} />
-                  <span className="text-sm font-medium truncate max-w-[200px]">{proofFile.name}</span>
+            <div className="grid grid-cols-4 gap-2">
+              {proofFiles.map((file, idx) => (
+                <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border">
+                  <img src={URL.createObjectURL(file)} className="w-full h-full object-cover" />
+                  <button type="button" onClick={() => removeFile(idx)} className="absolute top-0 right-0 bg-red-500 text-white p-0.5 rounded-bl"><X size={12} /></button>
                 </div>
-              ) : (
-                <>
-                  <Upload size={24} className="text-gray-400 mb-2" />
-                  <span className="text-sm text-gray-500">Nhấn để tải ảnh lên</span>
-                </>
+              ))}
+              {proofFiles.length < 5 && (
+                <label className="border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 aspect-square">
+                  <input type="file" accept="image/*" multiple onChange={handleFileSelect} className="hidden" />
+                  <Upload size={16} className="text-gray-400" />
+                </label>
               )}
             </div>
           </div>
 
-          {/* Lời nhắn */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Lời nhắn cho Admin</label>
-            <textarea 
-              rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm"
-              placeholder="VD: Tôi là chủ quán, sđt liên hệ 09xxxx..."
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              required
-            />
+            <label className="text-sm font-medium text-gray-700">Lời nhắn</label>
+            <textarea rows={2} className="w-full mt-1 p-2 border rounded-lg text-sm" placeholder="Ghi chú thêm..." value={formData.message} onChange={e => setFormData({...formData, message: e.target.value})} />
           </div>
+        </div>
 
-          {/* Footer Actions */}
-          <div className="pt-2 flex gap-3">
-            <button 
-              type="button" 
-              onClick={onClose}
-              className="flex-1 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-xl transition-colors text-sm"
-            >
-              Hủy bỏ
-            </button>
-            <button 
-              type="submit" 
-              disabled={isLoading}
-              className="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl transition-colors text-sm flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20"
-            >
-              {isLoading ? <Loader2 className="animate-spin" size={18} /> : 'Gửi yêu cầu'}
-            </button>
-          </div>
-
-        </form>
+        <div className="p-4 border-t bg-gray-50 flex gap-3 shrink-0">
+          <button type="button" onClick={onClose} className="flex-1 px-4 py-2 bg-white border hover:bg-gray-50 rounded-lg text-sm">Hủy</button>
+          <button type="submit" onClick={handleSubmit} disabled={isLoading} className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm flex items-center justify-center gap-2">
+            {isLoading ? <Loader2 className="animate-spin" size={16} /> : 'Gửi xác minh'}
+          </button>
+        </div>
       </div>
     </div>
   );
