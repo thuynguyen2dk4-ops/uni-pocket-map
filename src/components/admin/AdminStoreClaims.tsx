@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Check, X, MapPin, User, Loader2, Maximize2, Calendar, Store, ArrowRight, AlertTriangle, Phone, Mail, BadgeCheck, ShieldAlert } from 'lucide-react';
+import { 
+  Check, X, MapPin, User, Loader2, Maximize2, 
+  Store, ArrowRight, AlertTriangle, Phone, Mail, BadgeCheck, ImageOff 
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
@@ -21,9 +24,11 @@ interface ClaimRequest {
   lat: number;
   lng: number;
   mapbox_id: string;
-  profiles?: { email: string }; // Email người yêu cầu (Login)
   
-  // Thông tin chủ cũ (nếu tìm thấy)
+  // Login Email (Joined from profiles)
+  profiles?: { email: string };
+  
+  // Thông tin chủ sở hữu hiện tại (nếu có)
   existingStore?: {
     id: any;
     name_vi: string;
@@ -40,7 +45,8 @@ export const AdminStoreClaims = () => {
   const fetchClaims = async () => {
     setLoading(true);
     
-    // 1. Lấy danh sách yêu cầu
+    // 1. Lấy tất cả yêu cầu đang chờ (Pending)
+    // Lưu ý: profiles:user_id(email) là syntax join bảng của Supabase
     const { data: claimsData, error } = await supabase
       .from('store_claims')
       .select('*, profiles:user_id(email)')
@@ -53,13 +59,13 @@ export const AdminStoreClaims = () => {
       return;
     }
 
-    // 2. Tìm chủ cũ (Check cả Mapbox ID và Vị trí để tìm store cũ chưa có ID)
+    // 2. Kiểm tra xem các cửa hàng này đã có trên hệ thống chưa (Dựa vào Mapbox ID)
     const enrichedClaims = await Promise.all((claimsData as any[]).map(async (claim) => {
-        // Tìm cửa hàng trùng mapbox_id HOẶC trùng vị trí (sai số nhỏ)
+        // Tìm cửa hàng trùng mapbox_id
         const { data: existing } = await supabase
             .from('user_stores')
             .select('id, name_vi, user_id, is_verified, profiles:user_id(email)')
-            .or(`mapbox_id.eq.${claim.mapbox_id},and(lat.eq.${claim.lat},lng.eq.${claim.lng})`)
+            .eq('mapbox_id', claim.mapbox_id)
             .maybeSingle();
 
         return {
@@ -67,7 +73,7 @@ export const AdminStoreClaims = () => {
             existingStore: existing ? {
                 id: existing.id,
                 name_vi: existing.name_vi,
-                owner_email: existing.profiles?.email || 'Không rõ email',
+                owner_email: existing.profiles?.email || 'Không rõ Email',
                 is_verified: existing.is_verified
             } : null
         };
@@ -79,12 +85,13 @@ export const AdminStoreClaims = () => {
 
   useEffect(() => { fetchClaims(); }, []);
 
-  // --- LOGIC DUYỆT ---
+  // --- LOGIC DUYỆT (APPROVE) ---
   const handleApprove = async (claim: ClaimRequest) => {
-    let confirmMsg = `Duyệt quyền sở hữu cho "${claim.mapbox_name}"?`;
+    let confirmMsg = `Xác nhận duyệt quyền sở hữu cho "${claim.mapbox_name}"?`;
     
+    // Nếu đã có chủ -> Cảnh báo chuyển quyền
     if (claim.existingStore) {
-        confirmMsg = `⚠️ CẢNH BÁO CHUYỂN QUYỀN:\n\nCửa hàng đang thuộc về: ${claim.existingStore.owner_email}\nBạn có chắc chắn muốn chuyển sang cho: ${claim.profiles?.email}?`;
+        confirmMsg = `⚠️ CẢNH BÁO QUAN TRỌNG!\n\nĐịa điểm này đang thuộc sở hữu của: ${claim.existingStore.owner_email}\n\nBạn có chắc chắn muốn CHUYỂN QUYỀN SỞ HỮU sang cho: ${claim.profiles?.email}?`;
     }
 
     if (!confirm(confirmMsg)) return;
@@ -93,22 +100,24 @@ export const AdminStoreClaims = () => {
       toast.loading("Đang xử lý...");
 
       if (claim.existingStore) {
-        // UPDATE: Chuyển chủ
-        const { error } = await supabase.from('user_stores')
+        // TRƯỜNG HỢP 1: Cửa hàng ĐÃ CÓ -> Cập nhật chủ mới (UPDATE)
+        const { error: updateError } = await supabase
+          .from('user_stores')
           .update({
-            user_id: claim.user_id, // Gán cho người mới
-            name_vi: claim.mapbox_name, // Cập nhật tên mới nhất
-            is_verified: true,
+            user_id: claim.user_id, // Gán user_id người mới
+            name_vi: claim.mapbox_name, // Cập nhật tên (nếu muốn)
+            is_verified: true,      
             status: 'approved'
           })
           .eq('id', claim.existingStore.id);
         
-        if (error) throw error;
-        toast.info(`Đã chuyển quyền sở hữu thành công!`);
+        if (updateError) throw updateError;
+        toast.info(`Đã chuyển quyền sở hữu từ chủ cũ sang chủ mới.`);
 
       } else {
-        // INSERT: Tạo mới
-        const { error } = await supabase.from('user_stores')
+        // TRƯỜNG HỢP 2: Cửa hàng MỚI -> Tạo mới (INSERT)
+        const { error: insertError } = await supabase
+          .from('user_stores')
           .insert({
             user_id: claim.user_id,
             mapbox_id: claim.mapbox_id,
@@ -116,22 +125,22 @@ export const AdminStoreClaims = () => {
             address_vi: claim.mapbox_address,
             lat: claim.lat,
             lng: claim.lng,
-            category: 'checkin',
+            category: 'checkin', // Mặc định
             is_verified: true,
             status: 'approved',
-            description_vi: `Xác minh: ${claim.role} - ${claim.phone}`,
+            description_vi: `Đã xác minh: ${claim.role}. LH: ${claim.phone}`,
             image_url: claim.proof_image_url
           });
 
-        if (error) throw error;
+        if (insertError) throw insertError;
       }
 
-      // Cập nhật trạng thái yêu cầu
+      // 3. Cập nhật trạng thái yêu cầu này thành Approved
       await supabase.from('store_claims').update({ status: 'approved' }).eq('id', claim.id);
       
-      // Từ chối các yêu cầu khác trùng lặp
+      // 4. Từ chối tất cả các yêu cầu khác cho cùng địa điểm này (nếu có)
       if (claim.mapbox_id) {
-          await supabase.from('store_claims')
+        await supabase.from('store_claims')
             .update({ status: 'rejected' })
             .eq('mapbox_id', claim.mapbox_id)
             .eq('status', 'pending')
@@ -139,8 +148,8 @@ export const AdminStoreClaims = () => {
       }
 
       toast.dismiss();
-      toast.success("Thành công!");
-      fetchClaims();
+      toast.success("Duyệt thành công!");
+      fetchClaims(); // Load lại danh sách
 
     } catch (error: any) {
       toast.dismiss();
@@ -161,7 +170,7 @@ export const AdminStoreClaims = () => {
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-            <ShieldAlert className="text-orange-500" />
+            <BadgeCheck className="text-blue-600" />
             Duyệt xác minh chủ sở hữu ({claims.length})
         </h2>
       </div>
@@ -175,7 +184,7 @@ export const AdminStoreClaims = () => {
           {claims.map((claim) => (
             <div key={claim.id} className="bg-white border rounded-xl shadow-sm overflow-hidden">
               
-              {/* HEADER: Tiêu đề & Địa chỉ */}
+              {/* HEADER: Tên địa điểm */}
               <div className="bg-gray-50 px-6 py-4 border-b flex justify-between items-start">
                  <div>
                     <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
@@ -183,18 +192,17 @@ export const AdminStoreClaims = () => {
                     </h3>
                     <p className="text-sm text-gray-500 ml-7">{claim.mapbox_address}</p>
                  </div>
-                 <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 border-blue-200">Pending</Badge>
+                 <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100 border-yellow-200">Pending</Badge>
               </div>
 
-              {/* BODY: So sánh Chủ cũ vs Chủ mới */}
               <div className="p-6">
-                 {/* KHUNG SO SÁNH (QUAN TRỌNG) */}
+                 {/* 1. KHUNG SO SÁNH: CHỦ CŨ vs CHỦ MỚI */}
                  <div className="flex flex-col md:flex-row gap-4 mb-6">
                     
-                    {/* BÊN TRÁI: CHỦ HIỆN TẠI */}
+                    {/* BÊN TRÁI: HIỆN TRẠNG */}
                     <div className={`flex-1 p-4 rounded-lg border-2 ${claim.existingStore ? 'bg-orange-50 border-orange-200' : 'bg-gray-50 border-dashed border-gray-200'}`}>
                         <p className="text-xs font-bold uppercase tracking-wider mb-3 text-gray-500">
-                            {claim.existingStore ? '⚠️ CHỦ SỞ HỮU HIỆN TẠI' : 'CHƯA CÓ CHỦ'}
+                            {claim.existingStore ? '⚠️ CHỦ SỞ HỮU HIỆN TẠI' : 'TÌNH TRẠNG: CHƯA CÓ CHỦ'}
                         </p>
                         
                         {claim.existingStore ? (
@@ -211,26 +219,26 @@ export const AdminStoreClaims = () => {
                             </div>
                         ) : (
                             <div className="flex items-center gap-2 text-gray-400 py-2">
-                                <Store size={20}/> Địa điểm mới (Tạo store mới)
+                                <Store size={20}/> Đây là địa điểm mới
                             </div>
                         )}
                     </div>
 
-                    {/* MŨI TÊN */}
+                    {/* MŨI TÊN CHUYỂN ĐỔI */}
                     <div className="flex items-center justify-center">
-                        <div className="bg-blue-100 p-2 rounded-full text-blue-600">
+                        <div className="bg-blue-50 p-2 rounded-full text-blue-400">
                             <ArrowRight size={24} />
                         </div>
                     </div>
 
                     {/* BÊN PHẢI: NGƯỜI YÊU CẦU */}
-                    <div className="flex-1 p-4 rounded-lg border-2 border-blue-200 bg-blue-50/50">
+                    <div className="flex-1 p-4 rounded-lg border-2 border-blue-200 bg-blue-50/30">
                         <p className="text-xs font-bold uppercase tracking-wider mb-3 text-blue-600">NGƯỜI YÊU CẦU (CHỦ MỚI)</p>
                         
                         <div className="space-y-2 text-sm">
                             <div className="flex items-center gap-2 font-bold text-gray-900">
-                                <User size={16} className="text-blue-500"/> {claim.profiles?.email} 
-                                <span className="text-gray-400 font-normal text-xs">(Login Email)</span>
+                                <User size={16} className="text-blue-500"/> {claim.profiles?.email || 'Unknown User'} 
+                                <span className="text-gray-400 font-normal text-xs">(Login Account)</span>
                             </div>
                             
                             <div className="grid grid-cols-2 gap-x-4 gap-y-1 pl-6 mt-2">
@@ -239,51 +247,57 @@ export const AdminStoreClaims = () => {
                                 <div className="text-gray-600 col-span-2"><span className="font-semibold">Email LH:</span> {claim.email || '---'}</div>
                             </div>
 
-                            <div className="mt-3 bg-white p-2 rounded border border-blue-100 text-gray-600 italic text-xs">
+                            <div className="mt-3 bg-white p-2.5 rounded border border-blue-100 text-gray-600 italic text-xs">
                                 "Lời nhắn: {claim.message || 'Không có'}"
                             </div>
                         </div>
                     </div>
                  </div>
 
-                 {/* PHẦN ẢNH BẰNG CHỨNG */}
+                 {/* 2. KHUNG ẢNH BẰNG CHỨNG */}
                  <div className="border-t pt-4">
-                    <p className="text-xs font-bold text-gray-500 uppercase mb-3">ẢNH BẰNG CHỨNG ({claim.proof_images?.length || (claim.proof_image_url ? 1 : 0)})</p>
+                    <p className="text-xs font-bold text-gray-500 uppercase mb-3">
+                        ẢNH BẰNG CHỨNG ({claim.proof_images?.length || (claim.proof_image_url ? 1 : 0)})
+                    </p>
                     <div className="flex gap-3 overflow-x-auto pb-2">
-                        {/* Ảnh mới (Mảng) */}
+                        {/* Render mảng ảnh mới */}
                         {claim.proof_images && claim.proof_images.length > 0 ? (
                             claim.proof_images.map((img, idx) => (
-                                <div key={idx} className="w-24 h-24 flex-shrink-0 border rounded-lg overflow-hidden cursor-pointer hover:ring-2 ring-blue-500 relative bg-gray-100" onClick={() => setSelectedImage(img)}>
-                                    <img src={img} className="w-full h-full object-cover" loading="lazy" />
-                                    <div className="absolute inset-0 flex items-center justify-center bg-black/0 hover:bg-black/10 transition-colors">
-                                        <Maximize2 className="text-white opacity-0 hover:opacity-100 w-5 h-5 drop-shadow-md"/>
+                                <div key={idx} className="w-24 h-24 flex-shrink-0 border rounded-lg overflow-hidden cursor-pointer hover:ring-2 ring-blue-500 relative bg-gray-100 group" onClick={() => setSelectedImage(img)}>
+                                    <img src={img} className="w-full h-full object-cover" loading="lazy" onError={(e) => e.currentTarget.style.display='none'}/>
+                                    {/* Fallback khi ảnh lỗi */}
+                                    <div className="absolute inset-0 flex items-center justify-center text-gray-300">
+                                        <ImageOff size={20}/>
+                                    </div>
+                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+                                        <Maximize2 className="text-white opacity-0 group-hover:opacity-100 w-5 h-5 drop-shadow-md"/>
                                     </div>
                                 </div>
                             ))
                         ) : (
-                            // Ảnh cũ (Fallback)
+                            // Render ảnh cũ (Fallback)
                             claim.proof_image_url && (
-                                <div className="w-24 h-24 flex-shrink-0 border rounded-lg overflow-hidden cursor-pointer" onClick={() => setSelectedImage(claim.proof_image_url!)}>
+                                <div className="w-24 h-24 flex-shrink-0 border rounded-lg overflow-hidden cursor-pointer bg-gray-100" onClick={() => setSelectedImage(claim.proof_image_url!)}>
                                     <img src={claim.proof_image_url} className="w-full h-full object-cover" />
                                 </div>
                             )
                         )}
                         
                         {(!claim.proof_images?.length && !claim.proof_image_url) && (
-                            <span className="text-sm text-red-400 italic">Người dùng không tải lên ảnh nào.</span>
+                            <span className="text-sm text-red-400 italic bg-red-50 px-3 py-1 rounded">Người dùng không tải lên ảnh nào.</span>
                         )}
                     </div>
                  </div>
               </div>
 
-              {/* FOOTER: NÚT BẤM */}
+              {/* FOOTER ACTIONS */}
               <div className="bg-gray-50 px-6 py-4 border-t flex justify-end gap-3">
                  <Button variant="outline" onClick={() => handleReject(claim.id)} className="text-red-600 border-red-200 hover:bg-red-50">
-                    <X className="w-4 h-4 mr-2"/> Từ chối yêu cầu
+                    <X className="w-4 h-4 mr-2"/> Từ chối
                  </Button>
-                 <Button onClick={() => handleApprove(claim)} className="bg-green-600 hover:bg-green-700 text-white shadow-sm">
+                 <Button onClick={() => handleApprove(claim)} className="bg-green-600 hover:bg-green-700 text-white shadow-sm min-w-[140px]">
                     <Check className="w-4 h-4 mr-2"/> 
-                    {claim.existingStore ? 'Chuyển quyền sở hữu' : 'Duyệt & Tạo cửa hàng'}
+                    {claim.existingStore ? 'Chuyển quyền sở hữu' : 'Duyệt & Tạo mới'}
                  </Button>
               </div>
 
@@ -292,7 +306,7 @@ export const AdminStoreClaims = () => {
         </div>
       )}
 
-      {/* LIGHTBOX ẢNH */}
+      {/* LIGHTBOX (Xem ảnh phóng to) */}
       {selectedImage && (
         <div 
             className="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center p-4 animate-in fade-in duration-200"

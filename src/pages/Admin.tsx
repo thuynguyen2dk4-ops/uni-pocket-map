@@ -15,31 +15,61 @@ import { StoreDetailModal } from '@/components/admin/StoreDetailModal';
 import { AdminStoreClaims } from '@/components/admin/AdminStoreClaims'; 
 import { toast } from 'sonner';
 
-// --- 1. COMPONENT QUẢN LÝ QUẢNG CÁO ---
+// --- 1. COMPONENT QUẢN LÝ QUẢNG CÁO (FIX LỖI DATABASE RELATION) ---
 const AdsManagement = () => {
   const [ads, setAds] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchAds = async () => {
     setIsLoading(true);
-    // Lấy các cửa hàng đang chạy QC (is_ad = true)
-    const { data, error } = await supabase
+    
+    // BƯỚC 1: Lấy danh sách Store đang chạy quảng cáo
+    // Lưu ý: Không dùng join bảng (profiles) ở đây để tránh lỗi nếu chưa tạo foreign key
+    const { data: stores, error } = await supabase
       .from('user_stores')
-      .select('id, name_vi, image_url, ad_expiry, user_email') // Lưu ý: Cần đảm bảo cột user_email tồn tại hoặc bỏ đi nếu không có
+      .select('id, name_vi, image_url, ad_expiry, is_ad, user_id') 
       .eq('is_ad', true)
-      .order('ad_expiry', { ascending: true }); // Hết hạn sớm xếp trước
+      .order('ad_expiry', { ascending: true });
 
     if (error) {
-        console.error("Ads Error:", error);
-        toast.error("Lỗi tải quảng cáo (Kiểm tra lại Database)");
+        console.error("Ads Load Error:", error);
+        toast.error("Lỗi tải quảng cáo: " + error.message);
+        setIsLoading(false);
+        return;
     }
-    else setAds(data || []);
+
+    // BƯỚC 2: Tự lấy Email từ bảng profiles dựa vào user_id (Manual Join)
+    let formattedData: any[] = [];
+    
+    if (stores && stores.length > 0) {
+        // Lấy danh sách user_id duy nhất
+        const userIds = Array.from(new Set(stores.map(s => s.user_id).filter(Boolean)));
+        
+        // Gọi lên server lấy thông tin các user này
+        const { data: profiles } = await supabase
+            .from('profiles')
+            .select('id, email')
+            .in('id', userIds);
+
+        // Tạo map để tra cứu nhanh: { "user_id_abc": "email@gmail.com" }
+        const profilesMap: Record<string, string> = {};
+        profiles?.forEach(p => {
+            profilesMap[p.id] = p.email;
+        });
+
+        // Ghép Email vào Store
+        formattedData = stores.map(store => ({
+            ...store,
+            user_email: profilesMap[store.user_id] || 'Không tìm thấy Email'
+        }));
+    }
+
+    setAds(formattedData);
     setIsLoading(false);
   };
 
   useEffect(() => { fetchAds(); }, []);
 
-  // Hủy quảng cáo
   const handleCancelAd = async (id: string) => {
     if (!confirm("Bạn muốn hủy quảng cáo của cửa hàng này ngay lập tức?")) return;
     
@@ -58,41 +88,47 @@ const AdsManagement = () => {
 
   return (
     <div className="space-y-4">
-      {isLoading ? <p>Đang tải...</p> : ads.length === 0 ? <p className="text-gray-500 text-center py-8">Hiện không có cửa hàng nào chạy quảng cáo.</p> : null}
+      {isLoading ? (
+        <div className="flex justify-center p-8"><div className="animate-spin w-6 h-6 border-2 border-blue-600 rounded-full border-t-transparent"></div></div>
+      ) : ads.length === 0 ? (
+        <div className="text-gray-500 text-center py-12 bg-gray-50 rounded-xl border border-dashed">
+            Hiện không có cửa hàng nào chạy quảng cáo.
+        </div> 
+      ) : null}
       
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {ads.map(ad => {
-           // Tính ngày còn lại
            const expiry = new Date(ad.ad_expiry);
            const now = new Date();
-           const diffTime = expiry.getTime() - now.getTime();
-           const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+           const diffDays = Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
            const isExpired = diffDays < 0;
 
            return (
             <div key={ad.id} className="bg-white border rounded-xl overflow-hidden shadow-sm flex flex-col hover:shadow-md transition-shadow">
-               <div className="h-32 bg-gray-100 relative">
+               <div className="h-32 bg-gray-100 relative group">
                   <img src={ad.image_url} className="w-full h-full object-cover" onError={e => e.currentTarget.src='https://placehold.co/400x200'} />
-                  <div className="absolute top-2 right-2 bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded shadow-md flex items-center gap-1">
+                  <div className="absolute top-2 right-2 bg-gradient-to-r from-pink-500 to-red-500 text-white text-[10px] font-bold px-2 py-1 rounded shadow-md flex items-center gap-1">
                      <Megaphone size={12}/> Đang chạy
                   </div>
                </div>
                <div className="p-4 flex-1 flex flex-col">
                   <h4 className="font-bold text-gray-800 text-lg mb-1 line-clamp-1">{ad.name_vi}</h4>
-                  <p className="text-xs text-gray-500 mb-4 truncate">{ad.user_email || "Chưa có email"}</p>
+                  <p className="text-xs text-gray-500 mb-4 truncate flex items-center gap-1">
+                    <Users size={12}/> {ad.user_email}
+                  </p>
                   
                   <div className="mt-auto space-y-3">
-                    <div className="flex items-center justify-between text-sm bg-blue-50 p-2 rounded text-blue-800">
-                       <span className="flex items-center gap-1"><Calendar className="w-4 h-4"/> Hết hạn:</span>
+                    <div className="flex items-center justify-between text-sm bg-blue-50 p-2 rounded text-blue-800 border border-blue-100">
+                       <span className="flex items-center gap-1 text-xs"><Calendar className="w-3 h-3"/> Hết hạn:</span>
                        <span className="font-bold">{expiry.toLocaleDateString('vi-VN')}</span>
                     </div>
                     
                     <div className={`text-center text-xs font-bold ${isExpired ? 'text-red-500' : 'text-green-600'}`}>
-                       {isExpired ? 'Đã hết hạn (Cần gia hạn)' : `Còn ${diffDays} ngày`}
+                       {isExpired ? 'Đã hết hạn' : `Còn lại ${diffDays} ngày`}
                     </div>
 
-                    <Button variant="outline" className="w-full text-red-600 border-red-200 hover:bg-red-50" onClick={() => handleCancelAd(ad.id)}>
-                       <X className="w-4 h-4 mr-2"/> Dừng Quảng Cáo
+                    <Button variant="outline" className="w-full text-red-600 border-red-200 hover:bg-red-50 h-8 text-xs" onClick={() => handleCancelAd(ad.id)}>
+                       <X className="w-3 h-3 mr-2"/> Dừng Quảng Cáo
                     </Button>
                   </div>
                </div>
