@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Mail, Lock, User, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@/hooks/useAuth'; // Đảm bảo hook này trả về { error: ... } hoặc null
 import { useLanguage } from '@/i18n/LanguageContext';
 import { z } from 'zod';
 import { useNavigate } from 'react-router-dom';
@@ -13,6 +13,7 @@ interface AuthModalProps {
   onClose: () => void;
 }
 
+// Schema validation
 const emailSchema = z.string().email('Email không hợp lệ');
 const passwordSchema = z.string().min(6, 'Mật khẩu phải có ít nhất 6 ký tự');
 
@@ -22,6 +23,7 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  
   const { signIn, signUp } = useAuth();
   const { language } = useLanguage();
   const navigate = useNavigate();
@@ -30,15 +32,17 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
     e.preventDefault();
     setError('');
 
-    // 1. Kiểm tra Email và Mật khẩu (Validate) - Giữ nguyên phần của bạn
-    try {
-      emailSchema.parse(email);
-      passwordSchema.parse(password);
-    } catch (err) {
-      if (err instanceof z.ZodError) {
-        setError(err.errors[0].message);
-        return;
-      }
+    // 1. Validate dữ liệu đầu vào (Dùng safeParse cho gọn)
+    const emailCheck = emailSchema.safeParse(email);
+    if (!emailCheck.success) {
+      setError(emailCheck.error.errors[0].message);
+      return;
+    }
+
+    const passCheck = passwordSchema.safeParse(password);
+    if (!passCheck.success) {
+      setError(passCheck.error.errors[0].message);
+      return;
     }
 
     setLoading(true);
@@ -46,47 +50,56 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
     try {
       let result;
 
-      // 2. Gọi hàm Login hoặc Signup tùy theo chế độ (Mode)
+      // 2. Gọi hàm Login hoặc Signup
       if (mode === 'login') {
-        console.log("Đang thử đăng nhập với:", email); // <-- Log kiểm tra
         result = await signIn(email, password);
       } else {
-        console.log("Đang thử đăng ký với:", email); // <-- Log kiểm tra
         result = await signUp(email, password);
       }
 
-      // 3. In lỗi ra màn hình Console để xem (QUAN TRỌNG)
-      console.log("Kết quả từ Supabase:", result);
+      console.log("Kết quả Auth:", result);
 
-      // 4. Xử lý kết quả
-      if (result.error) {
-        // Nếu có lỗi thì hiện thông báo đỏ
-        if (result.error.message.includes('Invalid login credentials')) {
+      // 3. Xử lý kết quả
+      // Lưu ý: Logic này giả định useAuth của bạn trả về object { error: { message: ... } } khi lỗi
+      // Nếu useAuth ném ra lỗi (throw error) thì nó sẽ nhảy xuống phần catch bên dưới.
+      
+      if (result && result.error) {
+        // --- TRƯỜNG HỢP CÓ LỖI ---
+        const errMsg = result.error.message || JSON.stringify(result.error);
+        
+        if (errMsg.includes('Invalid login credentials') || errMsg.includes('auth/invalid-credential')) {
           setError(language === 'vi' ? 'Sai email hoặc mật khẩu' : 'Invalid email or password');
-        } else if (result.error.message.includes('User already registered')) {
+        } else if (errMsg.includes('User already registered') || errMsg.includes('auth/email-already-in-use')) {
           setError(language === 'vi' ? 'Email này đã được đăng ký' : 'Email already registered');
         } else {
-          // Hiện lỗi gốc nếu là lỗi lạ
-          setError(result.error.message);
+          setError(errMsg); // Hiện lỗi gốc
         }
-      // Trong AuthModal.tsx, phần else của handleSubmit
-} else {
-  // Nếu KHÔNG có lỗi -> Thành công
-  console.log("Đăng nhập thành công!"); 
-  // Thêm dòng này nếu bạn muốn hiện thông báo xanh lá trên màn hình:
-  // toast({ title: "Thành công", description: "Đăng nhập thành công!" }); (Cần import toast trước)
-  
-  onClose(); 
-  setEmail('');
-  setPassword('');
-  if (email === 'admin@gmail.com') {
-           // Nếu là admin thì bay thẳng vào trang quản lý
-           navigate('/admin');
+      } else {
+        // --- TRƯỜNG HỢP THÀNH CÔNG ---
+        console.log("Đăng nhập/Đăng ký thành công!");
+        
+        // Đóng modal & Reset form
+        onClose();
+        setEmail('');
+        setPassword('');
+        setError('');
+
+        // Logic Admin (Hardcode tạm thời)
+        if (email === 'admin@gmail.com') {
+          navigate('/admin');
         }
-}
-    } catch (err) {
-      console.error("Lỗi không mong muốn:", err);
-      setError("Có lỗi xảy ra, vui lòng thử lại.");
+      }
+
+    } catch (err: any) {
+      // Bắt lỗi nếu signIn/signUp dùng throw error (thường gặp ở Firebase gốc)
+      console.error("Lỗi Exception:", err);
+      
+      let msg = "Có lỗi xảy ra, vui lòng thử lại.";
+      // Xử lý lỗi Firebase ở đây nếu cần
+      if (err.code === 'auth/invalid-credential') msg = "Sai email hoặc mật khẩu.";
+      if (err.code === 'auth/email-already-in-use') msg = "Email này đã được sử dụng.";
+      
+      setError(msg);
     } finally {
       setLoading(false);
     }
