@@ -3,8 +3,10 @@ import { Search, Loader2, X, Navigation, MapPin, Building2, AlertCircle } from '
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { locations } from '@/data/locations';
-import { supabase } from '@/integrations/supabase/client';
 import { getMapboxToken } from '@/lib/mapboxToken';
+
+// 👇 Lấy link Backend
+const API_URL = import.meta.env.VITE_API_URL;
 
 // --- HÀM BỎ DẤU ---
 const removeAccents = (str: string) => {
@@ -89,7 +91,7 @@ export const SearchBar = ({
     const timer = setTimeout(async () => {
       const cleanQuery = removeAccents(query).toLowerCase().trim();
 
-      // 1. TÌM LOCAL
+      // 1. TÌM LOCAL (Dữ liệu tĩnh trong file data)
       const localMatches: SearchResult[] = locations
         .filter(loc => {
           const name = removeAccents(loc.name).toLowerCase();
@@ -120,29 +122,29 @@ export const SearchBar = ({
       try {
         let dbResults: SearchResult[] = [];
         let mapboxResults: SearchResult[] = [];
-
-        // 2. TÌM DATABASE
-        const { data: dbMatches } = await supabase
-          .from('user_stores')
-          .select('*')
-          .ilike('name_vi', `%${query}%`)
-          .limit(5);
-
-        if (dbMatches) {
-          dbResults = dbMatches.map(store => ({
-            id: `db-${store.id}`,
-            name: store.name_vi,
-            address: store.address_vi,
-            lat: store.lat,
-            lng: store.lng,
-            source: 'database' as const,
-            type: store.category,
-            originalData: store,
-            distance: userLocation ? calculateDistance(userLocation.lat, userLocation.lng, store.lat, store.lng) : 0
-          }));
+        try {
+          const res = await fetch(`${API_URL}/api/search/stores?q=${encodeURIComponent(query)}`, { signal });
+          if (res.ok) {
+            const dbMatches = await res.json();
+            if (Array.isArray(dbMatches)) {
+              dbResults = dbMatches.map((store: any) => ({
+                id: `db-${store.id}`,
+                name: store.name_vi,
+                address: store.address_vi,
+                lat: store.lat,
+                lng: store.lng,
+                source: 'database' as const,
+                type: store.category,
+                originalData: store,
+                distance: userLocation ? calculateDistance(userLocation.lat, userLocation.lng, store.lat, store.lng) : 0
+              }));
+            }
+          }
+        } catch (err) {
+           console.error("Lỗi gọi API search:", err);
         }
 
-        // 3. TÌM MAPBOX
+        // 3. TÌM MAPBOX (Giữ nguyên)
         if (mapboxToken) {
           const proximity = userLocation ? `&proximity=${userLocation.lng},${userLocation.lat}` : '';
           const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${mapboxToken}&country=vn&autocomplete=true&limit=10&language=vi&types=poi,address${proximity}`;
@@ -213,9 +215,7 @@ export const SearchBar = ({
 
   return (
     <div ref={containerRef} className="relative w-full pointer-events-auto z-[50]">
-      {/* MÀN HÌNH ĐEN MỜ (BACKDROP) CHO MOBILE 
-        Chỉ hiện khi đang tìm kiếm (isOpen) để tập trung sự chú ý
-      */}
+      {/* BACKDROP MOBILE */}
       {isOpen && (
         <div 
           className="fixed inset-0 bg-black/20 backdrop-blur-[1px] z-[-1] md:hidden" 
@@ -223,7 +223,7 @@ export const SearchBar = ({
         />
       )}
 
-      {/* THANH INPUT */}
+      {/* INPUT */}
       <div className="relative flex items-center bg-white rounded-full shadow-md border border-gray-200 h-12 overflow-hidden transition-all duration-200 focus-within:shadow-lg focus-within:border-blue-300">
         <div className="pl-4 pr-2 text-gray-400">
            {isLoading ? <Loader2 className="w-5 h-5 animate-spin text-blue-500"/> : <Search className="w-5 h-5"/>}
@@ -236,7 +236,7 @@ export const SearchBar = ({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onFocus={() => setIsOpen(true)}
-          style={{ fontSize: '16px' }} // Ngăn iOS zoom khi nhập liệu
+          style={{ fontSize: '16px' }} 
         />
 
         {query && (
@@ -251,20 +251,17 @@ export const SearchBar = ({
         )}
       </div>
 
-      {/* DROPDOWN KẾT QUẢ - XỬ LÝ RIÊNG CHO MOBILE & DESKTOP */}
+      {/* DROPDOWN KẾT QUẢ */}
       {isOpen && (results.length > 0 || (isLoading && query) || tokenError) && (
         <div 
           className={`
             bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden 
             flex flex-col
-            /* MOBILE: Fixed tràn màn hình, nằm dưới thanh search một chút */
             fixed top-[70px] left-2 right-2 max-h-[50vh]
-            /* DESKTOP: Absolute nằm ngay dưới thanh search */
             md:absolute md:top-full md:left-0 md:right-0 md:mt-2 md:max-h-[60vh]
             z-[100]
           `}
         >
-            {/* Scrollable Area */}
             <div className="overflow-y-auto overscroll-contain">
               {tokenError && (
                 <div className="p-3 bg-red-50 text-red-600 text-sm flex items-center gap-2 border-b border-red-100">

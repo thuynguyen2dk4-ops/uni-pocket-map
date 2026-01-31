@@ -2,10 +2,13 @@ import { useEffect, useState } from 'react';
 import { Star, User, Send, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { supabase } from '@/integrations/supabase/client';
+
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+
+// 👇 Lấy link Backend
+const API_URL = import.meta.env.VITE_API_URL;
 
 interface Review {
   id: string;
@@ -16,7 +19,7 @@ interface Review {
 }
 
 export const ReviewSection = ({ storeId }: { storeId: string }) => {
-  const { session } = useAuth();
+  const { user } = useAuth(); // ✅ Đổi session thành user (Firebase)
   const [reviews, setReviews] = useState<Review[]>([]);
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState('');
@@ -25,17 +28,18 @@ export const ReviewSection = ({ storeId }: { storeId: string }) => {
   // Tải danh sách đánh giá
   const fetchReviews = async () => {
     if (!storeId) return;
-    
     const targetId = String(storeId);
 
-    const { data, error } = await supabase
-      .from('location_reviews' as any) // Đảm bảo bảng này đúng tên trong DB của bạn (reviews hoặc location_reviews)
-      .select('*')
-      .eq('store_id', targetId) 
-      .order('created_at', { ascending: false });
-    
-    if (data) {
-        setReviews(data as any as Review[]);
+    try {
+      // 👇 Gọi API Backend
+      const res = await fetch(`${API_URL}/api/reviews/list/${targetId}`);
+      const data = await res.json();
+      
+      if (Array.isArray(data)) {
+        setReviews(data);
+      }
+    } catch (error) {
+      console.error("Lỗi tải review:", error);
     }
   };
 
@@ -45,7 +49,7 @@ export const ReviewSection = ({ storeId }: { storeId: string }) => {
 
   // Xử lý gửi đánh giá
   const handleSubmit = async () => {
-    if (!session?.user) {
+    if (!user) {
       toast.error("Vui lòng đăng nhập để đánh giá!");
       return;
     }
@@ -58,28 +62,31 @@ export const ReviewSection = ({ storeId }: { storeId: string }) => {
     try {
       const targetId = String(storeId); 
 
-      const { error } = await supabase.from('location_reviews' as any).insert({
-        store_id: targetId, 
-        user_id: session.user.id,
-        rating: rating,
-        comment: comment
+      // 👇 Gọi API POST Review
+      const res = await fetch(`${API_URL}/api/reviews`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          storeId: targetId,
+          userId: user.uid,
+          rating: rating,
+          comment: comment
+        })
       });
 
-      if (error) throw error;
+      if (!res.ok) throw new Error("Failed");
 
       toast.success("Cảm ơn đánh giá của bạn!");
 
-      // --- QUAN TRỌNG: BẮN TÍN HIỆU CẬP NHẬT ---
-      // Dòng này giúp Bottom Sheet bên ngoài biết là vừa có đánh giá mới để load lại sao
+      // --- BẮN TÍN HIỆU CẬP NHẬT ---
       window.dispatchEvent(new CustomEvent('review_updated', { detail: targetId }));
-      // ------------------------------------------
 
       setComment('');
       setRating(5);
       fetchReviews(); 
     } catch (err: any) {
       console.error(err);
-      toast.error(`Lỗi: ${err.message || "Không gửi được đánh giá"}`);
+      toast.error("Không gửi được đánh giá");
     } finally {
       setIsSubmitting(false);
     }
@@ -111,7 +118,7 @@ export const ReviewSection = ({ storeId }: { storeId: string }) => {
       </div>
 
       {/* Form Viết Đánh Giá */}
-      {session?.user ? (
+      {user ? (
         <div className="bg-white border rounded-xl p-4 shadow-sm">
            <h4 className="font-bold text-gray-800 mb-2 flex items-center gap-2">
               <User className="w-4 h-4"/> Viết đánh giá của bạn

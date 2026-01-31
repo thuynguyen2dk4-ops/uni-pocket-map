@@ -1,75 +1,73 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+
 import { useAuth } from "./useAuth";
 import { toast } from "sonner";
 import { Location } from "@/data/locations";
 
-export const useFavorites = () => {
-  const { session } = useAuth();
-  const queryClient = useQueryClient();
-  const userId = session?.user?.id;
+// 👇 Lấy link Backend
+const API_URL = import.meta.env.VITE_API_URL;
 
-  // 1. Lấy danh sách Favorites
+export const useFavorites = () => {
+  const { user } = useAuth(); // ✅ Đổi session -> user (Firebase)
+  const queryClient = useQueryClient();
+  const userId = user?.uid;
+
+  // 1. Lấy danh sách Favorites (Gọi API Backend)
   const { data: favorites = [], isLoading } = useQuery({
     queryKey: ['favorites', userId],
     queryFn: async () => {
       if (!userId) return [];
       
-      const { data, error } = await supabase
-        .from('favorites')
-        .select('*')
-        .eq('user_id', userId);
-      
-      if (error) throw error;
+      try {
+        const res = await fetch(`${API_URL}/api/favorites?userId=${userId}`);
+        const data = await res.json();
+        
+        if (!res.ok) throw new Error("Failed to fetch favorites");
 
-      // Chuyển đổi dữ liệu DB thành object Location
-      return data.map(fav => ({
-        id: fav.location_id,
-        name: fav.location_name_en || fav.location_name,
-        nameVi: fav.location_name,
-        type: fav.location_type as any,
-        lat: fav.location_lat,
-        lng: fav.location_lng,
-        address: '', 
-        description: '',
-        image: 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=800',
-        isSponsored: false,
-        hasVoucher: false
-      })) as Location[];
+        // Chuyển đổi dữ liệu DB thành object Location
+        return data.map((fav: any) => ({
+          id: fav.location_id,
+          name: fav.location_name_en || fav.location_name,
+          nameVi: fav.location_name,
+          type: fav.location_type as any,
+          lat: fav.location_lat,
+          lng: fav.location_lng,
+          address: '', // Có thể update DB để lưu thêm address nếu cần
+          description: '',
+          image: 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=800',
+          isSponsored: false,
+          hasVoucher: false
+        })) as Location[];
+
+      } catch (error) {
+        console.error(error);
+        return [];
+      }
     },
     enabled: !!userId,
   });
 
-  // 2. Thêm Favorite
+  // 2. Thêm Favorite (Gọi API Backend)
   const addMutation = useMutation({
     mutationFn: async (location: Location) => {
       if (!userId) throw new Error("Vui lòng đăng nhập");
       const idStr = location.id.toString();
       
-      // Kiểm tra trùng
-      const { data: existing } = await supabase
-        .from('favorites')
-        .select('id')
-        .eq('user_id', userId)
-        .eq('location_id', idStr)
-        .maybeSingle();
+      const res = await fetch(`${API_URL}/api/favorites`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: userId,
+          locationId: idStr,
+          name: location.nameVi || location.name,
+          nameEn: location.name || null,
+          lat: location.lat,
+          lng: location.lng,
+          type: location.type
+        })
+      });
 
-      if (existing) return;
-
-      // Insert vào DB
-      const { error } = await supabase
-        .from('favorites')
-        .insert({ 
-          user_id: userId, 
-          location_id: idStr,
-          location_name: location.nameVi || location.name,
-          location_name_en: location.name || null,
-          location_lat: location.lat,
-          location_lng: location.lng,
-          location_type: location.type
-        });
-      
-      if (error) throw error;
+      if (!res.ok) throw new Error("Lỗi khi thêm yêu thích");
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['favorites'] });
@@ -78,17 +76,18 @@ export const useFavorites = () => {
     onError: (err) => toast.error(err.message),
   });
 
-  // 3. Xóa Favorite
+  // 3. Xóa Favorite (Gọi API Backend)
   const removeMutation = useMutation({
     mutationFn: async (locationId: string | number) => {
       if (!userId) throw new Error("Vui lòng đăng nhập");
-      const { error } = await supabase
-        .from('favorites')
-        .delete()
-        .eq('user_id', userId)
-        .eq('location_id', locationId.toString());
       
-      if (error) throw error;
+      const res = await fetch(`${API_URL}/api/favorites/${locationId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: userId }) // Gửi userId để backend verify quyền sở hữu
+      });
+
+      if (!res.ok) throw new Error("Lỗi khi xóa yêu thích");
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['favorites'] });
@@ -97,11 +96,12 @@ export const useFavorites = () => {
     onError: (err) => toast.error(err.message),
   });
 
+  // Kiểm tra đã thích chưa
   const isFavorite = (locationId: string | number) => {
     return favorites.some(f => f.id.toString() === locationId.toString());
   };
 
-  // --- HÀM MỚI: Tự động kiểm tra để Thêm hoặc Xóa ---
+  // Tự động kiểm tra để Thêm hoặc Xóa
   const toggleFavorite = (location: Location) => {
     if (isFavorite(location.id)) {
       removeMutation.mutate(location.id);
@@ -116,7 +116,7 @@ export const useFavorites = () => {
     addFavorite: addMutation.mutate,
     removeFavorite: removeMutation.mutate,
     isFavorite,
-    toggleFavorite, // <--- Đã thêm export hàm này
+    toggleFavorite,
     isAdding: addMutation.isPending,
   };
 };

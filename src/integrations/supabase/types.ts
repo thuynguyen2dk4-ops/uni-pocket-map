@@ -1,499 +1,119 @@
+// Định nghĩa kiểu JSON cơ bản
 export type Json =
   | string
   | number
   | boolean
   | null
   | { [key: string]: Json | undefined }
-  | Json[]
+  | Json[];
 
-export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.1"
-  }
-  public: {
-    Tables: {
-      favorites: {
-        Row: {
-          created_at: string
-          id: string
-          location_id: string
-          location_lat: number
-          location_lng: number
-          location_name: string
-          location_name_en: string | null
-          location_type: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          location_id: string
-          location_lat: number
-          location_lng: number
-          location_name: string
-          location_name_en?: string | null
-          location_type: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          location_id?: string
-          location_lat?: number
-          location_lng?: number
-          location_name?: string
-          location_name_en?: string | null
-          location_type?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "favorites_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      profiles: {
-        Row: {
-          created_at: string
-          email: string | null
-          id: string
-          updated_at: string
-          username: string | null
-        }
-        Insert: {
-          created_at?: string
-          email?: string | null
-          id: string
-          updated_at?: string
-          username?: string | null
-        }
-        Update: {
-          created_at?: string
-          email?: string | null
-          id?: string
-          updated_at?: string
-          username?: string | null
-        }
-        Relationships: []
-      }
-      sponsored_listings: {
-        Row: {
-          amount_paid: number
-          created_at: string
-          currency: string
-          end_date: string | null
-          id: string
-          location_id: string
-          location_name: string
-          location_type: string
-          start_date: string | null
-          status: string
-          stripe_customer_id: string | null
-          stripe_payment_id: string | null
-          updated_at: string
-          user_id: string
-          voucher_text: string | null
-        }
-        Insert: {
-          amount_paid?: number
-          created_at?: string
-          currency?: string
-          end_date?: string | null
-          id?: string
-          location_id: string
-          location_name: string
-          location_type: string
-          start_date?: string | null
-          status?: string
-          stripe_customer_id?: string | null
-          stripe_payment_id?: string | null
-          updated_at?: string
-          user_id: string
-          voucher_text?: string | null
-        }
-        Update: {
-          amount_paid?: number
-          created_at?: string
-          currency?: string
-          end_date?: string | null
-          id?: string
-          location_id?: string
-          location_name?: string
-          location_type?: string
-          start_date?: string | null
-          status?: string
-          stripe_customer_id?: string | null
-          stripe_payment_id?: string | null
-          updated_at?: string
-          user_id?: string
-          voucher_text?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "sponsored_listings_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      store_menu_items: {
-        Row: {
-          created_at: string
-          description_en: string | null
-          description_vi: string | null
-          id: string
-          image_url: string | null
-          is_available: boolean
-          name_en: string | null
-          name_vi: string
-          price: number
-          sort_order: number
-          store_id: string
-        }
-        Insert: {
-          created_at?: string
-          description_en?: string | null
-          description_vi?: string | null
-          id?: string
-          image_url?: string | null
-          is_available?: boolean
-          name_en?: string | null
-          name_vi: string
-          price?: number
-          sort_order?: number
-          store_id: string
-        }
-        Update: {
-          created_at?: string
-          description_en?: string | null
-          description_vi?: string | null
-          id?: string
-          image_url?: string | null
-          is_available?: boolean
-          name_en?: string | null
-          name_vi?: string
-          price?: number
-          sort_order?: number
-          store_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "store_menu_items_store_id_fkey"
-            columns: ["store_id"]
-            isOneToOne: false
-            referencedRelation: "user_stores"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      store_vouchers: {
-        Row: {
-          code: string
-          created_at: string
-          description_en: string | null
-          description_vi: string | null
-          discount_type: string
-          discount_value: number
-          end_date: string | null
-          id: string
-          is_active: boolean
-          max_uses: number | null
-          min_order: number | null
-          start_date: string | null
-          store_id: string
-          title_en: string | null
-          title_vi: string
-          used_count: number
-        }
-        Insert: {
-          code: string
-          created_at?: string
-          description_en?: string | null
-          description_vi?: string | null
-          discount_type?: string
-          discount_value?: number
-          end_date?: string | null
-          id?: string
-          is_active?: boolean
-          max_uses?: number | null
-          min_order?: number | null
-          start_date?: string | null
-          store_id: string
-          title_en?: string | null
-          title_vi: string
-          used_count?: number
-        }
-        Update: {
-          code?: string
-          created_at?: string
-          description_en?: string | null
-          description_vi?: string | null
-          discount_type?: string
-          discount_value?: number
-          end_date?: string | null
-          id?: string
-          is_active?: boolean
-          max_uses?: number | null
-          min_order?: number | null
-          start_date?: string | null
-          store_id?: string
-          title_en?: string | null
-          title_vi?: string
-          used_count?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "store_vouchers_store_id_fkey"
-            columns: ["store_id"]
-            isOneToOne: false
-            referencedRelation: "user_stores"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      user_roles: {
-        Row: {
-          created_at: string
-          id: string
-          role: Database["public"]["Enums"]["app_role"]
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          role: Database["public"]["Enums"]["app_role"]
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          role?: Database["public"]["Enums"]["app_role"]
-          user_id?: string
-        }
-        Relationships: []
-      }
-      user_stores: {
-        Row: {
-          address_en: string | null
-          address_vi: string
-          category: string
-          created_at: string
-          description_en: string | null
-          description_vi: string | null
-          id: string
-          image_url: string | null
-          lat: number
-          lng: number
-          name_en: string | null
-          name_vi: string
-          open_hours_en: string | null
-          open_hours_vi: string | null
-          phone: string | null
-          status: string
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          address_en?: string | null
-          address_vi: string
-          category?: string
-          created_at?: string
-          description_en?: string | null
-          description_vi?: string | null
-          id?: string
-          image_url?: string | null
-          lat: number
-          lng: number
-          name_en?: string | null
-          name_vi: string
-          open_hours_en?: string | null
-          open_hours_vi?: string | null
-          phone?: string | null
-          status?: string
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          address_en?: string | null
-          address_vi?: string
-          category?: string
-          created_at?: string
-          description_en?: string | null
-          description_vi?: string | null
-          id?: string
-          image_url?: string | null
-          lat?: number
-          lng?: number
-          name_en?: string | null
-          name_vi?: string
-          open_hours_en?: string | null
-          open_hours_vi?: string | null
-          phone?: string | null
-          status?: string
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "user_stores_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      has_role: {
-        Args: {
-          _role: Database["public"]["Enums"]["app_role"]
-          _user_id: string
-        }
-        Returns: boolean
-      }
-    }
-    Enums: {
-      app_role: "admin" | "moderator" | "user"
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
+// --- 1. PROFILES (Người dùng) ---
+export interface Profile {
+  id: string;
+  email: string | null;
+  username: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
-type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
-
-type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
-
-export type Tables<
-  DefaultSchemaTableNameOrOptions extends
-    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
-    | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
-    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
+// --- 2. USER STORES (Cửa hàng) ---
+export interface UserStore {
+  id: string;
+  user_id: string;
+  name_vi: string;
+  name_en: string | null;
+  description_vi: string | null;
+  description_en: string | null;
+  address_vi: string;
+  address_en: string | null;
+  phone: string | null;
+  category: string; // 'food', 'cafe', 'office', ...
+  lat: number;
+  lng: number;
+  open_hours_vi: string | null;
+  open_hours_en: string | null;
+  image_url: string | null;
+  status: 'pending' | 'approved' | 'rejected';
+  
+  // Lưu ý: Cột này có thể bạn đã thêm vào DB nhưng chưa cập nhật type cũ
+  // Mình thêm vào đây để khớp với logic ở các bước trước
+  is_premium?: boolean; 
+  
+  created_at: string;
+  updated_at: string;
 }
-  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
-      Row: infer R
-    }
-    ? R
-    : never
-  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])
-    ? (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
-        Row: infer R
-      }
-      ? R
-      : never
-    : never
 
-export type TablesInsert<
-  DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
+// --- 3. STORE MENU ITEMS (Thực đơn) ---
+export interface StoreMenuItem {
+  id: string;
+  store_id: string;
+  name_vi: string;
+  name_en: string | null;
+  description_vi: string | null;
+  description_en: string | null;
+  price: number;
+  image_url: string | null;
+  is_available: boolean;
+  sort_order: number;
+  created_at: string;
 }
-  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-      Insert: infer I
-    }
-    ? I
-    : never
-  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-        Insert: infer I
-      }
-      ? I
-      : never
-    : never
 
-export type TablesUpdate<
-  DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
+// --- 4. STORE VOUCHERS (Mã giảm giá) ---
+export interface StoreVoucher {
+  id: string;
+  store_id: string;
+  code: string;
+  title_vi: string;
+  title_en: string | null;
+  description_vi: string | null;
+  description_en: string | null;
+  discount_type: 'percent' | 'fixed' | string; // 'percent' hoặc 'amount'
+  discount_value: number;
+  min_order: number | null;
+  max_uses: number | null;
+  used_count: number;
+  start_date: string | null;
+  end_date: string | null;
+  is_active: boolean;
+  created_at: string;
 }
-  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-      Update: infer U
-    }
-    ? U
-    : never
-  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-        Update: infer U
-      }
-      ? U
-      : never
-    : never
 
-export type Enums<
-  DefaultSchemaEnumNameOrOptions extends
-    | keyof DefaultSchema["Enums"]
-    | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
-> = DefaultSchemaEnumNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
+// --- 5. FAVORITES (Yêu thích) ---
+export interface Favorite {
+  id: string;
+  user_id: string;
+  location_id: string;
+  location_name: string;
+  location_name_en: string | null;
+  location_lat: number;
+  location_lng: number;
+  location_type: string;
+  created_at: string;
 }
-  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
-  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
-    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
-    : never
 
-export type CompositeTypes<
-  PublicCompositeTypeNameOrOptions extends
-    | keyof DefaultSchema["CompositeTypes"]
-    | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
-    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
-> = PublicCompositeTypeNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
+// --- 6. SPONSORED LISTINGS (Quảng cáo) ---
+export interface SponsoredListing {
+  id: string;
+  user_id: string;
+  location_id: string;
+  location_name: string;
+  location_type: string;
+  voucher_text: string | null;
+  amount_paid: number;
+  currency: string;
+  status: 'active' | 'expired' | 'pending' | string;
+  start_date: string | null;
+  end_date: string | null;
+  stripe_payment_id: string | null;
+  stripe_customer_id: string | null;
+  created_at: string;
+  updated_at: string;
 }
-  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
-  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
-    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
-    : never
 
-export const Constants = {
-  public: {
-    Enums: {
-      app_role: ["admin", "moderator", "user"],
-    },
-  },
-} as const
+// --- 7. USER ROLES (Phân quyền) ---
+export interface UserRole {
+  id: string;
+  user_id: string;
+  role: 'admin' | 'moderator' | 'user';
+  created_at: string;
+}

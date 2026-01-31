@@ -1,91 +1,87 @@
-// @ts-ignore
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-// @ts-ignore
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-// @ts-ignore
-import { createHmac } from "https://deno.land/std@0.168.0/node/crypto.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
-
-serve(async (req: Request) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-
+// --- API: Tạo Link Thanh Toán PayOS (Thay thế Edge Function) ---
+app.post('/api/payment/create-checkout', async (req, res) => {
   try {
-    const CLIENT_ID = Deno.env.get("PAYOS_CLIENT_ID");
-    const API_KEY = Deno.env.get("PAYOS_API_KEY");
-    const CHECKSUM_KEY = Deno.env.get("PAYOS_CHECKSUM_KEY");
-    if (!CLIENT_ID || !API_KEY || !CHECKSUM_KEY) throw new Error("Thiếu cấu hình PayOS");
+    // 1. Lấy cấu hình từ biến môi trường
+    const CLIENT_ID = process.env.PAYOS_CLIENT_ID;
+    const API_KEY = process.env.PAYOS_API_KEY;
+    const CHECKSUM_KEY = process.env.PAYOS_CHECKSUM_KEY;
 
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-    );
+    if (!CLIENT_ID || !API_KEY || !CHECKSUM_KEY) {
+      return res.status(500).json({ error: "Thiếu cấu hình PayOS trong .env" });
+    }
 
-    const { storeId, type, packageType, categoryId, returnUrl, cancelUrl } = await req.json();
-    if (!storeId) throw new Error("Thiếu Store ID");
+    const { storeId, type, packageType, returnUrl, cancelUrl } = req.body;
+    if (!storeId) return res.status(400).json({ error: "Thiếu Store ID" });
 
-    // Tạo mã đơn hàng số (nhỏ hơn 15 ký tự)
-    const orderCode = Number(String(Date.now()).slice(-9)); 
+    // 2. Tạo mã đơn hàng & Tính tiền
+    const orderCode = Number(String(Date.now()).slice(-9)); // Mã số ngẫu nhiên
     let amount = 2000;
     let description = "";
 
-    // --- 1. XỬ LÝ GIÁ TIỀN ---
+    // Logic giá tiền (Khớp với code cũ của bạn)
     if (type === "vip") {
-      amount = 100000; // Giá VIP: 5.000đ
+      amount = 100000; // Giá VIP
       description = `VIP ${orderCode}`;
     } 
     else if (type === "ad") {
-      // Kiểm tra gói tuần hay tháng
       if (packageType === 'month') {
-        amount = 150000; // Giá QC Tháng: 150.000đ
+        amount = 150000; // QC Tháng
         description = `QC Thang ${orderCode}`;
       } else {
-        amount = 50000;  // Giá QC Tuần: 50.000đ
+        amount = 50000;  // QC Tuần
         description = `QC Tuan ${orderCode}`;
       }
     }
 
-    // --- 2. QUAN TRỌNG: CẬP NHẬT MÃ ĐƠN HÀNG VÀO STORE ---
-    // (Phải lưu lại thì lát nữa thanh toán xong Webhook mới biết update cho shop nào)
-    const { error: updateError } = await supabase
-      .from("user_stores")
-      .update({ last_order_code: orderCode })
-      .eq("id", storeId);
+    // 3. Cập nhật mã đơn hàng vào Database (Thay vì dùng Supabase SDK)
+    // Lưu last_order_code để sau này Webhook biết đơn hàng này của Shop nào
+    await pool.query(
+      `UPDATE user_stores SET last_order_code = $1 WHERE id = $2`,
+      [orderCode, storeId]
+    );
 
-    if (updateError) throw new Error("Lỗi cập nhật đơn hàng: " + updateError.message);
-
-    // --- 3. TẠO SIGNATURE & GỌI PAYOS ---
-    // (Phần này giữ nguyên)
+    // 4. Tạo Signature (HMAC SHA256)
+    // PayOS yêu cầu sắp xếp các trường theo alphabets để ký
     const signData = `amount=${amount}&cancelUrl=${cancelUrl}&description=${description}&orderCode=${orderCode}&returnUrl=${returnUrl}`;
-    const hmac = createHmac("sha256", CHECKSUM_KEY);
+    
+    const hmac = crypto.createHmac("sha256", CHECKSUM_KEY);
     hmac.update(signData);
     const signature = hmac.digest("hex");
 
+    // 5. Gọi API PayOS tạo link checkout
     const payload = {
-      orderCode, amount, description, 
-      buyerName: "User", buyerEmail: "user@example.com",
-      cancelUrl, returnUrl, signature,
+      orderCode,
+      amount,
+      description,
+      buyerName: "User", 
+      buyerEmail: "user@example.com",
+      cancelUrl,
+      returnUrl,
+      signature,
       items: [{ name: description, quantity: 1, price: amount }]
     };
 
     const response = await fetch("https://api-merchant.payos.vn/v2/payment-requests", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-client-id": CLIENT_ID, "x-api-key": API_KEY },
-        body: JSON.stringify(payload)
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-client-id": CLIENT_ID,
+        "x-api-key": API_KEY
+      },
+      body: JSON.stringify(payload)
     });
 
     const result = await response.json();
-    if (!response.ok || result.code !== "00") throw new Error(result.desc);
 
-    return new Response(JSON.stringify({ checkoutUrl: result.data.checkoutUrl }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    if (!response.ok || result.code !== "00") {
+      throw new Error(result.desc || "Lỗi tạo thanh toán PayOS");
+    }
 
-  } catch (error: any) {
-    console.error(error);
-    return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    // Trả về link thanh toán cho Frontend
+    res.json({ checkoutUrl: result.data.checkoutUrl });
+
+  } catch (error) {
+    console.error("Payment Error:", error);
+    res.status(500).json({ error: error.message });
   }
 });

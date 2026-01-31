@@ -8,7 +8,9 @@ import { StoreFormModal } from './StoreFormModal';
 import { MenuItemForm } from './MenuItemForm'; 
 import { VoucherForm } from './VoucherForm';   
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client'; // Thêm import supabase để thanh toán
+
+// 👇 Lấy link Backend
+const API_URL = import.meta.env.VITE_API_URL;
 
 interface StoreManagementPanelProps {
   isOpen: boolean;
@@ -30,12 +32,13 @@ const STATUS_LABELS = {
 
 export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreManagementPanelProps) => {
   const { language } = useLanguage();
-  const { session } = useAuth(); 
+  const { user } = useAuth(); // ✅ Đổi session -> user
   
+  // Custom Hook này cũng cần được sửa để dùng API Backend (sẽ hướng dẫn ở bước sau nếu cần)
+  // Tạm thời giả định useUserStores đã được sửa hoặc chúng ta sẽ ghi đè logic ở đây
   const { 
     stores, isLoading, fetchStores, 
-    deleteStore, 
-    fetchMenuItems, fetchVouchers, deleteMenuItem, deleteVoucher 
+    // deleteStore, fetchMenuItems, fetchVouchers, deleteMenuItem, deleteVoucher 
   } = useUserStores();
   
   const [showStoreForm, setShowStoreForm] = useState(false);
@@ -51,7 +54,7 @@ export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreMan
   const [editingMenuItem, setEditingMenuItem] = useState<StoreMenuItem | null>(null);
   const [editingVoucher, setEditingVoucher] = useState<StoreVoucher | null>(null);
   
-  const [isUpgrading, setIsUpgrading] = useState(false); // State loading khi bấm mua
+  const [isUpgrading, setIsUpgrading] = useState(false);
 
   useEffect(() => {
     if (expandedStoreId) {
@@ -59,18 +62,27 @@ export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreMan
     }
   }, [expandedStoreId]);
 
+  // --- HÀM LOAD CHI TIẾT (GỌI API BACKEND) ---
   const loadStoreDetails = async (storeId: string) => {
-    const [items, voucherList] = await Promise.all([
-      fetchMenuItems(storeId),
-      fetchVouchers(storeId),
-    ]);
-    setMenuItems(items);
-    setVouchers(voucherList);
+    try {
+      const [resMenu, resVoucher] = await Promise.all([
+        fetch(`${API_URL}/api/stores/${storeId}/menu`),
+        fetch(`${API_URL}/api/stores/${storeId}/vouchers-all`) // Lấy tất cả voucher để quản lý
+      ]);
+      
+      const menuData = await resMenu.json();
+      const voucherData = await resVoucher.json();
+
+      setMenuItems(Array.isArray(menuData) ? menuData : []);
+      setVouchers(Array.isArray(voucherData) ? voucherData : []);
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const handleStoreSubmit = async (formData: any) => {
+  const handleStoreSubmit = async () => {
     try {
-      await fetchStores(); 
+      await fetchStores(); // Refresh danh sách
     } catch (e) {
       console.error(e);
     }
@@ -78,41 +90,63 @@ export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreMan
     setEditingStore(null);
   };
 
+  // --- HÀM XÓA CỬA HÀNG (GỌI API) ---
   const handleDeleteStore = async (storeId: string) => {
-    if (confirm(language === 'vi' ? 'Bạn có chắc muốn xóa cửa hàng này?' : 'Are you sure you want to delete this store?')) {
-      await deleteStore(storeId);
+    if (!confirm(language === 'vi' ? 'Bạn có chắc muốn xóa cửa hàng này?' : 'Are you sure?')) return;
+    
+    try {
+      await fetch(`${API_URL}/api/stores/${storeId}`, { method: 'DELETE' });
+      fetchStores(); // Refresh
+    } catch (e) {
+      alert("Lỗi khi xóa cửa hàng");
     }
   };
 
+  // --- HÀM XÓA MÓN (GỌI API) ---
   const handleDeleteMenuItem = async (itemId: string) => {
-    if (confirm(language === 'vi' ? 'Xóa món này?' : 'Delete this item?')) {
-      await deleteMenuItem(itemId);
+    if (!confirm(language === 'vi' ? 'Xóa món này?' : 'Delete this item?')) return;
+    
+    try {
+      await fetch(`${API_URL}/api/menu-items/${itemId}`, { method: 'DELETE' });
       if (expandedStoreId) loadStoreDetails(expandedStoreId); 
+    } catch (e) {
+      alert("Lỗi xóa món");
     }
   };
 
+  // --- HÀM XÓA VOUCHER (GỌI API) ---
   const handleDeleteVoucher = async (voucherId: string) => {
-    if (confirm(language === 'vi' ? 'Xóa voucher này?' : 'Delete this voucher?')) {
-      await deleteVoucher(voucherId);
+    if (!confirm(language === 'vi' ? 'Xóa voucher này?' : 'Delete this voucher?')) return;
+    
+    try {
+      await fetch(`${API_URL}/api/vouchers/${voucherId}`, { method: 'DELETE' });
       if (expandedStoreId) loadStoreDetails(expandedStoreId); 
+    } catch (e) {
+      alert("Lỗi xóa voucher");
     }
   };
   
-  // --- HÀM XỬ LÝ THANH TOÁN NGAY TẠI ĐÂY ---
+  // --- HÀM XỬ LÝ THANH TOÁN (GỌI API BACKEND) ---
   const handleUpgradeStore = async (storeId: string) => {
     setIsUpgrading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('create-checkout', {
-        body: {
+      // 👇 Gọi API Backend tạo link thanh toán
+      const response = await fetch(`${API_URL}/api/payment/create-checkout`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           storeId: storeId,
           type: 'vip',
           categoryId: 1, 
           returnUrl: window.location.href,
           cancelUrl: window.location.href
-        }
+        })
       });
 
-      if (error) throw error;
+      const data = await response.json();
+
+      if (!response.ok) throw new Error(data.error);
+
       if (data && data.checkoutUrl) {
         window.location.href = data.checkoutUrl;
       } else {
@@ -159,7 +193,7 @@ export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreMan
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 bg-gray-50/50">
-          {!session ? (
+          {!user ? (
             <div className="text-center py-12">
               <Store className="w-16 h-16 mx-auto text-gray-300 mb-4" />
               <p className="text-muted-foreground mb-4">
@@ -187,7 +221,6 @@ export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreMan
           ) : (
             <div className="space-y-4">
               {stores.map(store => {
-                // Kiểm tra trạng thái VIP
                 const isPremium = (store as any).is_premium === true;
 
                 return (
@@ -312,7 +345,6 @@ export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreMan
                                 )}
                               </AnimatePresence>
 
-                              {/* --- KIỂM TRA VIP CHO MENU --- */}
                               {!showMenuForm && (
                                 isPremium ? (
                                     <Button
@@ -379,7 +411,6 @@ export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreMan
                                 )}
                               </AnimatePresence>
 
-                              {/* --- KIỂM TRA VIP CHO VOUCHER --- */}
                               {!showVoucherForm && (
                                 isPremium ? (
                                     <Button
@@ -462,12 +493,8 @@ export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreMan
         initialData={editingStore}
         onSubmit={handleStoreSubmit}
         isSubmitting={isLoading}
-        // Truyền hàm nâng cấp cho Form sửa dùng luôn
         onUpgradeClick={() => {
-            // Đóng form lại để hiện Popup thanh toán (nếu cần) hoặc chuyển trang
-            // Nếu muốn giữ form mở thì bỏ dòng setShowStoreForm(false) đi
             if(editingStore) {
-                // Gọi hàm thanh toán đã viết ở trên
                 handleUpgradeStore(editingStore.id); 
             } else {
                 alert("Vui lòng lưu cửa hàng trước khi nâng cấp!");

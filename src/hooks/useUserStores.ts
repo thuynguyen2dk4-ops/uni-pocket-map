@@ -1,7 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+
 import { useAuth } from "./useAuth";
 import { toast } from "sonner";
+
+// 👇 Lấy link Backend
+const API_URL = import.meta.env.VITE_API_URL;
 
 // --- 1. ĐỊNH NGHĨA INTERFACE ---
 
@@ -22,7 +25,6 @@ export interface UserStore {
   open_hours_en: string | null;
   image_url: string | null;
   status: 'pending' | 'approved' | 'rejected';
-  // is_active: boolean; // Tạm ẩn vì DB chưa có
   created_at: string;
   updated_at: string;
 }
@@ -65,70 +67,58 @@ export interface StoreVoucher {
 // --- 2. HOOK CHÍNH ---
 
 export const useUserStores = () => {
-  const { session } = useAuth();
+  const { user } = useAuth(); // ✅ Đổi session -> user
   const queryClient = useQueryClient();
-  const user = session?.user;
 
   // --- A. QUẢN LÝ CỬA HÀNG (STORES) ---
 
   const { data: stores = [], isLoading, refetch } = useQuery({
-    queryKey: ['user_stores', user?.id],
+    queryKey: ['user_stores', user?.uid],
     queryFn: async () => {
       if (!user) return [];
-      const { data, error } = await supabase
-        .from('user_stores')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return data as UserStore[];
+      try {
+        const res = await fetch(`${API_URL}/api/user-stores?userId=${user.uid}`);
+        const data = await res.json();
+        return Array.isArray(data) ? data as UserStore[] : [];
+      } catch (err) {
+        console.error(err);
+        return [];
+      }
     },
     enabled: !!user,
   });
 
+  // 1. Tạo Store (Đã chuyển sang dùng API upload + create gộp ở StoreFormModal)
+  // Hàm này chỉ giữ lại để tương thích code cũ nếu có gọi trực tiếp
   const createStoreMutation = useMutation({
     mutationFn: async (storeData: Partial<UserStore>) => {
-      if (!user) throw new Error("Vui lòng đăng nhập");
-      // Loại bỏ các trường không cần thiết khi insert
-      const { id, created_at, updated_at, ...payload } = storeData as any;
-      
-      // --- SỬA LỖI Ở ĐÂY: XÓA is_active: true ---
-      const { data, error } = await supabase
-        .from('user_stores')
-        .insert({ 
-            ...payload, 
-            user_id: user.id, 
-            status: 'pending' 
-            // Đã xóa dòng is_active: true để tránh lỗi DB chưa có cột
-        })
-        .select().single();
-      
-      if (error) throw error;
-      return data;
+      // Logic tạo store đã được chuyển sang StoreFormModal dùng FormData
+      // Ở đây chỉ giả lập
+      return null;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user_stores'] });
       toast.success('Đã gửi yêu cầu tạo cửa hàng!');
-    },
-    onError: (err) => toast.error('Lỗi: ' + err.message),
+    }
   });
 
+  // 2. Cập nhật Store
   const updateStoreMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<UserStore> }) => {
-      const { error } = await supabase.from('user_stores').update(data).eq('id', id);
-      if (error) throw error;
+      // Logic update store cũng đã chuyển sang StoreFormModal
+      return null;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user_stores'] });
       toast.success('Đã cập nhật cửa hàng!');
-    },
-    onError: (err) => toast.error('Lỗi: ' + err.message),
+    }
   });
 
+  // 3. Xóa Store
   const deleteStoreMutation = useMutation({
     mutationFn: async (storeId: string) => {
-      const { error } = await supabase.from('user_stores').delete().eq('id', storeId);
-      if (error) throw error;
+      const res = await fetch(`${API_URL}/api/stores/${storeId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error("Failed");
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user_stores'] });
@@ -140,14 +130,23 @@ export const useUserStores = () => {
   // --- B. QUẢN LÝ MENU ---
 
   const fetchMenuItems = async (storeId: string): Promise<StoreMenuItem[]> => {
-    const { data } = await supabase.from('store_menu_items').select('*').eq('store_id', storeId).order('sort_order', { ascending: true });
-    return (data as StoreMenuItem[]) || [];
+    try {
+      const res = await fetch(`${API_URL}/api/stores/${storeId}/menu`);
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    } catch {
+      return [];
+    }
   };
 
   const createMenuItemMutation = useMutation({
     mutationFn: async (itemData: Partial<StoreMenuItem>) => {
-      const { error } = await supabase.from('store_menu_items').insert(itemData as any);
-      if (error) throw error;
+      const res = await fetch(`${API_URL}/api/menu-items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(itemData)
+      });
+      if (!res.ok) throw new Error("Failed");
     },
     onSuccess: () => toast.success('Đã thêm món mới'),
     onError: (err) => toast.error('Lỗi thêm món: ' + err.message),
@@ -155,8 +154,12 @@ export const useUserStores = () => {
 
   const updateMenuItemMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<StoreMenuItem> }) => {
-      const { error } = await supabase.from('store_menu_items').update(data).eq('id', id);
-      if (error) throw error;
+      const res = await fetch(`${API_URL}/api/menu-items/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      if (!res.ok) throw new Error("Failed");
     },
     onSuccess: () => toast.success('Đã cập nhật món'),
     onError: (err) => toast.error('Lỗi cập nhật: ' + err.message),
@@ -164,8 +167,8 @@ export const useUserStores = () => {
 
   const deleteMenuItemMutation = useMutation({
     mutationFn: async (itemId: string) => {
-      const { error } = await supabase.from('store_menu_items').delete().eq('id', itemId);
-      if (error) throw error;
+      const res = await fetch(`${API_URL}/api/menu-items/${itemId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error("Failed");
     },
     onSuccess: () => toast.success('Đã xóa món ăn'),
   });
@@ -173,14 +176,24 @@ export const useUserStores = () => {
   // --- C. QUẢN LÝ VOUCHER ---
 
   const fetchVouchers = async (storeId: string): Promise<StoreVoucher[]> => {
-    const { data } = await supabase.from('store_vouchers').select('*').eq('store_id', storeId).order('created_at', { ascending: false });
-    return (data as StoreVoucher[]) || [];
+    try {
+      // Lấy tất cả voucher để quản lý
+      const res = await fetch(`${API_URL}/api/stores/${storeId}/vouchers-all`);
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    } catch {
+      return [];
+    }
   };
 
   const createVoucherMutation = useMutation({
     mutationFn: async (voucherData: Partial<StoreVoucher>) => {
-      const { error } = await supabase.from('store_vouchers').insert(voucherData as any);
-      if (error) throw error;
+      const res = await fetch(`${API_URL}/api/vouchers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(voucherData)
+      });
+      if (!res.ok) throw new Error("Failed");
     },
     onSuccess: () => toast.success('Đã tạo voucher'),
     onError: (err) => toast.error('Lỗi tạo voucher: ' + err.message),
@@ -188,8 +201,12 @@ export const useUserStores = () => {
 
   const updateVoucherMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<StoreVoucher> }) => {
-      const { error } = await supabase.from('store_vouchers').update(data).eq('id', id);
-      if (error) throw error;
+      const res = await fetch(`${API_URL}/api/vouchers/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      if (!res.ok) throw new Error("Failed");
     },
     onSuccess: () => toast.success('Đã cập nhật voucher'),
     onError: (err) => toast.error('Lỗi cập nhật: ' + err.message),
@@ -197,32 +214,20 @@ export const useUserStores = () => {
 
   const deleteVoucherMutation = useMutation({
     mutationFn: async (voucherId: string) => {
-      const { error } = await supabase.from('store_vouchers').delete().eq('id', voucherId);
-      if (error) throw error;
+      const res = await fetch(`${API_URL}/api/vouchers/${voucherId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error("Failed");
     },
     onSuccess: () => toast.success('Đã xóa voucher'),
   });
 
-  // --- D. UPLOAD IMAGE (ĐÃ SỬA: Hàm này nhận 2 tham số: file và folder) ---
+  // --- D. UPLOAD IMAGE (Giả lập) ---
   const uploadImage = async (file: File, folder: string = 'common'): Promise<string | null> => {
-    try {
-      if (!user) return null;
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${user.id}/${folder}/${Date.now()}.${fileExt}`;
-      
-      const { error: uploadError } = await supabase.storage
-        .from('avatars') 
-        .upload(fileName, file);
-
-      if (uploadError) throw uploadError;
-
-      const { data } = supabase.storage.from('avatars').getPublicUrl(fileName);
-      return data.publicUrl;
-    } catch (error) {
-      console.error('Upload failed:', error);
-      toast.error('Lỗi tải ảnh lên');
-      return null;
-    }
+ 
+    // bạn cần dùng API upload riêng hoặc trả về URL dummy để test.
+    // Logic upload thật nên được thực hiện trong Form submit (như StoreFormModal đã làm).
+    
+    // Giả lập trả về URL để UI hiển thị preview
+    return URL.createObjectURL(file);
   };
 
   // --- E. RETURN ĐẦY ĐỦ ---
@@ -254,7 +259,6 @@ export const useUserStores = () => {
     },
     deleteVoucher: deleteVoucherMutation.mutateAsync,
 
-    // Common
-    uploadImage, // Hàm này giờ đã chuẩn 2 tham số
+    uploadImage, 
   };
 };

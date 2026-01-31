@@ -1,12 +1,17 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { Session, User } from "@supabase/supabase-js"; // <-- Thêm import User
+import { 
+  User, 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  signOut as firebaseSignOut,
+  onAuthStateChanged 
+} from "firebase/auth";
+import { auth } from "@/lib/firebase"; // Import auth từ file cấu hình vừa tạo
 import { toast } from "sonner";
 
 // 1. Định nghĩa kiểu dữ liệu
 type AuthContextType = {
-  session: Session | null;
-  user: User | null; // <-- THÊM DÒNG NÀY: Để có thể destructure { user } trực tiếp
+  user: User | null; // Firebase User
   isLoading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signUp: (email: string, password: string) => Promise<{ error: any }>;
@@ -18,51 +23,54 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // 3. Provider Component
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [session, setSession] = useState<Session | null>(null);
-  const [user, setUser] = useState<User | null>(null); // <-- Thêm state user
+  const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Lấy session hiện tại
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null); // Cập nhật user
+    // Lắng nghe trạng thái đăng nhập từ Firebase
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
       setIsLoading(false);
     });
 
-    // Lắng nghe thay đổi
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null); // Cập nhật user khi auth thay đổi
-      setIsLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
+    return () => unsubscribe();
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error };
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      toast.success("Đăng nhập thành công");
+      return { error: null };
+    } catch (error: any) {
+      console.error(error);
+      toast.error("Đăng nhập thất bại: " + error.message);
+      return { error };
+    }
   };
 
   const signUp = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signUp({ email, password });
-    return { error };
+    try {
+      await createUserWithEmailAndPassword(auth, email, password);
+      toast.success("Đăng ký thành công! Hãy đăng nhập ngay.");
+      return { error: null };
+    } catch (error: any) {
+      console.error(error);
+      toast.error("Đăng ký thất bại: " + error.message);
+      return { error };
+    }
   };
 
   const signOut = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) {
+    try {
+      await firebaseSignOut(auth);
+      toast.success("Đã đăng xuất");
+    } catch (error: any) {
       toast.error(error.message);
-    } else {
-      toast.success("Đăng xuất thành công");
     }
   };
 
   return (
-    <AuthContext.Provider value={{ session, user, isLoading, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={{ user, isLoading, signIn, signUp, signOut }}>
       {children}
     </AuthContext.Provider>
   );

@@ -4,7 +4,6 @@ import { X, Navigation, Clock, Phone, MapPin, Star, Ticket, ArrowRight, Loader2,
 import { Button } from '@/components/ui/button';
 import { Location, Department } from '@/data/locations';
 import { useLanguage } from '@/i18n/LanguageContext';
-// ❌ Đã xóa import supabase
 import { useAuth } from '@/hooks/useAuth';
 import { useFavorites } from '@/hooks/useFavorites';
 import { toast } from 'sonner';
@@ -73,7 +72,6 @@ export const BottomSheet = ({
         return;
       }
 
-      // 2. Gọi API Backend (Thay vì Supabase trực tiếp)
       if (isMapboxLocation && !forceUpdate) return;
 
       setIsFetchingRating(true);

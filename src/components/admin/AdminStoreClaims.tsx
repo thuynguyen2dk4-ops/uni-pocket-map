@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { 
   Check, X, MapPin, User, Loader2, Maximize2, 
-  Store, ArrowRight, AlertTriangle, Phone, Mail, BadgeCheck, ImageOff 
+  Store, ArrowRight, BadgeCheck, ImageOff 
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+
+// 👇 Lấy link Backend
+const API_URL = import.meta.env.VITE_API_URL;
 
 interface ClaimRequest {
   id: string;
@@ -25,10 +27,8 @@ interface ClaimRequest {
   lng: number;
   mapbox_id: string;
   
-  // Login Email (Joined from profiles)
+  // Dữ liệu đã được Backend join sẵn
   profiles?: { email: string };
-  
-  // Thông tin chủ sở hữu hiện tại (nếu có)
   existingStore?: {
     id: any;
     name_vi: string;
@@ -44,52 +44,29 @@ export const AdminStoreClaims = () => {
 
   const fetchClaims = async () => {
     setLoading(true);
-    
-    // 1. Lấy tất cả yêu cầu đang chờ (Pending)
-    // Lưu ý: profiles:user_id(email) là syntax join bảng của Supabase
-    const { data: claimsData, error } = await supabase
-      .from('store_claims')
-      .select('*, profiles:user_id(email)')
-      .eq('status', 'pending')
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      toast.error("Lỗi tải yêu cầu: " + error.message);
+    try {
+      const res = await fetch(`${API_URL}/api/admin/claims`);
+      const data = await res.json();
+      
+      if (Array.isArray(data)) {
+        setClaims(data);
+      } else {
+        toast.error("Lỗi dữ liệu từ server");
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("Không tải được danh sách yêu cầu");
+    } finally {
       setLoading(false);
-      return;
     }
-
-    // 2. Kiểm tra xem các cửa hàng này đã có trên hệ thống chưa (Dựa vào Mapbox ID)
-    const enrichedClaims = await Promise.all((claimsData as any[]).map(async (claim) => {
-        // Tìm cửa hàng trùng mapbox_id
-        const { data: existing } = await supabase
-            .from('user_stores')
-            .select('id, name_vi, user_id, is_verified, profiles:user_id(email)')
-            .eq('mapbox_id', claim.mapbox_id)
-            .maybeSingle();
-
-        return {
-            ...claim,
-            existingStore: existing ? {
-                id: existing.id,
-                name_vi: existing.name_vi,
-                owner_email: existing.profiles?.email || 'Không rõ Email',
-                is_verified: existing.is_verified
-            } : null
-        };
-    }));
-
-    setClaims(enrichedClaims);
-    setLoading(false);
   };
 
   useEffect(() => { fetchClaims(); }, []);
 
-  // --- LOGIC DUYỆT (APPROVE) ---
+  // --- LOGIC DUYỆT (GỌI API) ---
   const handleApprove = async (claim: ClaimRequest) => {
     let confirmMsg = `Xác nhận duyệt quyền sở hữu cho "${claim.mapbox_name}"?`;
     
-    // Nếu đã có chủ -> Cảnh báo chuyển quyền
     if (claim.existingStore) {
         confirmMsg = `⚠️ CẢNH BÁO QUAN TRỌNG!\n\nĐịa điểm này đang thuộc sở hữu của: ${claim.existingStore.owner_email}\n\nBạn có chắc chắn muốn CHUYỂN QUYỀN SỞ HỮU sang cho: ${claim.profiles?.email}?`;
     }
@@ -99,53 +76,25 @@ export const AdminStoreClaims = () => {
     try {
       toast.loading("Đang xử lý...");
 
-      if (claim.existingStore) {
-        // TRƯỜNG HỢP 1: Cửa hàng ĐÃ CÓ -> Cập nhật chủ mới (UPDATE)
-        const { error: updateError } = await supabase
-          .from('user_stores')
-          .update({
-            user_id: claim.user_id, // Gán user_id người mới
-            name_vi: claim.mapbox_name, // Cập nhật tên (nếu muốn)
-            is_verified: true,      
-            status: 'approved'
-          })
-          .eq('id', claim.existingStore.id);
-        
-        if (updateError) throw updateError;
-        toast.info(`Đã chuyển quyền sở hữu từ chủ cũ sang chủ mới.`);
+      // 👇 Gọi API Approve
+      const res = await fetch(`${API_URL}/api/admin/claims/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          claimId: claim.id,
+          mapboxId: claim.mapbox_id,
+          userId: claim.user_id,
+          mapboxName: claim.mapbox_name,
+          mapboxAddress: claim.mapbox_address,
+          lat: claim.lat,
+          lng: claim.lng,
+          role: claim.role,
+          phone: claim.phone,
+          proofImageUrl: claim.proof_image_url
+        })
+      });
 
-      } else {
-        // TRƯỜNG HỢP 2: Cửa hàng MỚI -> Tạo mới (INSERT)
-        const { error: insertError } = await supabase
-          .from('user_stores')
-          .insert({
-            user_id: claim.user_id,
-            mapbox_id: claim.mapbox_id,
-            name_vi: claim.mapbox_name,
-            address_vi: claim.mapbox_address,
-            lat: claim.lat,
-            lng: claim.lng,
-            category: 'checkin', // Mặc định
-            is_verified: true,
-            status: 'approved',
-            description_vi: `Đã xác minh: ${claim.role}. LH: ${claim.phone}`,
-            image_url: claim.proof_image_url
-          });
-
-        if (insertError) throw insertError;
-      }
-
-      // 3. Cập nhật trạng thái yêu cầu này thành Approved
-      await supabase.from('store_claims').update({ status: 'approved' }).eq('id', claim.id);
-      
-      // 4. Từ chối tất cả các yêu cầu khác cho cùng địa điểm này (nếu có)
-      if (claim.mapbox_id) {
-        await supabase.from('store_claims')
-            .update({ status: 'rejected' })
-            .eq('mapbox_id', claim.mapbox_id)
-            .eq('status', 'pending')
-            .neq('id', claim.id);
-      }
+      if (!res.ok) throw new Error("Server error");
 
       toast.dismiss();
       toast.success("Duyệt thành công!");
@@ -153,15 +102,28 @@ export const AdminStoreClaims = () => {
 
     } catch (error: any) {
       toast.dismiss();
-      toast.error("Lỗi: " + error.message);
+      toast.error("Lỗi khi duyệt: " + error.message);
     }
   };
 
+  // --- LOGIC TỪ CHỐI (GỌI API) ---
   const handleReject = async (id: string) => {
     if (!confirm("Từ chối yêu cầu này?")) return;
-    await supabase.from('store_claims').update({ status: 'rejected' }).eq('id', id);
-    toast.success("Đã từ chối.");
-    fetchClaims();
+    
+    try {
+      const res = await fetch(`${API_URL}/api/admin/claims/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ claimId: id })
+      });
+      
+      if (!res.ok) throw new Error("Failed");
+      
+      toast.success("Đã từ chối.");
+      fetchClaims();
+    } catch {
+      toast.error("Lỗi khi từ chối");
+    }
   };
 
   if (loading) return <div className="p-12 flex justify-center"><Loader2 className="animate-spin text-blue-600 w-8 h-8" /></div>;
@@ -196,7 +158,7 @@ export const AdminStoreClaims = () => {
               </div>
 
               <div className="p-6">
-                 {/* 1. KHUNG SO SÁNH: CHỦ CŨ vs CHỦ MỚI */}
+                 {/* 1. KHUNG SO SÁNH */}
                  <div className="flex flex-col md:flex-row gap-4 mb-6">
                     
                     {/* BÊN TRÁI: HIỆN TRẠNG */}
@@ -238,7 +200,6 @@ export const AdminStoreClaims = () => {
                         <div className="space-y-2 text-sm">
                             <div className="flex items-center gap-2 font-bold text-gray-900">
                                 <User size={16} className="text-blue-500"/> {claim.profiles?.email || 'Unknown User'} 
-                                <span className="text-gray-400 font-normal text-xs">(Login Account)</span>
                             </div>
                             
                             <div className="grid grid-cols-2 gap-x-4 gap-y-1 pl-6 mt-2">
@@ -260,12 +221,11 @@ export const AdminStoreClaims = () => {
                         ẢNH BẰNG CHỨNG ({claim.proof_images?.length || (claim.proof_image_url ? 1 : 0)})
                     </p>
                     <div className="flex gap-3 overflow-x-auto pb-2">
-                        {/* Render mảng ảnh mới */}
+                        {/* Render mảng ảnh */}
                         {claim.proof_images && claim.proof_images.length > 0 ? (
                             claim.proof_images.map((img, idx) => (
                                 <div key={idx} className="w-24 h-24 flex-shrink-0 border rounded-lg overflow-hidden cursor-pointer hover:ring-2 ring-blue-500 relative bg-gray-100 group" onClick={() => setSelectedImage(img)}>
                                     <img src={img} className="w-full h-full object-cover" loading="lazy" onError={(e) => e.currentTarget.style.display='none'}/>
-                                    {/* Fallback khi ảnh lỗi */}
                                     <div className="absolute inset-0 flex items-center justify-center text-gray-300">
                                         <ImageOff size={20}/>
                                     </div>
@@ -306,7 +266,7 @@ export const AdminStoreClaims = () => {
         </div>
       )}
 
-      {/* LIGHTBOX (Xem ảnh phóng to) */}
+      {/* LIGHTBOX */}
       {selectedImage && (
         <div 
             className="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center p-4 animate-in fade-in duration-200"

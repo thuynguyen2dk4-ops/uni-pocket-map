@@ -1,15 +1,17 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@/hooks/useAuth'; // Hook này giờ dùng Firebase
 import { Location } from '@/data/locations';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { X, Heart, Ticket, Trash2, ExternalLink, Loader2, MapPin } from 'lucide-react';
 import { toast } from 'sonner';
 
-// --- ĐỊNH NGHĨA KIỂU DỮ LIỆU (Giúp code tường minh hơn) ---
+// 👇 Lấy đường dẫn Backend
+const API_URL = import.meta.env.VITE_API_URL;
+
+// --- GIỮ NGUYÊN INTERFACE CŨ (Để không phải sửa JSX) ---
 interface SavedVoucherItem {
-  id: string; // ID của bảng user_saved_vouchers
+  id: string; 
   voucher: {
     id: string;
     code: string;
@@ -43,62 +45,61 @@ export const FavoritesPanel = ({
   onLoginClick 
 }: FavoritesPanelProps) => {
   
-  const { session } = useAuth();
+  const { user } = useAuth(); // ✅ Đổi session -> user (Firebase)
   const [favorites, setFavorites] = useState<Location[]>([]);
   const [savedVouchers, setSavedVouchers] = useState<SavedVoucherItem[]>([]);
   const [loading, setLoading] = useState(true);
-  // Không cần state activeTab trừ khi bạn muốn điều khiển nó từ bên ngoài
 
   const fetchData = async () => {
-    if (!session?.user) return;
+    if (!user) return;
     setLoading(true);
 
     try {
-      // 1. Tải địa điểm yêu thích (Favorites)
-      const { data: favData, error: favError } = await supabase
-        .from('favorites')
-        .select('*')
-        .eq('user_id', session.user.id);
-
-      if (favError) throw favError;
+      // 1. Tải Favorites từ API
+      const resFav = await fetch(`${API_URL}/api/favorites?userId=${user.uid}`);
+      const favData = await resFav.json();
       
-      if (favData) {
+      if (Array.isArray(favData)) {
         const mappedFavs: Location[] = favData.map((f: any) => ({
           id: f.location_id,
-          name: f.location_name_en || f.location_name, // Fallback tên
+          name: f.location_name_en || f.location_name,
           nameVi: f.location_name,
           lat: f.location_lat,
           lng: f.location_lng,
           type: f.location_type || 'checkin',
-          address: 'Địa điểm đã lưu', // Có thể cập nhật thêm cột address trong bảng favorites nếu cần
+          address: 'Địa điểm đã lưu',
           description: '', 
           image: '',
         }));
         setFavorites(mappedFavs);
       }
 
-      // 2. Tải Voucher đã lưu (Nested Query)
-      const { data: voucherData, error: voucherError } = await supabase
-        .from('user_saved_vouchers' as any) // Ép kiểu tạm nếu chưa generate types
-        .select(`
-          id,
-          voucher:store_vouchers (
-            id, code, title_vi, discount_value, discount_type,
-            store:user_stores (
-              id, name_vi, lat, lng, address_vi, image_url
-            )
-          )
-        `)
-        .eq('user_id', session.user.id);
+      // 2. Tải Voucher từ API
+      const resVoucher = await fetch(`${API_URL}/api/user-vouchers?userId=${user.uid}`);
+      const voucherData = await resVoucher.json();
 
-      if (voucherError) throw voucherError;
-
-      if (voucherData) {
-        // Lọc bỏ những voucher mà store bị null (đề phòng store bị xóa)
-        const validVouchers = voucherData.filter((v: any) => v.voucher && v.voucher.store);
-        setSavedVouchers(validVouchers);
+      if (Array.isArray(voucherData)) {
+        // 👇 Mapping dữ liệu phẳng từ API sang cấu trúc lồng nhau cũ
+        const mappedVouchers: SavedVoucherItem[] = voucherData.map((item: any) => ({
+          id: item.saved_id, // ID của bảng user_saved_vouchers
+          voucher: {
+            id: item.id, // ID của bảng store_vouchers
+            code: item.code,
+            title_vi: item.title_vi,
+            discount_value: item.discount_value,
+            discount_type: item.discount_type,
+            store: {
+              id: item.store_id,
+              name_vi: item.store_name,
+              lat: item.lat,
+              lng: item.lng,
+              address_vi: item.address_vi,
+              image_url: item.image_url
+            }
+          }
+        }));
+        setSavedVouchers(mappedVouchers);
       }
-
     } catch (error) {
       console.error("🔥 Lỗi tải dữ liệu:", error);
       toast.error("Không thể tải danh sách yêu thích");
@@ -111,38 +112,44 @@ export const FavoritesPanel = ({
     if (isOpen) {
       fetchData();
     }
-  }, [session, isOpen]);
+  }, [user, isOpen]);
 
+  // --- HÀM XÓA FAVORITE (GỌI API) ---
   const removeFavorite = async (e: React.MouseEvent, id: string | number) => {
     e.stopPropagation();
-    // Optimistic UI Update (Xóa trên giao diện trước)
+    // Optimistic Update
     setFavorites(prev => prev.filter(f => f.id !== id));
     
-    const { error } = await supabase.from('favorites').delete().eq('location_id', id);
-    if (error) {
-       toast.error("Lỗi khi xóa, vui lòng thử lại");
-       fetchData(); // Rollback nếu lỗi
-    } else {
-       toast.success("Đã xóa khỏi yêu thích");
+    try {
+      // Backend cần userId trong body để verify
+      await fetch(`${API_URL}/api/favorites/${id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user?.uid })
+      });
+      toast.success("Đã xóa khỏi yêu thích");
+    } catch {
+      toast.error("Lỗi khi xóa, vui lòng thử lại");
+      fetchData(); // Rollback
     }
   };
 
+  // --- HÀM XÓA VOUCHER (GỌI API) ---
   const removeVoucher = async (e: React.MouseEvent, savedId: string) => {
-    e.stopPropagation(); // QUAN TRỌNG: Chặn sự kiện click xuyên qua
+    e.stopPropagation(); 
     
     const prevVouchers = [...savedVouchers];
     setSavedVouchers(prev => prev.filter(v => v.id !== savedId));
 
-    const { error } = await supabase
-      .from('user_saved_vouchers' as any)
-      .delete()
-      .eq('id', savedId);
-
-    if (error) {
+    try {
+      const res = await fetch(`${API_URL}/api/user-vouchers/${savedId}`, {
+        method: 'DELETE'
+      });
+      if (!res.ok) throw new Error('Failed');
+      toast.success("Đã xóa voucher");
+    } catch {
       setSavedVouchers(prevVouchers); // Rollback
       toast.error("Không xóa được voucher");
-    } else {
-      toast.success("Đã xóa voucher");
     }
   };
 
@@ -153,19 +160,18 @@ export const FavoritesPanel = ({
     } else if (onSelectLocation) {
       onSelectLocation(location);
     }
-    onClose(); // Đóng panel sau khi chọn
+    onClose(); 
   };
 
   const handleUseVoucher = (item: SavedVoucherItem) => {
     const store = item.voucher.store;
-    // Tạo object Location giả lập từ dữ liệu Store để Map có thể đọc được
     const locationData: Location = {
-      id: store.id, // ID dạng UUID của store
+      id: store.id,
       nameVi: store.name_vi,
       name: store.name_vi,
       lat: store.lat,
       lng: store.lng,
-      type: 'food', // Hoặc lấy type từ store nếu có
+      type: 'food', 
       address: store.address_vi,
       description: `Ưu đãi: Giảm ${item.voucher.discount_value}${item.voucher.discount_type === 'percent' ? '%' : 'k'} - Code: ${item.voucher.code}`,
       image: store.image_url || 'https://placehold.co/600x400?text=Store',
@@ -192,7 +198,7 @@ export const FavoritesPanel = ({
 
       {/* Content */}
       <div className="flex-1 overflow-hidden bg-white">
-        {!session ? (
+        {!user ? (
           <div className="h-full flex flex-col items-center justify-center text-center space-y-4 p-6">
             <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
                <Heart className="w-8 h-8 text-gray-400" />
@@ -298,7 +304,7 @@ export const FavoritesPanel = ({
                       </div>
                     </div>
                     
-                    {/* Nút xóa - Đã tối ưu cho Mobile (Luôn hiện mờ, đậm khi hover) */}
+                    {/* Nút xóa */}
                     <button 
                       onClick={(e) => removeVoucher(e, item.id)} 
                       className="absolute top-1 right-1 p-1.5 text-gray-400/50 hover:text-red-500 hover:bg-red-50 rounded-full transition-all z-10"

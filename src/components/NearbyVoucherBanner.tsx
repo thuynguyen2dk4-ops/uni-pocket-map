@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Ticket, MapPin, X, Save, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@/hooks/useAuth'; // Đã chuyển sang Firebase
 import { toast } from 'sonner';
+
+// 👇 Lấy link Backend
+const API_URL = import.meta.env.VITE_API_URL;
 
 // Hàm tính khoảng cách
 const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
@@ -25,7 +27,7 @@ interface NearbyVoucherBannerProps {
 
 export const NearbyVoucherBanner = ({ userLocation, onViewStore }: NearbyVoucherBannerProps) => {
 
-  const { session } = useAuth(); // Lấy session người dùng
+  const { user } = useAuth(); // ✅ Đổi session thành user (cho khớp Firebase)
   const [vouchers, setVouchers] = useState<any[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isVisible, setIsVisible] = useState(true);
@@ -35,50 +37,54 @@ export const NearbyVoucherBanner = ({ userLocation, onViewStore }: NearbyVoucher
     if (!userLocation) return;
 
     const fetchData = async () => {
-      // 1. Lấy voucher đang chạy (active)
-      const { data, error } = await supabase
-        .from('store_vouchers')
-        .select(`
-          *,
-          store:user_stores!inner (
-            id, name_vi, lat, lng, address_vi
-          )
-        `)
-        .eq('is_active', true);
+      try {
+        // 1. Gọi API lấy voucher active
+        const res = await fetch(`${API_URL}/api/vouchers/active`);
+        const data = await res.json();
 
-      if (error || !data) {
-        console.error("Lỗi lấy voucher:", error);
-        return;
-      }
+        if (!Array.isArray(data)) return;
 
-      // 2. Tính khoảng cách và lọc quán < 10km
-      const nearby = data
-        .map((v: any) => ({
-          ...v,
-          distance: calculateDistance(userLocation.lat, userLocation.lng, v.store.lat, v.store.lng)
-        }))
-        .filter((v) => v.distance <= 10)
-        .sort((a, b) => a.distance - b.distance);
+        // 2. Map dữ liệu & Tính khoảng cách
+        const nearby = data
+          .map((v: any) => ({
+            id: v.id,
+            code: v.code,
+            discount_value: v.discount_value,
+            discount_type: v.discount_type,
+            // Gom nhóm thông tin store lại cho giống cấu trúc cũ
+            store: {
+              id: v.store_id,
+              name_vi: v.store_name,
+              lat: v.store_lat,
+              lng: v.store_lng,
+              address_vi: v.address_vi
+            },
+            distance: calculateDistance(userLocation.lat, userLocation.lng, v.store_lat, v.store_lng)
+          }))
+          .filter((v) => v.distance <= 10) // Chỉ lấy quán < 10km
+          .sort((a, b) => a.distance - b.distance);
 
-      setVouchers(nearby);
+        setVouchers(nearby);
 
-      // 3. Nếu đã đăng nhập, xem user đã lưu mã nào chưa
-      if (session?.user) {
-        const { data: saved } = await supabase
-          .from('user_saved_vouchers' as any)
-          .select('voucher_id')
-          .eq('user_id', session.user.id);
-        
-        if (saved) {
-          // Ép kiểu trực tiếp để tránh lỗi TypeScript
-          const ids = (saved as any[]).map((s) => s.voucher_id);
-          setSavedIds(new Set(ids));
+        // 3. Nếu đã đăng nhập, lấy danh sách voucher đã lưu
+        if (user) {
+          const resSaved = await fetch(`${API_URL}/api/user-vouchers?userId=${user.uid}`);
+          const savedData = await resSaved.json();
+          
+          if (Array.isArray(savedData)) {
+            // savedData trả về có trường voucher_id hoặc id của bảng user_saved_vouchers
+            // API user-vouchers ở bước trước trả về cấu trúc join, ta cần lấy ID của voucher gốc
+            const ids = savedData.map((s: any) => s.voucher_id || s.id); 
+            setSavedIds(new Set(ids));
+          }
         }
+      } catch (error) {
+        console.error("Lỗi tải voucher:", error);
       }
-    }; // <--- ĐÃ THÊM DẤU ĐÓNG NGOẶC BỊ THIẾU Ở ĐÂY
+    };
 
     fetchData();
-  }, [userLocation, session]);
+  }, [userLocation, user]);
 
   // Tự động chuyển slide
   useEffect(() => {
@@ -90,33 +96,38 @@ export const NearbyVoucherBanner = ({ userLocation, onViewStore }: NearbyVoucher
   }, [vouchers]);
 
   const handleSaveVoucher = async (e: React.MouseEvent, voucher: any) => {
-    e.stopPropagation(); // Không kích hoạt sự kiện click vào banner
+    e.stopPropagation();
 
-    if (!session?.user) {
+    if (!user) {
       toast.error("Bạn cần đăng nhập để lưu mã!");
       return;
     }
 
+    // Optimistic Update (Cập nhật giao diện trước cho mượt)
+    if (savedIds.has(voucher.id)) return;
+    setSavedIds(prev => new Set(prev).add(voucher.id));
+    toast.success("Đã lưu mã vào ví!");
+
     try {
-      const { error } = await supabase.from('user_saved_vouchers' as any).insert({
-        user_id: session.user.id,
-        voucher_id: voucher.id
+      const res = await fetch(`${API_URL}/api/vouchers/save`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.uid,
+          voucherId: voucher.id
+        })
       });
 
-      if (error) {
-        if (error.code === '23505') { // Mã lỗi trùng lặp
-            toast.info("Bạn đã lưu mã này rồi!");
-            setSavedIds(prev => new Set(prev).add(voucher.id));
-        } else {
-            throw error;
-        }
-      } else {
-        toast.success("Đã lưu mã vào ví!");
-        setSavedIds(prev => new Set(prev).add(voucher.id));
-      }
+      if (!res.ok) throw new Error('Failed');
+
     } catch (err) {
-      console.error(err);
-      toast.error("Lỗi khi lưu mã");
+      // Rollback nếu lỗi
+      setSavedIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(voucher.id);
+        return newSet;
+      });
+      toast.error("Lỗi kết nối, vui lòng thử lại");
     }
   };
 
@@ -126,7 +137,7 @@ export const NearbyVoucherBanner = ({ userLocation, onViewStore }: NearbyVoucher
   const isSaved = savedIds.has(currentVoucher.id);
 
   return (
-    // VỊ TRÍ: Góc TRÁI dưới (bottom-24 left-4)
+    // VỊ TRÍ: Góc TRÁI dưới (bottom-2 left-2)
     <div className="fixed bottom-2 left-2 z-[40] w-[90%] md:w-80">
       <AnimatePresence mode="wait">
         <motion.div

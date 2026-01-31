@@ -9,9 +9,12 @@ import {
   MapPin, Loader2, ImagePlus, UploadCloud, Lock, Crown
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '@/integrations/supabase/client';
+
 import { useAuth } from '@/hooks/useAuth';
 import { LocationPickerModal } from './LocationPickerModal';
+
+// 👇 Lấy link Backend
+const API_URL = import.meta.env.VITE_API_URL;
 
 interface StoreFormState {
   name_vi: string;
@@ -31,7 +34,7 @@ interface StoreFormModalProps {
   initialData?: any; 
   isSubmitting?: boolean;
   customStoreId?: string;
-  onUpgradeClick?: () => void; // Callback quan trọng để kích hoạt mua VIP
+  onUpgradeClick?: () => void; 
 }
 
 export const StoreFormModal = ({ 
@@ -43,12 +46,10 @@ export const StoreFormModal = ({
   customStoreId,
   onUpgradeClick
 }: StoreFormModalProps) => {
-  const { session } = useAuth();
+  const { user } = useAuth(); // ✅ Đổi session -> user
   
-  // Xác định quyền hạn: Admin hoặc đã mua gói Premium
-  // (Sửa logic: dùng is_premium thay vì is_vip cũ)
   const isPremium = (initialData as any)?.is_premium === true;
-  const isAdmin = !!customStoreId; // Admin mode (luôn full quyền)
+  const isAdmin = !!customStoreId; 
   const canAccessVipFeatures = isPremium || isAdmin;
 
   const [formData, setFormData] = useState<StoreFormState>({
@@ -83,11 +84,19 @@ export const StoreFormModal = ({
         setAvatarPreview(initialData.image_url || initialData.image || '');
         setAvatarFile(null);
         
-        // Chỉ fetch ảnh gallery nếu được phép
         const targetId = customStoreId || initialData.id;
-        if(targetId && canAccessVipFeatures) fetchExistingGallery(targetId);
+
+        if(targetId && canAccessVipFeatures) {
+            const cleanId = String(targetId).replace('user-store-', '');
+            fetch(`${API_URL}/api/stores/${cleanId}/gallery`)
+                .then(res => res.json())
+                .then(data => {
+                    if(Array.isArray(data)) setExistingGallery(data);
+                })
+                .catch(console.error);
+        }
       } else {
-        // Reset form khi thêm mới
+        // Reset form
         setFormData({
             name_vi: '', address_vi: '', phone: '',
             description_vi: '', category: 'cafe',
@@ -105,21 +114,6 @@ export const StoreFormModal = ({
   const handleLocationConfirm = (lat: number, lng: number, address?: string) => {
     setFormData(prev => ({ ...prev, lat, lng, address_vi: address || prev.address_vi }));
     toast.success("Đã cập nhật vị trí!");
-  };
-
-  const fetchExistingGallery = async (storeId: string) => {
-    // Xử lý ID cũ dạng 'user-store-...' nếu có
-    const cleanId = String(storeId).includes('user-store-') ? String(storeId).replace('user-store-', '') : storeId;
-    
-    // Kiểm tra ID có hợp lệ (UUID) không trước khi gọi
-    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanId);
-    if (!isUUID) return;
-
-    const { data } = await (supabase as any)
-      .from('store_gallery')
-      .select('*')
-      .eq('store_id', cleanId);
-    if (data) setExistingGallery(data);
   };
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -148,69 +142,59 @@ export const StoreFormModal = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsUploading(true);
+
     try {
-        let finalImageUrl = formData.image_url;
-        // Upload Avatar chính
-        if (avatarFile) {
-            const fileExt = avatarFile.name.split('.').pop();
-            const fileName = `avatars/${Date.now()}_avatar.${fileExt}`;
-            const { error: uploadError } = await (supabase.storage as any)
-                .from('avatars').upload(fileName, avatarFile, { upsert: true });
-            if (!uploadError) {
-                const { data } = (supabase.storage as any).from('avatars').getPublicUrl(fileName);
-                finalImageUrl = data.publicUrl;
-            }
-        }
+        const targetId = customStoreId || initialData?.id;
 
-        let targetId = customStoreId || initialData?.id;
+        // 1. Tạo FormData để chứa File + Text
+        const submitData = new FormData();
         
-        // Chuẩn bị dữ liệu lưu
-        const storeDataToSave = {
-            id: targetId, // Nếu có ID thì là update, không thì insert
-            user_id: session?.user?.id,
-            name_vi: formData.name_vi,
-            address_vi: formData.address_vi,
-            phone: formData.phone,
-            // Chỉ lưu description nếu là VIP
-            description_vi: canAccessVipFeatures ? formData.description_vi : null, 
-            category: formData.category,
-            image_url: finalImageUrl,
-            lat: formData.lat,
-            lng: formData.lng,
-            // Giữ nguyên trạng thái premium cũ (không cho tự sửa ở đây)
-            is_premium: customStoreId ? true : (initialData?.is_premium || false)
-        };
+        // Append dữ liệu text
+        submitData.append('userId', user?.uid || '');
+        if (targetId) submitData.append('id', String(targetId).replace('user-store-', ''));
+        submitData.append('name_vi', formData.name_vi);
+        submitData.append('address_vi', formData.address_vi);
+        submitData.append('phone', formData.phone);
+        submitData.append('category', formData.category);
+        submitData.append('lat', String(formData.lat));
+        submitData.append('lng', String(formData.lng));
+        
+        // Link ảnh cũ (nếu không đổi ảnh mới)
+        submitData.append('image_url', formData.image_url);
 
-        const { data: savedStore, error: saveError } = await (supabase as any)
-            .from('user_stores')
-            .upsert(storeDataToSave)
-            .select()
-            .single();
-
-        if (saveError) throw saveError;
-        if (!targetId && savedStore) targetId = savedStore.id;
-
-        // Xử lý Gallery (Chỉ VIP mới được lưu)
-        if (targetId && canAccessVipFeatures) {
-             // 1. Lưu ảnh mới vào Storage & DB
-             if (galleryFiles.length > 0) {
-                let count = 0;
-                for (const file of galleryFiles) {
-                    const fExt = file.name.split('.').pop();
-                    const fName = `${targetId}/${Date.now()}_${Math.random()}.${fExt}`;
-                    const { error: upErr } = await (supabase.storage as any).from('avatars').upload(fName, file);
-                    if (!upErr) {
-                        const { data } = (supabase.storage as any).from('avatars').getPublicUrl(fName);
-                        await (supabase as any).from('store_gallery').insert({ store_id: targetId, image_url: data.publicUrl });
-                        count++;
-                    }
-                }
-                if (count > 0) toast.success(`Đã thêm ${count} ảnh vào thư viện!`);
-             }
+        // Trường đặc biệt
+        if (canAccessVipFeatures) {
+            submitData.append('description_vi', formData.description_vi);
+        }
+        if (customStoreId) { // Admin mode
+            submitData.append('is_premium', 'true');
+        } else {
+            submitData.append('is_premium', initialData?.is_premium ? 'true' : 'false');
         }
 
-        toast.success(customStoreId ? "Đã cập nhật địa điểm hệ thống!" : "Đã lưu cửa hàng!");
-        if (onSubmit) await onSubmit(storeDataToSave);
+        // 2. Append File Avatar
+        if (avatarFile) {
+            submitData.append('avatar', avatarFile);
+        }
+
+        // 3. Append Files Gallery
+        if (canAccessVipFeatures && galleryFiles.length > 0) {
+            galleryFiles.forEach(file => {
+                submitData.append('gallery', file);
+            });
+        }
+
+        // 4. Gửi về Backend
+        const res = await fetch(`${API_URL}/api/stores/save`, {
+            method: 'POST',
+            body: submitData
+        });
+
+        if (!res.ok) throw new Error("Lỗi lưu dữ liệu");
+
+        toast.success(customStoreId ? "Đã cập nhật địa điểm!" : "Đã lưu cửa hàng!");
+        
+        if (onSubmit) await onSubmit(formData); // Callback giả lập để refresh UI cha
         onClose();
 
     } catch (error: any) {
@@ -362,12 +346,11 @@ export const StoreFormModal = ({
                  </div>
                  
                  <div className={`flex gap-4 overflow-x-auto pb-4 pt-2 scrollbar-thin scrollbar-thumb-gray-200 ${!canAccessVipFeatures ? 'opacity-40 pointer-events-none select-none filter blur-[2px]' : ''}`}>
-                    {/* Placeholder Ảnh mẫu để kích thích mua */}
+                    
                     {!canAccessVipFeatures && [1,2,3,4].map(i => (
                          <div key={i} className="w-24 h-24 flex-shrink-0 rounded-lg bg-gray-200 animate-pulse"></div>
                     ))}
                     
-                    {/* Ảnh thật (nếu có) */}
                     {canAccessVipFeatures && existingGallery.map((img) => (
                         <div key={img.id} className="relative w-24 h-24 flex-shrink-0 rounded-lg overflow-hidden border group">
                             <img src={img.image_url} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
@@ -380,7 +363,6 @@ export const StoreFormModal = ({
                     ))}
                  </div>
 
-                 {/* OVERLAY KHI KHÔNG PHẢI VIP */}
                  {!canAccessVipFeatures && (
                     <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-white/60 backdrop-blur-sm rounded-xl border border-dashed border-gray-300">
                         <div className="bg-white p-5 rounded-2xl shadow-xl flex flex-col items-center border border-yellow-100 max-w-xs text-center">

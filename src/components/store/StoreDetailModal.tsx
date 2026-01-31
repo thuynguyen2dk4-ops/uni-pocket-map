@@ -1,15 +1,17 @@
 import { useState, useEffect } from 'react';
-// 1. Import DialogTitle
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { X, MapPin, Star, Ticket, Clock, Utensils, Image as ImageIcon, Check, Phone, Loader2, MessageSquare, Edit3, Info } from 'lucide-react';
+import { X, MapPin, Star, Ticket, Clock, Utensils, Image as ImageIcon, Check, Phone, Loader2, Edit3, Info } from 'lucide-react';
 import { Location } from '@/data/locations';
-import { supabase } from '@/integrations/supabase/client';
+// ❌ Đã xóa import supabase
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import { ReviewSection } from './ReviewSection';
 import { StoreFormModal } from './StoreFormModal';
+
+// 👇 Lấy link Backend
+const API_URL = import.meta.env.VITE_API_URL;
 
 interface StoreDetailModalProps {
   isOpen: boolean;
@@ -19,10 +21,9 @@ interface StoreDetailModalProps {
 }
 
 export const StoreDetailModal = ({ isOpen, onClose, location, onNavigate }: StoreDetailModalProps) => {
-  // 1. Kiểm tra an toàn: Nếu không có location thì không render gì cả
   if (!location) return null;
 
-  const { session } = useAuth();
+  const { user } = useAuth(); // ✅ Đổi session -> user (Firebase)
   const [activeTab, setActiveTab] = useState("info");
   
   const [displayData, setDisplayData] = useState<any>(location);
@@ -38,70 +39,75 @@ export const StoreDetailModal = ({ isOpen, onClose, location, onNavigate }: Stor
   const [loading, setLoading] = useState(true);
   const [isEditOpen, setIsEditOpen] = useState(false);
 
-  // Xử lý ID an toàn
   const rawId = String(location.id).replace('user-store-', '');
 
-  // Logic phân quyền
-  const isAdmin = session?.user?.email === "admin@example.com"; // Thay bằng logic check role thực tế của bạn
-  const isOwner = displayData?.user_id === session?.user?.id;
-  const canEdit = isAdmin || isOwner;
+  // Logic phân quyền đơn giản
+  const isOwner = displayData?.user_id === user?.uid;
+  const canEdit = isOwner || user?.email === "admin@gmail.com";
 
   useEffect(() => {
     if (isOpen && location) {
       fetchMergedData();
     }
-  }, [isOpen, location.id]);
+  }, [isOpen, location.id, user]);
 
   const fetchMergedData = async () => {
     setLoading(true);
     
-    // 1. Lấy thông tin chi tiết từ bảng user_stores
-    const { data: dbStore } = await (supabase as any)
-      .from('user_stores')
-      .select('*')
-      .eq('id', rawId)
-      .maybeSingle();
+    try {
+      // 1. Gọi API lấy thông tin chi tiết Store từ DB
+      const resStore = await fetch(`${API_URL}/api/stores/${rawId}/public`);
+      const dbStore = await resStore.json();
 
-    // Ưu tiên dữ liệu từ DB, nếu không có thì dùng dữ liệu local/mapbox
-    const finalData = dbStore ? dbStore : location;
-    setDisplayData(finalData);
+      // Ưu tiên dữ liệu từ DB, nếu null thì dùng dữ liệu local/mapbox truyền vào
+      const finalData = dbStore || location;
+      setDisplayData(finalData);
 
-    // 2. Fetch các dữ liệu liên quan song song để nhanh hơn
-    const [menuRes, galleryRes, voucherRes, reviewsRes] = await Promise.all([
-        (supabase as any).from('store_menu_items').select('*').eq('store_id', rawId),
-        (supabase as any).from('store_gallery').select('*').eq('store_id', rawId),
-        (supabase as any).from('store_vouchers').select('*').eq('store_id', rawId).eq('is_active', true),
-        (supabase as any).from('location_reviews').select('rating').eq('store_id', rawId)
-    ]);
+      // 2. Fetch dữ liệu liên quan song song (Parallel Fetching)
+      const [menuRes, galleryRes, voucherRes, reviewsRes] = await Promise.all([
+        fetch(`${API_URL}/api/stores/${rawId}/menu`),           // Menu
+        fetch(`${API_URL}/api/stores/${rawId}/gallery`),        // Gallery
+        fetch(`${API_URL}/api/store-vouchers/${rawId}`),        // Voucher active
+        fetch(`${API_URL}/api/reviews/list/${rawId}`)           // Reviews
+      ]);
 
-    if (menuRes.data) setMenuItems(menuRes.data);
-    if (galleryRes.data) setGallery(galleryRes.data);
-    if (voucherRes.data) setVouchers(voucherRes.data);
+      const menuData = await menuRes.json();
+      const galleryData = await galleryRes.json();
+      const voucherData = await voucherRes.json();
+      const reviewsData = await reviewsRes.json();
 
-    // Tính điểm đánh giá
-    if (reviewsRes.data && reviewsRes.data.length > 0) {
-        const total = reviewsRes.data.reduce((acc: number, curr: any) => acc + curr.rating, 0);
-        const avg = total / reviewsRes.data.length;
-        setAverageRating(Number(avg.toFixed(1)));
-        setReviewCount(reviewsRes.data.length);
-    } else {
-        setAverageRating(0);
-        setReviewCount(0);
+      if (Array.isArray(menuData)) setMenuItems(menuData);
+      if (Array.isArray(galleryData)) setGallery(galleryData);
+      if (Array.isArray(voucherData)) setVouchers(voucherData);
+
+      // Tính điểm đánh giá
+      if (Array.isArray(reviewsData) && reviewsData.length > 0) {
+          const total = reviewsData.reduce((acc: number, curr: any) => acc + curr.rating, 0);
+          const avg = total / reviewsData.length;
+          setAverageRating(Number(avg.toFixed(1)));
+          setReviewCount(reviewsData.length);
+      } else {
+          setAverageRating(0);
+          setReviewCount(0);
+      }
+
+      // 3. Kiểm tra voucher đã lưu (nếu đã đăng nhập)
+      if (user) {
+        const resSaved = await fetch(`${API_URL}/api/user-vouchers?userId=${user.uid}`);
+        const savedData = await resSaved.json();
+        
+        if (Array.isArray(savedData)) {
+          // API user-vouchers trả về cấu trúc join, cần lấy đúng ID voucher gốc
+          const savedSet = new Set(savedData.map((s: any) => s.voucher_id || s.id));
+          setSavedVoucherIds(savedSet);
+        }
+      }
+
+    } catch (error) {
+      console.error("Lỗi tải dữ liệu chi tiết:", error);
+    } finally {
+      setLoading(false);
     }
-
-    // Kiểm tra voucher đã lưu (nếu đã đăng nhập)
-    if (session?.user && voucherRes.data && voucherRes.data.length > 0) {
-      const ids = voucherRes.data.map((v:any) => v.id);
-      const { data: saved } = await (supabase as any)
-        .from('user_saved_vouchers')
-        .select('voucher_id')
-        .eq('user_id', session.user.id)
-        .in('voucher_id', ids);
-      
-      if (saved) setSavedVoucherIds(new Set(saved.map((s:any) => s.voucher_id)));
-    }
-
-    setLoading(false);
   };
 
   const handleEditSuccess = async () => {
@@ -109,23 +115,37 @@ export const StoreDetailModal = ({ isOpen, onClose, location, onNavigate }: Stor
   };
 
   const handleSaveVoucher = async (voucher: any) => {
-    if (!session?.user) { toast.error("Vui lòng đăng nhập để lưu voucher!"); return; }
+    if (!user) { toast.error("Vui lòng đăng nhập để lưu voucher!"); return; }
     if (savedVoucherIds.has(voucher.id)) return;
 
-    const { error } = await (supabase as any).from('user_saved_vouchers').insert({
-      user_id: session.user.id,
-      voucher_id: voucher.id
-    });
+    // Optimistic Update
+    setSavedVoucherIds(prev => new Set(prev).add(voucher.id));
+    toast.success("Đã lưu voucher vào ví!");
 
-    if (!error || error.code === '23505') { // 23505 là mã lỗi trùng lặp (đã lưu rồi)
-      toast.success("Đã lưu voucher vào ví!");
-      setSavedVoucherIds(prev => new Set(prev).add(voucher.id));
-    } else {
-        toast.error("Không thể lưu voucher lúc này");
+    try {
+      const res = await fetch(`${API_URL}/api/vouchers/save`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.uid,
+          voucherId: voucher.id
+        })
+      });
+
+      if (!res.ok) throw new Error("Failed");
+
+    } catch (error) {
+       // Rollback
+       setSavedVoucherIds(prev => {
+         const newSet = new Set(prev);
+         newSet.delete(voucher.id);
+         return newSet;
+       });
+       toast.error("Không thể lưu voucher lúc này");
     }
   };
 
-  // Chuẩn bị dữ liệu hiển thị (Fallback an toàn)
+  // Chuẩn bị dữ liệu hiển thị
   const displayImage = displayData.image_url || displayData.image || 'https://images.unsplash.com/photo-1554118811-1e0d58224f24';
   const displayName = displayData.name_vi || displayData.nameVi || displayData.name || "Địa điểm chưa có tên";
   const displayAddress = displayData.address_vi || displayData.address || "Đang cập nhật địa chỉ";
@@ -138,7 +158,6 @@ export const StoreDetailModal = ({ isOpen, onClose, location, onNavigate }: Stor
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl h-[90vh] p-0 bg-white gap-0 border-none rounded-2xl overflow-hidden z-[100] flex flex-col focus:outline-none">
         
-        {/* 2. THÊM DIALOG TITLE (Ẩn đi để không phá vỡ UI nhưng vẫn đảm bảo Accessibility) */}
         <DialogTitle className="sr-only">
             {displayName}
         </DialogTitle>
@@ -158,7 +177,6 @@ export const StoreDetailModal = ({ isOpen, onClose, location, onNavigate }: Stor
                   onError={(e) => { e.currentTarget.src = "https://placehold.co/600x400?text=No+Image"; }}
                 />
                 
-                {/* Nút đóng */}
                 <button 
                   onClick={onClose} 
                   className="absolute top-4 right-4 bg-black/50 p-1.5 rounded-full text-white hover:bg-black/70 transition-colors z-10"
@@ -263,7 +281,7 @@ export const StoreDetailModal = ({ isOpen, onClose, location, onNavigate }: Stor
                                     />
                                 </div>
                                 <div className="flex-1 py-1 flex flex-col justify-between">
-                                    <h4 className="font-bold text-gray-900 text-sm line-clamp-2">{item.name}</h4>
+                                    <h4 className="font-bold text-gray-900 text-sm line-clamp-2">{item.name_vi || item.name}</h4>
                                     <span className="font-bold text-primary block">
                                         {item.price ? new Intl.NumberFormat('vi-VN').format(Number(item.price)) : 0}đ
                                     </span>

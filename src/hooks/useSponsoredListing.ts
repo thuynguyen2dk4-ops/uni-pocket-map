@@ -1,7 +1,10 @@
 import { useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
+
+// 👇 Lấy link Backend
+const API_URL = import.meta.env.VITE_API_URL;
 
 export interface SponsoredPackage {
   id: string;
@@ -45,8 +48,9 @@ export const sponsoredPackages: SponsoredPackage[] = [
 
 export const useSponsoredListing = () => {
   const [isLoading, setIsLoading] = useState(false);
-  const { user } = useAuth();
+  const { user } = useAuth(); // ✅ Đổi session -> user
 
+  // --- 1. Tạo thanh toán ---
   const createCheckout = async (
     locationId: string,
     locationName: string,
@@ -61,8 +65,12 @@ export const useSponsoredListing = () => {
 
     setIsLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('create-checkout', {
-        body: {
+ 
+      const res = await fetch(`${API_URL}/api/sponsored/create-checkout`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.uid,
           locationId,
           locationName,
           locationType,
@@ -70,15 +78,17 @@ export const useSponsoredListing = () => {
           voucherText,
           successUrl: `${window.location.origin}/?payment=success`,
           cancelUrl: `${window.location.origin}/?payment=cancelled`,
-        },
+        }),
       });
 
-      if (error) {
-        console.error('Checkout error:', error);
-        throw new Error(error.message);
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Lỗi server');
       }
 
       if (data?.url) {
+        // Chuyển hướng sang trang thanh toán
         window.location.href = data.url;
         return data;
       }
@@ -93,33 +103,30 @@ export const useSponsoredListing = () => {
     }
   };
 
+  // --- 2. Lấy danh sách gói đã mua của User ---
   const getSponsoredListings = async () => {
     if (!user) return [];
 
     try {
-      const { data, error } = await supabase
-        .from('sponsored_listings')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
+      const res = await fetch(`${API_URL}/api/sponsored/my-listings?userId=${user.uid}`);
+      const data = await res.json();
 
-      if (error) throw error;
-      return data || [];
+      if (Array.isArray(data)) return data;
+      return [];
     } catch (error) {
       console.error('Error fetching sponsored listings:', error);
       return [];
     }
   };
 
+  // --- 3. Lấy danh sách các địa điểm đang Active (cho bản đồ) ---
   const getActiveSponsoredLocations = async (): Promise<string[]> => {
     try {
-      const { data, error } = await supabase
-        .from('sponsored_listings')
-        .select('location_id')
-        .eq('status', 'active');
+      const res = await fetch(`${API_URL}/api/sponsored/active`);
+      const data = await res.json();
 
-      if (error) throw error;
-      return data?.map((item) => item.location_id) || [];
+      if (Array.isArray(data)) return data; // Trả về mảng ID chuỗi
+      return [];
     } catch (error) {
       console.error('Error fetching active sponsored locations:', error);
       return [];

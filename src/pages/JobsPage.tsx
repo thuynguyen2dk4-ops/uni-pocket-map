@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  ArrowLeft, Search, MapPin, DollarSign, Clock, Briefcase, 
+  ArrowLeft, Search, MapPin, Clock, Briefcase, 
   PlusCircle, Building2, Phone, FileText, X, CheckCircle2, Loader2 
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -10,53 +10,52 @@ import { Textarea } from '@/components/ui/textarea';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
-// --- IMPORT SUPABASE & AUTH ---
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+
+// 👇 Lấy link Backend
+const API_URL = import.meta.env.VITE_API_URL;
 
 export const JobsPage = () => {
   const navigate = useNavigate();
-  const { user } = useAuth(); // Lấy thông tin user đang đăng nhập
+  const { user } = useAuth(); // Lấy thông tin user
   
   const [showPostModal, setShowPostModal] = useState(false);
   const [filter, setFilter] = useState('Tất cả');
   const [expandedJobId, setExpandedJobId] = useState<number | null>(null);
   
-  // State dữ liệu thật
   const [jobs, setJobs] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // --- 1. LẤY DANH SÁCH TIN ĐÃ DUYỆT TỪ DB ---
+  // --- 1. LẤY DANH SÁCH TIN ĐÃ DUYỆT TỪ API ---
   useEffect(() => {
     const fetchJobs = async () => {
       setIsLoading(true);
-      // Chỉ lấy những tin có status = 'approved'
-      const { data, error } = await supabase
-        .from('jobs')
-        .select('*')
-        .eq('status', 'approved')
-        .order('created_at', { ascending: false });
-
-      if (error) {
+      try {
+        const res = await fetch(`${API_URL}/api/jobs/approved`);
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setJobs(data);
+        } else {
+          toast.error("Lỗi dữ liệu từ server");
+        }
+      } catch (error) {
         console.error("Lỗi lấy tin:", error);
         toast.error("Không tải được danh sách việc làm.");
-      } else {
-        setJobs(data || []);
+      } finally {
+        setIsLoading(false);
       }
-      setIsLoading(false);
     };
 
     fetchJobs();
   }, []);
 
-  // --- 2. XỬ LÝ ĐĂNG TIN LÊN DB ---
+  // --- 2. XỬ LÝ ĐĂNG TIN LÊN API ---
   const handlePostJob = async (e: any) => {
     e.preventDefault();
 
     if (!user) {
         toast.error("Vui lòng đăng nhập để đăng tin!");
-        // Có thể mở modal login ở đây nếu muốn
         return;
     }
 
@@ -64,30 +63,34 @@ export const JobsPage = () => {
     
     const formData = new FormData(e.target);
     
-    // Chuẩn bị dữ liệu khớp với bảng 'jobs' trong Supabase
     const newJob = {
       title: formData.get('title'),
-      shop_name: formData.get('shopName'), // Lưu ý: Cột trong DB là shop_name
+      shop_name: formData.get('shopName'),
       address: formData.get('address'),
       phone: formData.get('phone'),
       salary: formData.get('salary'),
       type: formData.get('type'),
       description: formData.get('description'),
-      user_id: user.id,   // Gắn ID người đăng
-      status: 'pending',  // Mặc định chờ duyệt
-      created_at: new Date().toISOString()
+      user_id: user.uid,   // Dùng user.uid từ Firebase
     };
 
-    const { error } = await supabase.from('jobs').insert([newJob]);
+    try {
+      const res = await fetch(`${API_URL}/api/jobs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newJob)
+      });
 
-    if (error) {
-        toast.error("Lỗi đăng tin: " + error.message);
-    } else {
-        toast.success("Đăng tin thành công! Tin của bạn đang chờ Admin duyệt.");
-        setShowPostModal(false);
+      if (!res.ok) throw new Error("Failed to post job");
+
+      toast.success("Đăng tin thành công! Tin của bạn đang chờ Admin duyệt.");
+      setShowPostModal(false);
+
+    } catch (error: any) {
+      toast.error("Lỗi đăng tin, vui lòng thử lại.");
+    } finally {
+      setIsSubmitting(false);
     }
-    
-    setIsSubmitting(false);
   };
 
   const toggleExpand = (id: number) => {
@@ -114,7 +117,6 @@ export const JobsPage = () => {
                 onClick={() => {
                     if (!user) {
                         toast.error("Bạn cần đăng nhập để đăng tin");
-                        // Ở đây bạn có thể gọi setShowAuthModal(true) nếu truyền prop từ Index
                     } else {
                         setShowPostModal(true);
                     }
@@ -185,7 +187,7 @@ export const JobsPage = () => {
                     <div className="flex flex-col gap-1 mb-3">
                         <div className="flex items-center gap-1.5 text-gray-700 text-sm font-semibold">
                             <Building2 className="w-3.5 h-3.5 text-blue-500" />
-                            {job.shop_name} {/* Tên cột trong DB */}
+                            {job.shop_name} 
                         </div>
                         <div className="flex items-center gap-1.5 text-gray-500 text-xs">
                             <MapPin className="w-3.5 h-3.5 text-gray-400" />
@@ -196,7 +198,6 @@ export const JobsPage = () => {
                     <div className="flex flex-wrap gap-2 text-xs text-gray-500">
                         <div className="flex items-center gap-1 bg-gray-50 px-2 py-1 rounded border border-gray-100">
                             <Clock className="w-3 h-3 text-orange-500" />
-                            {/* Format ngày đăng */}
                             {new Date(job.created_at).toLocaleDateString('vi-VN')}
                         </div>
                         <div className="flex items-center gap-1 bg-gray-50 px-2 py-1 rounded border border-gray-100">
@@ -295,7 +296,6 @@ export const JobsPage = () => {
                         
                         <div>
                             <label className="text-xs font-semibold text-gray-600 mb-1 block">Tên cửa hàng/quán <span className="text-red-500">*</span></label>
-                            {/* Lưu ý: name="shopName" sẽ được map vào shop_name */}
                             <Input name="shopName" placeholder="VD: Trà sữa Gong Cha" required className="bg-gray-50" />
                         </div>
                         

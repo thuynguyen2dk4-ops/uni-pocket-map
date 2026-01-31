@@ -9,11 +9,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { User, LogOut, MapPin, Store, ShieldCheck, Crown, Megaphone, Loader2, X, UserCircle2, Heart } from "lucide-react"; 
+import { User, LogOut, Store, ShieldCheck, Crown, Megaphone, Loader2, X, UserCircle2, Heart } from "lucide-react"; 
 import { useAuth } from "@/hooks/useAuth";
 import { useLanguage } from "@/i18n/LanguageContext";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+
+// 👇 Lấy link Backend
+const API_URL = import.meta.env.VITE_API_URL;
 
 interface UserMenuProps {
   onLoginClick: () => void;
@@ -22,69 +24,73 @@ interface UserMenuProps {
 }
 
 export const UserMenu = ({ onLoginClick, onFavoritesClick, onStoresClick }: UserMenuProps) => {
-  const { session, signOut } = useAuth();
+  const { user, signOut } = useAuth(); // ✅ Đổi session -> user
   const { language } = useLanguage();
   const navigate = useNavigate();
    
   const [isLoading, setIsLoading] = useState(false);
-   
-  // State quản lý danh sách cửa hàng và popup chọn
   const [myStores, setMyStores] = useState<any[]>([]);
   const [showStoreSelector, setShowStoreSelector] = useState(false);
   const [pendingService, setPendingService] = useState<{type: 'vip' | 'ad', packageType?: 'week' | 'month'} | null>(null);
 
-  // Lấy danh sách cửa hàng của user khi component load
+  // 1. Lấy danh sách cửa hàng của user (Gọi API Backend)
   useEffect(() => {
-    if (session?.user) {
+    if (user) {
       const fetchStores = async () => {
-        const { data } = await supabase
-          .from('user_stores')
-          .select('id, name_vi, address_vi, is_premium') // Lấy cả is_premium để hiện trạng thái
-          .eq('user_id', session.user.id);
-        if (data) setMyStores(data);
+        try {
+          const res = await fetch(`${API_URL}/api/user-stores?userId=${user.uid}`);
+          const data = await res.json();
+          if (Array.isArray(data)) {
+            setMyStores(data);
+          }
+        } catch (error) {
+          console.error("Lỗi lấy danh sách cửa hàng:", error);
+        }
       };
       fetchStores();
     }
-  }, [session]);
+  }, [user]);
 
-  // Bước 1: Khi bấm nút Mua -> Kiểm tra số lượng cửa hàng
+  // Bước 1: Khi bấm nút Mua -> Kiểm tra
   const handleInitiateBuy = (type: 'vip' | 'ad', packageType?: 'week' | 'month') => {
     if (!myStores || myStores.length === 0) {
         alert("Bạn chưa có cửa hàng nào! Hãy tạo cửa hàng trước.");
         return;
     }
 
-    // Nếu chỉ có 1 cửa hàng -> Mua luôn cho nó (đỡ mất công chọn)
     if (myStores.length === 1) {
         handleBuyService(myStores[0].id, type, packageType);
-    } 
-    // Nếu có nhiều cửa hàng -> Mở popup cho chọn
-    else {
+    } else {
         setPendingService({ type, packageType });
         setShowStoreSelector(true);
     }
   };
 
-  // Bước 2: Gọi API thanh toán
   const handleBuyService = async (storeId: string, type: 'vip' | 'ad', packageType?: 'week' | 'month') => {
     setIsLoading(true);
-    setShowStoreSelector(false); // Đóng popup nếu đang mở
+    setShowStoreSelector(false);
 
     try {
-      const { data, error } = await supabase.functions.invoke('create-checkout', {
-        body: {
+      // 👇 Gọi API Backend tạo link thanh toán
+      const response = await fetch(`${API_URL}/api/payment/create-checkout`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           storeId: storeId,
+          userId: user?.uid,
           type: type,              
           packageType: packageType, 
-          categoryId: 1,          
           returnUrl: window.location.href, 
           cancelUrl: window.location.href
-        }
+        })
       });
 
-      if (error) throw error;
+      const data = await response.json();
+
+      if (!response.ok) throw new Error(data.error || "Lỗi tạo thanh toán");
 
       if (data && data.checkoutUrl) {
+        // Chuyển hướng sang trang thanh toán (PayOS / Stripe / MoMo...)
         window.location.href = data.checkoutUrl;
       } else {
         throw new Error("Không lấy được link thanh toán");
@@ -98,14 +104,12 @@ export const UserMenu = ({ onLoginClick, onFavoritesClick, onStoresClick }: User
     }
   };
 
-  // --- HÀM XỬ LÝ ĐĂNG XUẤT (FIX LỖI KHÔNG ĐĂNG XUẤT ĐƯỢC) ---
   const handleLogout = async () => {
     try {
-      await signOut(); // Thử đăng xuất chuẩn
+      await signOut();
     } catch (error) {
-      console.warn("Lỗi API đăng xuất:", error);
+      console.warn("Lỗi đăng xuất:", error);
     } finally {
-      // Bắt buộc xóa cache và reload trang để thoát hoàn toàn
       localStorage.clear(); 
       window.location.reload(); 
     }
@@ -113,24 +117,18 @@ export const UserMenu = ({ onLoginClick, onFavoritesClick, onStoresClick }: User
 
   // --- RENDERING ---
 
-  // 1. CHƯA ĐĂNG NHẬP
-  if (!session) {
+  if (!user) {
     return (
       <>
-        {/* MOBILE: Nút tròn nhỏ */}
         <Button 
-          variant="outline" 
-          size="icon"
-          onClick={onLoginClick}
+          variant="outline" size="icon" onClick={onLoginClick}
           className="md:hidden w-10 h-10 rounded-full border-gray-200 bg-white shadow-sm active:scale-95 transition-all text-gray-700 hover:text-green-600 hover:border-green-600"
         >
           <UserCircle2 className="w-6 h-6" />
         </Button>
 
-        {/* DESKTOP: Nút to đầy đủ */}
         <Button 
-          onClick={onLoginClick}
-          variant="default" 
+          onClick={onLoginClick} variant="default" 
           className="hidden md:flex gap-2 shadow-lg rounded-xl font-semibold bg-white text-black hover:bg-gray-100 border border-gray-200"
         >
           <User className="w-4 h-4" />
@@ -140,9 +138,10 @@ export const UserMenu = ({ onLoginClick, onFavoritesClick, onStoresClick }: User
     );
   }
 
-  // 2. ĐÃ ĐĂNG NHẬP
-  const email = session.user.email;
+  const email = user.email;
   const firstLetter = email ? email[0].toUpperCase() : 'U';
+  // ✅ Firebase dùng photoURL thay vì user_metadata
+  const avatarUrl = user.photoURL; 
 
   return (
     <>
@@ -150,7 +149,7 @@ export const UserMenu = ({ onLoginClick, onFavoritesClick, onStoresClick }: User
         <DropdownMenuTrigger asChild>
           <Button variant="secondary" className="relative w-10 h-10 rounded-full p-0 overflow-hidden shadow-lg border-2 border-white cursor-pointer hover:ring-2 hover:ring-green-500 transition-all">
             <Avatar className="h-full w-full">
-              <AvatarImage src={session.user.user_metadata.avatar_url} />
+              <AvatarImage src={avatarUrl || undefined} />
               <AvatarFallback className="bg-green-600 text-white font-bold">
                 {firstLetter}
               </AvatarFallback>
@@ -172,13 +171,12 @@ export const UserMenu = ({ onLoginClick, onFavoritesClick, onStoresClick }: User
           
           <DropdownMenuSeparator className="my-1 bg-gray-100" />
 
-          {/* --- MENU MUA DỊCH VỤ --- */}
+          {/* MENU NÂNG CẤP */}
           <div className="bg-gray-50 rounded-lg p-2 mb-2 border border-gray-100">
             <p className="text-[10px] uppercase text-gray-500 font-bold mb-2 pl-1">
               {language === 'vi' ? 'Nâng cấp cửa hàng' : 'Upgrade Store'}
             </p>
             
-            {/* Nút VIP */}
             <button
               disabled={isLoading}
               onClick={() => handleInitiateBuy('vip')}
@@ -188,7 +186,6 @@ export const UserMenu = ({ onLoginClick, onFavoritesClick, onStoresClick }: User
               VIP 
             </button>
 
-            {/* Nút Quảng Cáo */}
             <div className="grid grid-cols-2 gap-1">
               <button
                 disabled={isLoading}
@@ -235,7 +232,6 @@ export const UserMenu = ({ onLoginClick, onFavoritesClick, onStoresClick }: User
           
           <DropdownMenuSeparator className="my-1 bg-gray-100" />
           
-          {/* NÚT ĐĂNG XUẤT (Đã dùng hàm handleLogout) */}
           <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50 rounded-lg p-2">
             <LogOut className="mr-2 h-4 w-4" />
             <span>{language === 'vi' ? 'Đăng xuất' : 'Log out'}</span>
@@ -243,7 +239,7 @@ export const UserMenu = ({ onLoginClick, onFavoritesClick, onStoresClick }: User
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {/* --- POPUP CHỌN CỬA HÀNG --- */}
+      {/* POPUP CHỌN CỬA HÀNG */}
       {showStoreSelector && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-200">

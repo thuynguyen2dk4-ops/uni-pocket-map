@@ -1,173 +1,365 @@
-import { useEffect, useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { AdminStore } from '@/hooks/useAdminStores';
-import { StoreMenuItem, StoreVoucher } from '@/hooks/useUserStores';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useState, useEffect } from 'react';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Badge } from '@/components/ui/badge';
-import { Phone, Mail, Clock, UtensilsCrossed, Ticket, Info, CalendarDays } from 'lucide-react';
-// Đã xóa import Mapbox và CSS để giảm nhẹ file
+import { X, MapPin, Star, Ticket, Clock, Utensils, Image as ImageIcon, Edit3, Info, Loader2, Check, Phone } from 'lucide-react';
+import { Location } from '@/data/locations';
+import { useAuth } from '@/hooks/useAuth';
+import { toast } from 'sonner';
+// 👇 ĐÃ SỬA ĐƯỜNG DẪN IMPORT (Dùng @/components/store/...)
+import { ReviewSection } from '@/components/store/ReviewSection';
+import { StoreFormModal } from '@/components/store/StoreFormModal';
+
+// 👇 Lấy link Backend
+const API_URL = import.meta.env.VITE_API_URL;
 
 interface StoreDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
-  store: AdminStore | null;
+  location: Location | null;
+  onNavigate?: () => void;
 }
 
-export const StoreDetailModal = ({ isOpen, onClose, store }: StoreDetailModalProps) => {
-  const [menuItems, setMenuItems] = useState<StoreMenuItem[]>([]);
-  const [vouchers, setVouchers] = useState<StoreVoucher[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+export const StoreDetailModal = ({ isOpen, onClose, location }: StoreDetailModalProps) => {
+  if (!location) return null;
 
-  // Format ngày tháng kiểu Việt Nam (Ví dụ: 20:30 22/01/2026)
-  const formatDate = (dateString?: string) => {
-    if (!dateString) return 'Không rõ';
-    return new Date(dateString).toLocaleString('vi-VN', {
-      hour: '2-digit',
-      minute: '2-digit',
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    });
-  };
+  const { user } = useAuth(); 
+  const [activeTab, setActiveTab] = useState("info");
+  
+  const [displayData, setDisplayData] = useState<any>(location);
+  
+  const [vouchers, setVouchers] = useState<any[]>([]);
+  const [menuItems, setMenuItems] = useState<any[]>([]);
+  const [gallery, setGallery] = useState<any[]>([]);
+  const [savedVoucherIds, setSavedVoucherIds] = useState<Set<string>>(new Set());
+  
+  const [averageRating, setAverageRating] = useState<number>(0);
+  const [reviewCount, setReviewCount] = useState<number>(0);
+  
+  const [loading, setLoading] = useState(true);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+
+  const rawId = String(location.id).replace('user-store-', '');
+
+  // Logic phân quyền
+  const isOwner = displayData?.user_id === user?.uid;
+  const canEdit = isOwner || user?.email === "admin@gmail.com";
 
   useEffect(() => {
-    if (store && isOpen) {
-      const fetchData = async () => {
-        setIsLoading(true);
-        // 1. Lấy Menu
-        const { data: menu } = await supabase
-          .from('store_menu_items')
-          .select('*')
-          .eq('store_id', store.id);
-        
-        // 2. Lấy Voucher
-        const { data: voucherList } = await supabase
-          .from('store_vouchers')
-          .select('*')
-          .eq('store_id', store.id);
-
-        setMenuItems(menu || []);
-        setVouchers(voucherList || []);
-        setIsLoading(false);
-      };
-      fetchData();
+    if (isOpen && location) {
+      fetchMergedData();
     }
-  }, [store, isOpen]);
+  }, [isOpen, location.id, user]);
 
-  if (!store) return null;
+  const fetchMergedData = async () => {
+    setLoading(true);
+    
+    try {
+      const resStore = await fetch(`${API_URL}/api/stores/${rawId}/public`);
+      const dbStore = await resStore.json();
+
+      const finalData = dbStore || location;
+      setDisplayData(finalData);
+
+      const [menuRes, galleryRes, voucherRes, reviewsRes] = await Promise.all([
+        fetch(`${API_URL}/api/stores/${rawId}/menu`),
+        fetch(`${API_URL}/api/stores/${rawId}/gallery`),
+        fetch(`${API_URL}/api/store-vouchers/${rawId}`),
+        fetch(`${API_URL}/api/reviews/list/${rawId}`)
+      ]);
+
+      const menuData = await menuRes.json();
+      const galleryData = await galleryRes.json();
+      const voucherData = await voucherRes.json();
+      const reviewsData = await reviewsRes.json();
+
+      if (Array.isArray(menuData)) setMenuItems(menuData);
+      if (Array.isArray(galleryData)) setGallery(galleryData);
+      if (Array.isArray(voucherData)) setVouchers(voucherData);
+
+      if (Array.isArray(reviewsData) && reviewsData.length > 0) {
+          const total = reviewsData.reduce((acc: number, curr: any) => acc + curr.rating, 0);
+          const avg = total / reviewsData.length;
+          setAverageRating(Number(avg.toFixed(1)));
+          setReviewCount(reviewsData.length);
+      } else {
+          setAverageRating(0);
+          setReviewCount(0);
+      }
+
+      if (user) {
+        const resSaved = await fetch(`${API_URL}/api/user-vouchers?userId=${user.uid}`);
+        const savedData = await resSaved.json();
+        
+        if (Array.isArray(savedData)) {
+          const savedSet = new Set(savedData.map((s: any) => s.id || s.voucher_id)); 
+          setSavedVoucherIds(savedSet);
+        }
+      }
+
+    } catch (error) {
+      console.error("Lỗi tải dữ liệu chi tiết:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEditSuccess = async () => {
+      await fetchMergedData();
+  };
+
+  const handleSaveVoucher = async (voucher: any) => {
+    if (!user) { toast.error("Vui lòng đăng nhập để lưu voucher!"); return; }
+    if (savedVoucherIds.has(voucher.id)) return;
+
+    setSavedVoucherIds(prev => new Set(prev).add(voucher.id));
+    toast.success("Đã lưu voucher vào ví!");
+
+    try {
+      const res = await fetch(`${API_URL}/api/vouchers/save`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.uid,
+          voucherId: voucher.id
+        })
+      });
+
+      if (!res.ok) throw new Error("Failed");
+
+    } catch (error) {
+       setSavedVoucherIds(prev => {
+         const newSet = new Set(prev);
+         newSet.delete(voucher.id);
+         return newSet;
+       });
+       toast.error("Không thể lưu voucher lúc này");
+    }
+  };
+
+  const displayImage = displayData.image_url || displayData.image || 'https://images.unsplash.com/photo-1554118811-1e0d58224f24';
+  const displayName = displayData.name_vi || displayData.nameVi || displayData.name || "Địa điểm chưa có tên";
+  const displayAddress = displayData.address_vi || displayData.address || "Đang cập nhật địa chỉ";
+  const displayPhone = displayData.phone || location.phone || 'Chưa cập nhật';
+  const displayHours = displayData.open_hours_vi || '08:00 - 22:00';
+  const displayDesc = displayData.description_vi || displayData.description;
 
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-xl font-bold flex items-center gap-2">
-            {store.name_vi}
-            <Badge variant={store.status === 'approved' ? 'default' : store.status === 'rejected' ? 'destructive' : 'secondary'}>
-              {store.status === 'approved' ? 'Đã duyệt' : store.status === 'rejected' ? 'Bị từ chối' : 'Chờ duyệt'}
-            </Badge>
-          </DialogTitle>
-        </DialogHeader>
+      <DialogContent className="max-w-2xl h-[90vh] p-0 bg-white gap-0 border-none rounded-2xl overflow-hidden z-[100] flex flex-col focus:outline-none">
+        
+        <DialogTitle className="sr-only">
+            {displayName}
+        </DialogTitle>
 
-        <Tabs defaultValue="info" className="w-full">
-          <TabsList className="grid w-full grid-cols-3"> {/* Đổi thành 3 cột vì bỏ tab Map */}
-            <TabsTrigger value="info"><Info className="w-4 h-4 mr-2"/> Thông tin</TabsTrigger>
-            <TabsTrigger value="menu"><UtensilsCrossed className="w-4 h-4 mr-2"/> Menu ({menuItems.length})</TabsTrigger>
-            <TabsTrigger value="voucher"><Ticket className="w-4 h-4 mr-2"/> Voucher ({vouchers.length})</TabsTrigger>
-          </TabsList>
-
-          {/* TAB 1: THÔNG TIN CƠ BẢN (Đã thêm ngày tạo) */}
-          <TabsContent value="info" className="space-y-4 py-4">
-            <div className="grid md:grid-cols-2 gap-6">
-              <div>
+        {loading ? (
+            <div className="flex-1 flex items-center justify-center">
+                <Loader2 className="w-8 h-8 animate-spin text-primary"/>
+            </div>
+        ) : (
+        <>
+            {/* Header Image */}
+            <div className="relative h-48 bg-gray-200 flex-shrink-0">
                 <img 
-                  src={store.image_url || 'https://placehold.co/600x400?text=Store'} 
-                  alt="Store" 
-                  className="w-full h-64 object-cover rounded-xl shadow-sm border"
+                  src={displayImage} 
+                  className="w-full h-full object-cover" 
+                  alt={displayName} 
                   onError={(e) => { e.currentTarget.src = "https://placehold.co/600x400?text=No+Image"; }}
                 />
-              </div>
-              <div className="space-y-4 text-sm">
                 
-                {/* --- PHẦN MỚI: NGÀY TẠO --- */}
-                <div className="flex items-center gap-3 p-3 bg-blue-50 text-blue-700 rounded-lg border border-blue-100">
-                  <CalendarDays className="w-5 h-5"/> 
-                  <div>
-                    <span className="font-bold block text-xs uppercase opacity-70">Ngày tạo cửa hàng</span>
-                    <span className="font-bold text-base">{formatDate(store.created_at)}</span>
-                  </div>
-                </div>
-                {/* ------------------------- */}
+                <button 
+                  onClick={onClose} 
+                  className="absolute top-4 right-4 bg-black/50 p-1.5 rounded-full text-white hover:bg-black/70 transition-colors z-10"
+                >
+                    <X className="w-5 h-5"/>
+                </button>
 
-                <div className="flex items-center gap-2 p-2 bg-gray-50 rounded border border-gray-100">
-                  <Phone className="w-4 h-4 text-gray-500"/> 
-                  <span className="font-medium text-gray-500">SĐT:</span> {store.phone || 'Chưa cập nhật'}
-                </div>
-                <div className="flex items-center gap-2 p-2 bg-gray-50 rounded border border-gray-100">
-                  <Mail className="w-4 h-4 text-gray-500"/> 
-                  <span className="font-medium text-gray-500">Email chủ:</span> {store.user_email}
-                </div>
-                <div className="flex items-center gap-2 p-2 bg-gray-50 rounded border border-gray-100">
-                  <Clock className="w-4 h-4 text-gray-500"/> 
-                  <span className="font-medium text-gray-500">Giờ mở cửa:</span> {store.open_hours_vi || 'N/A'}
-                </div>
-                
-                <div className="border p-4 rounded-lg bg-gray-50">
-                   <p className="font-bold mb-2 text-gray-700">Mô tả:</p>
-                   <p className="text-gray-600 leading-relaxed">{store.description_vi || 'Không có mô tả'}</p>
-                </div>
-              </div>
+                {canEdit && (
+                  <Button 
+                    size="sm" 
+                    className="absolute bottom-4 right-4 bg-white/90 text-black hover:bg-white shadow-md border backdrop-blur-sm"
+                    onClick={() => setIsEditOpen(true)}
+                  >
+                    <Edit3 className="w-3.5 h-3.5 mr-2"/> Chỉnh sửa
+                  </Button>
+                )}
             </div>
-          </TabsContent>
 
-          {/* TAB 2: MENU */}
-          <TabsContent value="menu" className="py-4">
-            {isLoading ? <div className="text-center py-4">Đang tải menu...</div> : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {menuItems.length === 0 && <p className="text-gray-500 italic col-span-full text-center py-8">Cửa hàng chưa đăng món ăn nào.</p>}
-                {menuItems.map(item => (
-                  <div key={item.id} className="flex gap-3 p-3 border rounded-lg bg-white hover:shadow-sm transition-all">
-                    <img 
-                      src={item.image_url || 'https://placehold.co/100x100?text=Food'} 
-                      className="w-16 h-16 rounded object-cover bg-gray-100"
-                      onError={(e) => { e.currentTarget.src = "https://placehold.co/100x100?text=Food"; }}
-                    />
-                    <div>
-                      <p className="font-bold text-gray-800">{item.name_vi}</p>
-                      <p className="text-primary font-bold">{new Intl.NumberFormat('vi-VN').format(item.price)}đ</p>
-                      <p className="text-xs text-gray-500 line-clamp-1">{item.description_vi}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </TabsContent>
+            {/* Info Header */}
+            <div className="pt-4 px-6 pb-2 flex-shrink-0">
+                <h2 className="text-2xl font-bold text-gray-900 leading-tight">{displayName}</h2>
+                <div className="flex items-center gap-2 text-sm text-gray-500 mt-1">
+                    <Star className={`w-4 h-4 ${averageRating > 0 ? "fill-yellow-500 text-yellow-500" : "text-gray-300"}`} />
+                    
+                    <span className="font-bold text-gray-900">
+                        {averageRating > 0 ? averageRating : "Chưa có đánh giá"}
+                    </span>
+                    
+                    {reviewCount > 0 && <span>({reviewCount})</span>}
 
-          {/* TAB 3: VOUCHER */}
-          <TabsContent value="voucher" className="py-4">
-             {isLoading ? <div className="text-center py-4">Đang tải voucher...</div> : (
-              <div className="space-y-3">
-                {vouchers.length === 0 && <p className="text-gray-500 italic text-center py-8">Chưa có mã giảm giá nào.</p>}
-                {vouchers.map(v => (
-                  <div key={v.id} className="flex justify-between items-center p-4 border border-dashed border-primary/40 bg-primary/5 rounded-xl">
-                    <div className="flex gap-3 items-center">
-                      <Ticket className="w-8 h-8 text-primary opacity-50" />
-                      <div>
-                        <p className="font-bold text-lg text-primary">{v.code}</p>
-                        <p className="font-medium text-sm">{v.title_vi}</p>
-                        <p className="text-xs text-gray-500">Giảm: {v.discount_value}{v.discount_type === 'percent' ? '%' : 'đ'}</p>
-                      </div>
+                    <span className="capitalize px-2 py-0.5 bg-gray-100 rounded-full text-xs">
+                      {displayData.category || displayData.type || 'Địa điểm'}
+                    </span>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-3">
+                    <div className="flex items-center gap-1.5 text-sm text-gray-600">
+                        <Clock className="w-4 h-4 text-green-600"/> <span>{displayHours}</span>
                     </div>
-                    <Badge variant={v.is_active ? 'default' : 'destructive'}>
-                      {v.is_active ? 'Đang chạy' : 'Đã dừng'}
-                    </Badge>
-                  </div>
-                ))}
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
+                    <div className="flex items-center gap-1.5 text-sm text-gray-600">
+                        <Phone className="w-4 h-4 text-blue-600"/> <span>{displayPhone}</span>
+                    </div>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-gray-500 mt-2">
+                    <MapPin className="w-4 h-4 flex-shrink-0 text-red-500"/> 
+                    <span className="truncate">{displayAddress}</span>
+                </div>
+            </div>
+
+            {/* Tabs */}
+            <Tabs defaultValue="info" className="flex-1 flex flex-col min-h-0" value={activeTab} onValueChange={setActiveTab}>
+                <div className="px-6 border-b flex-shrink-0 bg-white sticky top-0 z-10">
+                    <TabsList className="w-full justify-start bg-transparent h-12 p-0 gap-6 overflow-x-auto no-scrollbar">
+                        <TabsTrigger value="info" className="data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-primary rounded-none h-full px-0 bg-transparent font-medium">
+                            Thông tin
+                        </TabsTrigger>
+                        <TabsTrigger value="menu" className="data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-primary rounded-none h-full px-0 bg-transparent font-medium">
+                            Thực đơn ({menuItems.length})
+                        </TabsTrigger>
+                        <TabsTrigger value="vouchers" className="data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-primary rounded-none h-full px-0 bg-transparent font-medium">
+                            Voucher ({vouchers.length})
+                        </TabsTrigger>
+                        <TabsTrigger value="gallery" className="data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-primary rounded-none h-full px-0 bg-transparent font-medium">
+                            Ảnh ({gallery.length})
+                        </TabsTrigger>
+                        <TabsTrigger value="reviews" className="data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-primary rounded-none h-full px-0 bg-transparent font-medium">
+                            Đánh giá ({reviewCount})
+                        </TabsTrigger>
+                    </TabsList>
+                </div>
+
+                <div className="flex-1 overflow-y-auto bg-gray-50 p-4 scroll-smooth">
+                    {/* TAB INFO */}
+                    <TabsContent value="info" className="m-0 focus:outline-none">
+                        <div className="bg-white p-5 rounded-xl shadow-sm border space-y-3">
+                            <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                                <Info className="w-4 h-4 text-blue-500"/> Giới thiệu
+                            </h3>
+                            <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">
+                                {displayDesc || "Chưa có mô tả chi tiết về địa điểm này."}
+                            </p>
+                        </div>
+                    </TabsContent>
+
+                    {/* TAB MENU */}
+                    <TabsContent value="menu" className="space-y-4 m-0 focus:outline-none">
+                    {menuItems.length === 0 ? (
+                        <div className="text-center py-12 text-gray-400">
+                            <Utensils className="w-12 h-12 mx-auto mb-3 opacity-20"/>
+                            <p>Chưa cập nhật thực đơn.</p>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {menuItems.map((item) => (
+                                <div key={item.id} className="bg-white p-2 rounded-xl border flex gap-3 hover:shadow-md transition-shadow">
+                                <div className="w-20 h-20 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
+                                    <img 
+                                        src={item.image_url || 'https://placehold.co/100x100'} 
+                                        className="w-full h-full object-cover" 
+                                        alt={item.name} 
+                                        onError={(e) => { e.currentTarget.src = "https://placehold.co/100x100?text=Food"; }}
+                                    />
+                                </div>
+                                <div className="flex-1 py-1 flex flex-col justify-between">
+                                    <h4 className="font-bold text-gray-900 text-sm line-clamp-2">{item.name_vi || item.name}</h4>
+                                    <span className="font-bold text-primary block">
+                                        {item.price ? new Intl.NumberFormat('vi-VN').format(Number(item.price)) : 0}đ
+                                    </span>
+                                </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                    </TabsContent>
+
+                    {/* TAB VOUCHERS */}
+                    <TabsContent value="vouchers" className="space-y-3 m-0 focus:outline-none">
+                    {vouchers.length === 0 ? (
+                        <div className="text-center py-12 text-gray-400">
+                            <Ticket className="w-12 h-12 mx-auto mb-3 opacity-20"/>
+                            <p>Không có mã giảm giá nào.</p>
+                        </div>
+                    ) : (
+                        vouchers.map((v) => {
+                        const isSaved = savedVoucherIds.has(v.id);
+                        return (
+                            <div key={v.id} className="bg-white rounded-xl border border-dashed border-orange-200 p-4 shadow-sm relative group hover:border-orange-400 transition-colors">
+                            <div className="flex gap-4 items-center">
+                                <div className="w-16 h-16 bg-orange-50 rounded-lg flex flex-col items-center justify-center border border-orange-100 text-orange-600 flex-shrink-0">
+                                    <span className="text-xl font-black">{v.discount_value}</span>
+                                    <span className="text-xs font-bold uppercase">{v.discount_type === 'percent' ? '%' : 'k'}</span>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <h4 className="font-bold text-gray-900 truncate">{v.title_vi}</h4>
+                                    <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
+                                        Mã: <span className="font-mono bg-gray-100 px-1.5 py-0.5 rounded text-gray-700 font-bold">{v.code}</span>
+                                    </p>
+                                </div>
+                                <Button 
+                                    onClick={() => handleSaveVoucher(v)}
+                                    disabled={isSaved}
+                                    size="sm"
+                                    className={`shrink-0 ${isSaved ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-orange-500 text-white hover:bg-orange-600'}`}
+                                >
+                                    {isSaved ? <><Check className="w-4 h-4 mr-1"/> Đã lưu</> : "Lưu mã"}
+                                </Button>
+                            </div>
+                            </div>
+                        )
+                        })
+                    )}
+                    </TabsContent>
+
+                    {/* TAB GALLERY */}
+                    <TabsContent value="gallery" className="m-0 focus:outline-none">
+                    {gallery.length === 0 ? (
+                        <div className="text-center py-12 text-gray-400">
+                            <ImageIcon className="w-12 h-12 mx-auto mb-3 opacity-20"/>
+                            <p>Chưa có hình ảnh nào khác.</p>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-3 gap-2">
+                            {gallery.map((img) => (
+                                <div key={img.id} className="aspect-square rounded-xl overflow-hidden border bg-gray-100 cursor-pointer hover:opacity-90">
+                                    <img src={img.image_url} className="w-full h-full object-cover" alt="" />
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                    </TabsContent>
+
+                    {/* TAB REVIEWS */}
+                    <TabsContent value="reviews" className="m-0 focus:outline-none">
+                        <ReviewSection storeId={rawId} />
+                    </TabsContent>
+                </div>
+            </Tabs>
+        </>
+        )}
+
       </DialogContent>
     </Dialog>
+
+    {isEditOpen && (
+        <StoreFormModal
+            isOpen={isEditOpen}
+            onClose={() => setIsEditOpen(false)}
+            onSubmit={handleEditSuccess}
+            initialData={displayData}
+            customStoreId={rawId}
+        />
+    )}
+    </>
   );
 };

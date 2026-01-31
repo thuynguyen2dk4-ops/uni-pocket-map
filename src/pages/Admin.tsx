@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminStores, AdminStore } from '@/hooks/useAdminStores';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -15,74 +14,38 @@ import { StoreDetailModal } from '@/components/admin/StoreDetailModal';
 import { AdminStoreClaims } from '@/components/admin/AdminStoreClaims'; 
 import { toast } from 'sonner';
 
-// --- 1. COMPONENT QUẢN LÝ QUẢNG CÁO (FIX LỖI DATABASE RELATION) ---
+// 👇 Lấy link Backend
+const API_URL = import.meta.env.VITE_API_URL;
+
+// --- 1. COMPONENT QUẢN LÝ QUẢNG CÁO ---
 const AdsManagement = () => {
   const [ads, setAds] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchAds = async () => {
     setIsLoading(true);
-    
-    // BƯỚC 1: Lấy danh sách Store đang chạy quảng cáo
-    // Lưu ý: Không dùng join bảng (profiles) ở đây để tránh lỗi nếu chưa tạo foreign key
-    const { data: stores, error } = await supabase
-      .from('user_stores')
-      .select('id, name_vi, image_url, ad_expiry, is_ad, user_id') 
-      .eq('is_ad', true)
-      .order('ad_expiry', { ascending: true });
-
-    if (error) {
-        console.error("Ads Load Error:", error);
-        toast.error("Lỗi tải quảng cáo: " + error.message);
-        setIsLoading(false);
-        return;
+    try {
+      const res = await fetch(`${API_URL}/api/admin/ads`);
+      const data = await res.json();
+      if (Array.isArray(data)) setAds(data);
+    } catch (error) {
+      console.error(error);
+      toast.error("Lỗi tải quảng cáo");
+    } finally {
+      setIsLoading(false);
     }
-
-    // BƯỚC 2: Tự lấy Email từ bảng profiles dựa vào user_id (Manual Join)
-    let formattedData: any[] = [];
-    
-    if (stores && stores.length > 0) {
-        // Lấy danh sách user_id duy nhất
-        const userIds = Array.from(new Set(stores.map(s => s.user_id).filter(Boolean)));
-        
-        // Gọi lên server lấy thông tin các user này
-        const { data: profiles } = await supabase
-            .from('profiles')
-            .select('id, email')
-            .in('id', userIds);
-
-        // Tạo map để tra cứu nhanh: { "user_id_abc": "email@gmail.com" }
-        const profilesMap: Record<string, string> = {};
-        profiles?.forEach(p => {
-            profilesMap[p.id] = p.email;
-        });
-
-        // Ghép Email vào Store
-        formattedData = stores.map(store => ({
-            ...store,
-            user_email: profilesMap[store.user_id] || 'Không tìm thấy Email'
-        }));
-    }
-
-    setAds(formattedData);
-    setIsLoading(false);
   };
 
   useEffect(() => { fetchAds(); }, []);
 
   const handleCancelAd = async (id: string) => {
-    if (!confirm("Bạn muốn hủy quảng cáo của cửa hàng này ngay lập tức?")) return;
-    
-    const { error } = await supabase
-      .from('user_stores')
-      .update({ is_ad: false, ad_expiry: null })
-      .eq('id', id);
-
-    if (!error) {
+    if (!confirm("Hủy quảng cáo này?")) return;
+    try {
+      await fetch(`${API_URL}/api/admin/ads/cancel/${id}`, { method: 'PUT' });
       toast.success("Đã hủy quảng cáo");
       setAds(prev => prev.filter(ad => ad.id !== id));
-    } else {
-      toast.error("Lỗi: " + error.message);
+    } catch {
+      toast.error("Lỗi khi hủy");
     }
   };
 
@@ -147,34 +110,41 @@ const JobsManagement = () => {
 
   const fetchJobs = async () => {
     setIsLoading(true);
-    const { data } = await supabase
-        .from('jobs')
-        .select('*')
-        .order('created_at', { ascending: false });
-    setJobs(data || []);
-    setIsLoading(false);
+    try {
+      const res = await fetch(`${API_URL}/api/admin/jobs`);
+      const data = await res.json();
+      if (Array.isArray(data)) setJobs(data);
+    } catch {
+      toast.error("Lỗi tải tin tuyển dụng");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   useEffect(() => { fetchJobs(); }, []);
 
   const handleDeleteJob = async (id: number) => {
-    if(!confirm("Xóa tin tuyển dụng này?")) return;
-    const { error } = await supabase.from('jobs').delete().eq('id', id);
-    if(!error) {
-        toast.success("Đã xóa tin");
-        setJobs(prev => prev.filter(j => j.id !== id));
-    } else {
-        toast.error("Lỗi xóa: " + error.message);
+    if(!confirm("Xóa tin này?")) return;
+    try {
+      await fetch(`${API_URL}/api/admin/jobs/${id}`, { method: 'DELETE' });
+      setJobs(prev => prev.filter(j => j.id !== id));
+      toast.success("Đã xóa");
+    } catch {
+      toast.error("Lỗi xóa");
     }
   };
 
   const handleUpdateStatus = async (id: number, status: 'approved' | 'rejected') => {
-    const { error } = await supabase.from('jobs').update({ status }).eq('id', id);
-    if(!error) {
-        toast.success(`Đã cập nhật: ${status}`);
-        setJobs(prev => prev.map(j => j.id === id ? { ...j, status } : j));
-    } else {
-        toast.error("Lỗi cập nhật: " + error.message);
+    try {
+      await fetch(`${API_URL}/api/admin/jobs/${id}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+      setJobs(prev => prev.map(j => j.id === id ? { ...j, status } : j));
+      toast.success(`Đã cập nhật: ${status}`);
+    } catch {
+      toast.error("Lỗi cập nhật");
     }
   };
 
@@ -224,47 +194,27 @@ const UsersManagement = () => {
     useEffect(() => {
         const fetchUsers = async () => {
             setLoading(true);
-            // 1. Lấy tất cả user profiles
-            const { data: profiles, error } = await supabase
-                .from('profiles')
-                .select('*')
-                .order('created_at', { ascending: false });
-            
-            if (error) {
-                console.error("Profile Error:", error);
+            try {
+                const res = await fetch(`${API_URL}/api/admin/users`);
+                const data = await res.json();
+                if (Array.isArray(data)) setUsers(data);
+            } catch {
+                console.error("Lỗi tải users");
+            } finally {
                 setLoading(false);
-                return;
             }
-
-            // 2. Lấy danh sách ID của các user sở hữu Shop VIP
-            const { data: vipStores } = await supabase
-                .from('user_stores')
-                .select('user_id')
-                .eq('is_premium', true);
-            
-            // Tạo Set chứa user_id VIP để tra cứu cho nhanh
-            const vipUserIds = new Set(vipStores?.map(s => s.user_id));
-
-            // 3. Merge thông tin
-            const mergedUsers = profiles?.map(user => ({
-                ...user,
-                isVip: vipUserIds.has(user.id) // Nếu user_id có trong danh sách VIP store -> User VIP
-            })) || [];
-
-            setUsers(mergedUsers);
-            setLoading(false);
         };
         fetchUsers();
     }, []);
 
     const handleDeleteUser = async (id: string) => {
         if(!confirm("Cảnh báo: Xóa user sẽ mất hết dữ liệu liên quan!")) return;
-        const { error } = await supabase.from('profiles').delete().eq('id', id);
-        if(!error) {
-            toast.success("Đã xóa hồ sơ");
+        try {
+            await fetch(`${API_URL}/api/admin/users/${id}`, { method: 'DELETE' });
             setUsers(prev => prev.filter(u => u.id !== id));
-        } else {
-            toast.error("Lỗi: " + error.message);
+            toast.success("Đã xóa hồ sơ");
+        } catch {
+            toast.error("Lỗi xóa user");
         }
     };
 
@@ -288,7 +238,6 @@ const UsersManagement = () => {
                                 <td className="p-4">
                                     <div className="font-bold text-gray-900 flex items-center gap-2">
                                         {user.email}
-                                        {/* HIỂN THỊ ICON VIP NẾU LÀ VIP */}
                                         {user.isVip && (
                                             <span className="bg-yellow-100 text-yellow-700 text-[10px] px-1.5 py-0.5 rounded border border-yellow-200 flex items-center gap-1 shadow-sm">
                                                 <Crown className="w-3 h-3 fill-yellow-600" /> VIP

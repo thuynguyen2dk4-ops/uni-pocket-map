@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { toast } from 'sonner';
+
+// 👇 Lấy link Backend
+const API_URL = import.meta.env.VITE_API_URL;
 
 export interface AdminStore {
   id: string;
@@ -26,15 +28,14 @@ export interface AdminStore {
 }
 
 export const useAdminStores = () => {
-  const { session } = useAuth();
-  const user = session?.user;
+  const { user } = useAuth(); // ✅ Đổi session -> user
 
   const [stores, setStores] = useState<AdminStore[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending');
 
-  // 1. Kiểm tra quyền Admin
+  // 1. Kiểm tra quyền Admin (Gọi API)
   const checkAdminStatus = useCallback(async () => {
     if (!user) {
       setIsAdmin(false);
@@ -42,15 +43,10 @@ export const useAdminStores = () => {
     }
 
     try {
-      const { data, error } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', user.id)
-        .maybeSingle();
-
-      if (error) throw error;
+      const res = await fetch(`${API_URL}/api/admin/check?userId=${user.uid}`);
+      const data = await res.json();
       
-      const hasAdminRole = data?.role === 'admin';
+      const hasAdminRole = data.isAdmin === true;
       setIsAdmin(hasAdminRole);
       return hasAdminRole;
     } catch (err) {
@@ -60,7 +56,7 @@ export const useAdminStores = () => {
     }
   }, [user]);
 
-  // 2. Lấy danh sách cửa hàng
+  // 2. Lấy danh sách cửa hàng (Gọi API)
   const fetchStores = useCallback(async () => {
     if (!user) {
       setStores([]);
@@ -69,37 +65,16 @@ export const useAdminStores = () => {
     }
 
     try {
-      let query = supabase
-        .from('user_stores')
-        .select('*')
-        .order('created_at', { ascending: false });
+      // Gọi API với tham số filter
+      const res = await fetch(`${API_URL}/api/admin/stores?status=${filter}`);
+      const data = await res.json();
 
-      if (filter !== 'all') {
-        query = query.eq('status', filter);
-      }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
-      
-      // Lấy thêm email từ bảng profiles
-      const storesWithEmails: AdminStore[] = [];
-      if (data) {
-        for (const store of data) {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('email')
-            .eq('id', store.user_id)
-            .single();
-          
-          storesWithEmails.push({
-            ...store,
-            user_email: profile?.email || 'N/A'
-          });
-        }
+      if (Array.isArray(data)) {
+        setStores(data);
+      } else {
+        throw new Error("Invalid data format");
       }
       
-      setStores(storesWithEmails);
     } catch (err) {
       console.error('Lỗi tải danh sách cửa hàng:', err);
       toast.error('Không thể tải danh sách cửa hàng');
@@ -108,7 +83,7 @@ export const useAdminStores = () => {
     }
   }, [user, filter]);
 
-  // 3. Khởi chạy khi component mount
+  // 3. Khởi chạy
   useEffect(() => {
     const init = async () => {
       const hasAdmin = await checkAdminStatus();
@@ -121,48 +96,43 @@ export const useAdminStores = () => {
     init();
   }, [checkAdminStatus, fetchStores]);
 
+  // 4. Cập nhật trạng thái (Duyệt/Từ chối)
   const updateStoreStatus = async (storeId: string, status: 'approved' | 'rejected') => {
-  try {
-    console.log(`Đang gọi RPC để update store ${storeId} sang ${status}...`);
+    try {
+      const res = await fetch(`${API_URL}/api/admin/stores/${storeId}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
 
-    // GỌI HÀM RPC VỪA TẠO (Thay thế cho .update)
-    const { error } = await supabase.rpc('approve_store_by_id' as any, {
-      store_id_input: storeId,
-      new_status: status
-    });
+      if (!res.ok) throw new Error("Failed to update");
 
-    if (error) {
-      console.error("RPC Error:", error);
-      throw error;
+      // Update thành công -> Cập nhật giao diện ngay lập tức (Optimistic UI)
+      setStores(prev => prev.map(s => 
+        s.id === storeId ? { ...s, status } : s
+      ));
+      
+      // Nếu đang ở tab pending thì ẩn nó đi cho gọn
+      if (filter === 'pending') {
+           setStores(prev => prev.filter(s => s.id !== storeId));
+      }
+
+      toast.success(status === 'approved' ? 'Đã duyệt xong!' : 'Đã từ chối!');
+
+    } catch (err: any) {
+      console.error('Lỗi Update:', err);
+      toast.error("Lỗi kết nối server");
     }
+  };
 
-    // Update thành công -> Cập nhật giao diện
-    setStores(prev => prev.map(s => 
-      s.id === storeId ? { ...s, status } : s
-    ));
-    
-    // Nếu đang ở tab pending thì ẩn nó đi cho gọn
-    if (filter === 'pending') {
-         setStores(prev => prev.filter(s => s.id !== storeId));
-    }
-
-    toast.success(status === 'approved' ? 'Đã duyệt xong!' : 'Đã từ chối!');
-
-  } catch (err: any) {
-    console.error('Lỗi Update:', err);
-    toast.error(`Lỗi: ${err.message || "Không thể kết nối"}`);
-  }
-};
-
-  // 5. Hàm Xóa cửa hàng
+  // 5. Xóa cửa hàng
   const deleteStore = async (storeId: string) => {
     try {
-      const { error } = await supabase
-        .from('user_stores')
-        .delete()
-        .eq('id', storeId);
+      const res = await fetch(`${API_URL}/api/stores/${storeId}`, {
+        method: 'DELETE'
+      });
 
-      if (error) throw error;
+      if (!res.ok) throw new Error("Failed to delete");
       
       setStores(prev => prev.filter(s => s.id !== storeId));
       toast.success('Đã xóa cửa hàng!');
