@@ -188,7 +188,7 @@ export const useUserStores = () => {
 
   const createVoucherMutation = useMutation({
     mutationFn: async (voucherData: Partial<StoreVoucher>) => {
-      const res = await fetch(`${API_URL}/api/vouchers`, {
+      const res = await fetch(`${API_URL}/api/vouchers/active`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(voucherData)
