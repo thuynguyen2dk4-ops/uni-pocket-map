@@ -6,10 +6,9 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
-  MapPin, Loader2, ImagePlus, UploadCloud, Lock, Crown
+  MapPin, Loader2, ImagePlus, UploadCloud, Lock, Crown, X, Trash2
 } from 'lucide-react';
 import { toast } from 'sonner';
-
 import { useAuth } from '@/hooks/useAuth';
 import { LocationPickerModal } from './LocationPickerModal';
 
@@ -46,7 +45,7 @@ export const StoreFormModal = ({
   customStoreId,
   onUpgradeClick
 }: StoreFormModalProps) => {
-  const { user } = useAuth(); // ✅ Đổi session -> user
+  const { user } = useAuth(); 
   
   const isPremium = (initialData as any)?.is_premium === true;
   const isAdmin = !!customStoreId; 
@@ -85,15 +84,8 @@ export const StoreFormModal = ({
         setAvatarFile(null);
         
         const targetId = customStoreId || initialData.id;
-
         if(targetId && canAccessVipFeatures) {
-            const cleanId = String(targetId).replace('user-store-', '');
-            fetch(`${API_URL}/api/stores/${cleanId}/gallery`)
-                .then(res => res.json())
-                .then(data => {
-                    if(Array.isArray(data)) setExistingGallery(data);
-                })
-                .catch(console.error);
+            fetchGallery(targetId);
         }
       } else {
         // Reset form
@@ -110,6 +102,16 @@ export const StoreFormModal = ({
       }
     }
   }, [isOpen, initialData, customStoreId, canAccessVipFeatures]);
+
+  const fetchGallery = (storeId: string) => {
+    const cleanId = String(storeId).replace('user-store-', '');
+    fetch(`${API_URL}/api/stores/${cleanId}/gallery`)
+        .then(res => res.json())
+        .then(data => {
+            if(Array.isArray(data)) setExistingGallery(data);
+        })
+        .catch(console.error);
+  };
 
   const handleLocationConfirm = (lat: number, lng: number, address?: string) => {
     setFormData(prev => ({ ...prev, lat, lng, address_vi: address || prev.address_vi }));
@@ -139,17 +141,43 @@ export const StoreFormModal = ({
     }
   };
 
+  // [FIX] Hàm xóa ảnh đã lưu trên server
+  const handleDeleteExistingImage = async (imageId: string) => {
+    if(!confirm("Bạn có chắc muốn xóa ảnh này không?")) return;
+
+    try {
+        const res = await fetch(`${API_URL}/api/gallery/${imageId}`, {
+            method: 'DELETE'
+        });
+        
+        if (!res.ok) throw new Error("Lỗi xóa ảnh");
+        
+        // Cập nhật UI ngay lập tức
+        setExistingGallery(prev => prev.filter(img => img.id !== imageId));
+        toast.success("Đã xóa ảnh!");
+    } catch (error) {
+        console.error(error);
+        toast.error("Không thể xóa ảnh lúc này.");
+    }
+  };
+
+  // Hàm xóa ảnh mới chọn (chưa upload)
+  const handleRemoveNewImage = (index: number) => {
+    setGalleryFiles(prev => prev.filter((_, i) => i !== index));
+    setGalleryPreviews(prev => {
+        // Revoke URL để tránh rò rỉ bộ nhớ
+        URL.revokeObjectURL(prev[index]);
+        return prev.filter((_, i) => i !== index);
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsUploading(true);
-
     try {
         const targetId = customStoreId || initialData?.id;
-
-        // 1. Tạo FormData để chứa File + Text
         const submitData = new FormData();
         
-        // Append dữ liệu text
         submitData.append('userId', user?.uid || '');
         if (targetId) submitData.append('id', String(targetId).replace('user-store-', ''));
         submitData.append('name_vi', formData.name_vi);
@@ -158,45 +186,36 @@ export const StoreFormModal = ({
         submitData.append('category', formData.category);
         submitData.append('lat', String(formData.lat));
         submitData.append('lng', String(formData.lng));
-        
-        // Link ảnh cũ (nếu không đổi ảnh mới)
         submitData.append('image_url', formData.image_url);
-
-        // Trường đặc biệt
+        
         if (canAccessVipFeatures) {
             submitData.append('description_vi', formData.description_vi);
         }
-        if (customStoreId) { // Admin mode
+        if (customStoreId) { 
             submitData.append('is_premium', 'true');
         } else {
             submitData.append('is_premium', initialData?.is_premium ? 'true' : 'false');
         }
 
-        // 2. Append File Avatar
         if (avatarFile) {
             submitData.append('avatar', avatarFile);
         }
 
-        // 3. Append Files Gallery
         if (canAccessVipFeatures && galleryFiles.length > 0) {
             galleryFiles.forEach(file => {
                 submitData.append('gallery', file);
             });
         }
 
-        // 4. Gửi về Backend
         const res = await fetch(`${API_URL}/api/stores/save`, {
             method: 'POST',
             body: submitData
         });
-
         if (!res.ok) throw new Error("Lỗi lưu dữ liệu");
-
-        toast.success(customStoreId ? "Đã cập nhật địa điểm!" : "Đã lưu cửa hàng!");
         
-        if (onSubmit) await onSubmit(formData); // Callback giả lập để refresh UI cha
+        toast.success(customStoreId ? "Đã cập nhật địa điểm!" : "Đã lưu cửa hàng!");
+        if (onSubmit) await onSubmit(formData); 
         onClose();
-
     } catch (error: any) {
         console.error(error);
         toast.error("Có lỗi xảy ra: " + error.message);
@@ -351,14 +370,37 @@ export const StoreFormModal = ({
                          <div key={i} className="w-24 h-24 flex-shrink-0 rounded-lg bg-gray-200 animate-pulse"></div>
                     ))}
                     
+                    {/* [FIX] HIỂN THỊ ẢNH CŨ VỚI NÚT XÓA */}
                     {canAccessVipFeatures && existingGallery.map((img) => (
                         <div key={img.id} className="relative w-24 h-24 flex-shrink-0 rounded-lg overflow-hidden border group">
                             <img src={img.image_url} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
+                            
+                            {/* Nút xóa ảnh đã lưu */}
+                            <button
+                                type="button"
+                                onClick={() => handleDeleteExistingImage(img.id)}
+                                className="absolute top-1 right-1 bg-red-500/80 hover:bg-red-600 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-sm z-10"
+                                title="Xóa ảnh này"
+                            >
+                                <X size={12} strokeWidth={3} />
+                            </button>
                         </div>
                     ))}
+
+                    {/* HIỂN THỊ ẢNH MỚI (PREVIEW) */}
                     {canAccessVipFeatures && galleryPreviews.map((src, idx) => (
-                         <div key={idx} className="relative w-24 h-24 flex-shrink-0 rounded-lg overflow-hidden border">
+                         <div key={idx} className="relative w-24 h-24 flex-shrink-0 rounded-lg overflow-hidden border group">
                             <img src={src} className="w-full h-full object-cover" />
+                            
+                            {/* Nút xóa ảnh preview */}
+                            <button
+                                type="button"
+                                onClick={() => handleRemoveNewImage(idx)}
+                                className="absolute top-1 right-1 bg-gray-500/80 hover:bg-gray-600 text-white p-1 rounded-full shadow-sm z-10"
+                                title="Bỏ ảnh này"
+                            >
+                                <X size={12} strokeWidth={3} />
+                            </button>
                          </div>
                     ))}
                  </div>
@@ -378,6 +420,7 @@ export const StoreFormModal = ({
                     </div>
                  )}
               </div>
+
             </div>
 
             <DialogFooter className="pt-4 border-t sticky bottom-0 bg-white z-20">

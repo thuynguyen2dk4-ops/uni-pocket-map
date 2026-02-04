@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { X, MapPin, Star, Ticket, Clock, Utensils, Image as ImageIcon, Check, Phone, Loader2, Edit3, Info } from 'lucide-react';
 import { Location } from '@/data/locations';
-// ❌ Đã xóa import supabase
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import { ReviewSection } from './ReviewSection';
@@ -23,7 +22,7 @@ interface StoreDetailModalProps {
 export const StoreDetailModal = ({ isOpen, onClose, location, onNavigate }: StoreDetailModalProps) => {
   if (!location) return null;
 
-  const { user } = useAuth(); // ✅ Đổi session -> user (Firebase)
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("info");
   
   const [displayData, setDisplayData] = useState<any>(location);
@@ -65,10 +64,10 @@ export const StoreDetailModal = ({ isOpen, onClose, location, onNavigate }: Stor
 
       // 2. Fetch dữ liệu liên quan song song (Parallel Fetching)
       const [menuRes, galleryRes, voucherRes, reviewsRes] = await Promise.all([
-        fetch(`${API_URL}/api/stores/${rawId}/menu`),           // Menu
-        fetch(`${API_URL}/api/stores/${rawId}/gallery`),        // Gallery
-        fetch(`${API_URL}/api/store-vouchers/${rawId}`),        // Voucher active
-        fetch(`${API_URL}/api/reviews/list/${rawId}`)           // Reviews
+        fetch(`${API_URL}/api/stores/${rawId}/menu`),           
+        fetch(`${API_URL}/api/stores/${rawId}/gallery`),        
+        fetch(`${API_URL}/api/store-vouchers/${rawId}`),        
+        fetch(`${API_URL}/api/reviews/list/${rawId}`)           
       ]);
 
       const menuData = await menuRes.json();
@@ -78,6 +77,9 @@ export const StoreDetailModal = ({ isOpen, onClose, location, onNavigate }: Stor
 
       if (Array.isArray(menuData)) setMenuItems(menuData);
       if (Array.isArray(galleryData)) setGallery(galleryData);
+      
+      // [FIX] Log kiểm tra dữ liệu voucher
+      console.log("Vouchers fetched:", voucherData);
       if (Array.isArray(voucherData)) setVouchers(voucherData);
 
       // Tính điểm đánh giá
@@ -302,17 +304,28 @@ export const StoreDetailModal = ({ isOpen, onClose, location, onNavigate }: Stor
                     ) : (
                         vouchers.map((v) => {
                         const isSaved = savedVoucherIds.has(v.id);
+                        
+                        // [FIX HIỂN THỊ] Dùng fallback để tránh lỗi nếu tên biến khác nhau
+                        const title = v.title_vi || v.title || "Mã giảm giá";
+                        const discount = v.discount_value || v.discount || v.discount_amount || 0;
+                        const type = v.discount_type || v.type || 'amount';
+                        const code = v.code || 'CODE';
+
                         return (
                             <div key={v.id} className="bg-white rounded-xl border border-dashed border-orange-200 p-4 shadow-sm relative group hover:border-orange-400 transition-colors">
                             <div className="flex gap-4 items-center">
                                 <div className="w-16 h-16 bg-orange-50 rounded-lg flex flex-col items-center justify-center border border-orange-100 text-orange-600 flex-shrink-0">
-                                    <span className="text-xl font-black">{v.discount_value}</span>
-                                    <span className="text-xs font-bold uppercase">{v.discount_type === 'percent' ? '%' : 'k'}</span>
+                                    <span className="text-xl font-black">
+                                        {new Intl.NumberFormat('vi-VN').format(Number(discount))}
+                                    </span>
+                                    <span className="text-xs font-bold uppercase">
+                                        {type === 'percent' ? '%' : 'k'}
+                                    </span>
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <h4 className="font-bold text-gray-900 truncate">{v.title_vi}</h4>
+                                    <h4 className="font-bold text-gray-900 truncate">{title}</h4>
                                     <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
-                                        Mã: <span className="font-mono bg-gray-100 px-1.5 py-0.5 rounded text-gray-700 font-bold">{v.code}</span>
+                                        Mã: <span className="font-mono bg-gray-100 px-1.5 py-0.5 rounded text-gray-700 font-bold">{code}</span>
                                     </p>
                                 </div>
                                 <Button 

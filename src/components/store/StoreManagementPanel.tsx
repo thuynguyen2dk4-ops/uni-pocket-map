@@ -32,13 +32,10 @@ const STATUS_LABELS = {
 
 export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreManagementPanelProps) => {
   const { language } = useLanguage();
-  const { user } = useAuth(); // ✅ Đổi session -> user
+  const { user } = useAuth();
   
-  // Custom Hook này cũng cần được sửa để dùng API Backend (sẽ hướng dẫn ở bước sau nếu cần)
-  // Tạm thời giả định useUserStores đã được sửa hoặc chúng ta sẽ ghi đè logic ở đây
   const { 
-    stores, isLoading, fetchStores, 
-    // deleteStore, fetchMenuItems, fetchVouchers, deleteMenuItem, deleteVoucher 
+    stores, isLoading, fetchStores 
   } = useUserStores();
   
   const [showStoreForm, setShowStoreForm] = useState(false);
@@ -47,12 +44,12 @@ export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreMan
   const [expandedStoreId, setExpandedStoreId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'menu' | 'voucher'>('menu');
   
-  const [menuItems, setMenuItems] = useState<StoreMenuItem[]>([]);
-  const [vouchers, setVouchers] = useState<StoreVoucher[]>([]);
+  const [menuItems, setMenuItems] = useState<any[]>([]); // Dùng any để linh hoạt
+  const [vouchers, setVouchers] = useState<any[]>([]);   // Dùng any để linh hoạt
   const [showMenuForm, setShowMenuForm] = useState(false);
   const [showVoucherForm, setShowVoucherForm] = useState(false);
-  const [editingMenuItem, setEditingMenuItem] = useState<StoreMenuItem | null>(null);
-  const [editingVoucher, setEditingVoucher] = useState<StoreVoucher | null>(null);
+  const [editingMenuItem, setEditingMenuItem] = useState<any | null>(null);
+  const [editingVoucher, setEditingVoucher] = useState<any | null>(null);
   
   const [isUpgrading, setIsUpgrading] = useState(false);
 
@@ -65,9 +62,10 @@ export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreMan
   // --- HÀM LOAD CHI TIẾT (GỌI API BACKEND) ---
   const loadStoreDetails = async (storeId: string) => {
     try {
+      // [FIX URL] Sửa đường dẫn API lấy voucher cho đúng với Backend
       const [resMenu, resVoucher] = await Promise.all([
         fetch(`${API_URL}/api/stores/${storeId}/menu`),
-        fetch(`${API_URL}/api/stores/${storeId}/vouchers-all`) // Lấy tất cả voucher để quản lý
+        fetch(`${API_URL}/api/store-vouchers/${storeId}`) // URL đúng: /api/store-vouchers/:id
       ]);
       
       const menuData = await resMenu.json();
@@ -130,14 +128,15 @@ export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreMan
   const handleUpgradeStore = async (storeId: string) => {
     setIsUpgrading(true);
     try {
-      // 👇 Gọi API Backend tạo link thanh toán
       const response = await fetch(`${API_URL}/api/payment/create-checkout`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          userId: user?.uid, // Thêm userId
           storeId: storeId,
           type: 'vip',
-          categoryId: 1, 
+          amount: 100000, // Gửi kèm giá để chắc chắn
+          description: `Nâng cấp VIP Store ${storeId}`,
           returnUrl: window.location.href,
           cancelUrl: window.location.href
         })
@@ -252,7 +251,7 @@ export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreMan
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2">
                           <h3 className="font-semibold truncate text-gray-900 pr-8">
-                            {language === 'en' && store.name_en ? store.name_en : store.name_vi}
+                            {language === 'en' && (store as any).name_en ? (store as any).name_en : store.name_vi}
                           </h3>
                         </div>
                         <div className="flex items-center gap-2 mt-1">
@@ -262,7 +261,7 @@ export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreMan
                         </div>
                         <div className="flex items-center gap-2 text-xs text-gray-500 mt-1">
                           <MapPin className="w-3 h-3 flex-shrink-0" />
-                          <span className="truncate">{language === 'en' && store.address_en ? store.address_en : store.address_vi}</span>
+                          <span className="truncate">{language === 'en' && (store as any).address_en ? (store as any).address_en : store.address_vi}</span>
                         </div>
                       </div>
                     </div>
@@ -362,7 +361,7 @@ export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreMan
                                         <p className="text-xs font-medium text-yellow-800 mb-2">Tính năng Menu chỉ dành cho VIP</p>
                                         <Button size="sm" onClick={() => handleUpgradeStore(store.id)} disabled={isUpgrading} className="bg-yellow-500 hover:bg-yellow-600 text-white w-full">
                                             {isUpgrading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Crown className="w-3 h-3 mr-1" />}
-                                            Nâng cấp ngay (5.000đ)
+                                            Nâng cấp ngay (100.000đ)
                                         </Button>
                                     </div>
                                 )
@@ -379,9 +378,10 @@ export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreMan
                                     />
                                     <div className="flex-1 min-w-0">
                                       <p className="font-medium text-sm truncate text-gray-900">
-                                        {language === 'en' && item.name_en ? item.name_en : item.name_vi}
+                                        {/* [FIX] Fallback tên món */}
+                                        {language === 'en' && item.name_en ? item.name_en : (item.name_vi || item.name || 'Tên món')}
                                       </p>
-                                      <p className="text-xs text-primary font-bold">{formatPrice(item.price)}</p>
+                                      <p className="text-xs text-primary font-bold">{formatPrice(Number(item.price))}</p>
                                     </div>
                                     <div className="flex gap-1">
                                       <button onClick={() => { setEditingMenuItem(item); setShowMenuForm(true); }} className="p-1.5 hover:bg-gray-100 rounded text-gray-600">
@@ -428,14 +428,20 @@ export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreMan
                                         <p className="text-xs font-medium text-yellow-800 mb-2">Tính năng Voucher chỉ dành cho VIP</p>
                                         <Button size="sm" onClick={() => handleUpgradeStore(store.id)} disabled={isUpgrading} className="bg-yellow-500 hover:bg-yellow-600 text-white w-full">
                                             {isUpgrading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Crown className="w-3 h-3 mr-1" />}
-                                            Nâng cấp ngay (5.000đ)
+                                            Nâng cấp ngay (100.000đ)
                                         </Button>
                                     </div>
                                 )
                               )}
 
                               <div className="space-y-2">
-                                {vouchers.map(voucher => (
+                                {vouchers.map(voucher => {
+                                  // [FIX] Map dữ liệu voucher linh hoạt
+                                  const title = voucher.title_vi || voucher.title || 'Voucher';
+                                  const discountVal = voucher.discount_value || voucher.discount || voucher.discount_amount || 0;
+                                  const type = voucher.discount_type || 'amount';
+
+                                  return (
                                   <div key={voucher.id} className="p-3 bg-white rounded-lg border border-dashed border-primary/30">
                                     <div className="flex items-start justify-between gap-2">
                                       <div>
@@ -445,12 +451,12 @@ export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreMan
                                           </span>
                                         </div>
                                         <p className="text-sm font-medium mt-1 text-gray-900">
-                                          {language === 'en' && voucher.title_en ? voucher.title_en : voucher.title_vi}
+                                          {title}
                                         </p>
                                         <p className="text-xs text-gray-500">
-                                          Giảm: {voucher.discount_type === 'percent' 
-                                            ? `${voucher.discount_value}%` 
-                                            : formatPrice(voucher.discount_value)
+                                          Giảm: {type === 'percent' 
+                                            ? `${discountVal}%` 
+                                            : formatPrice(discountVal)
                                           }
                                         </p>
                                       </div>
@@ -464,7 +470,7 @@ export const StoreManagementPanel = ({ isOpen, onClose, onLoginClick }: StoreMan
                                       </div>
                                     </div>
                                   </div>
-                                ))}
+                                )})}
                               </div>
                             </>
                           )}

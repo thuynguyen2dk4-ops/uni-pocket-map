@@ -10,11 +10,12 @@ import {
   LogOut, ArrowLeft, Check, X, MapPin, Eye, Store, ShieldAlert, 
   Briefcase, Users, Trash2, Megaphone, Crown, Calendar 
 } from 'lucide-react';
-import { StoreDetailModal } from '@/components/admin/StoreDetailModal'; 
+// [FIX IMPORT] Trỏ về đúng Modal dùng chung
+import { StoreDetailModal } from '@/components/store/StoreDetailModal'; 
 import { AdminStoreClaims } from '@/components/admin/AdminStoreClaims'; 
 import { toast } from 'sonner';
 
-// 👇 Lấy link Backend
+//  👇  Lấy link Backend
 const API_URL = import.meta.env.VITE_API_URL;
 
 // --- 1. COMPONENT QUẢN LÝ QUẢNG CÁO ---
@@ -89,7 +90,6 @@ const AdsManagement = () => {
                     <div className={`text-center text-xs font-bold ${isExpired ? 'text-red-500' : 'text-green-600'}`}>
                        {isExpired ? 'Đã hết hạn' : `Còn lại ${diffDays} ngày`}
                     </div>
-
                     <Button variant="outline" className="w-full text-red-600 border-red-200 hover:bg-red-50 h-8 text-xs" onClick={() => handleCancelAd(ad.id)}>
                        <X className="w-3 h-3 mr-2"/> Dừng Quảng Cáo
                     </Button>
@@ -274,6 +274,7 @@ const Admin = () => {
   const { stores, isLoading, isAdmin, setFilter, updateStoreStatus, deleteStore } = useAdminStores();
   const { signOut } = useAuth();
   const navigate = useNavigate();
+  
   const [selectedStore, setSelectedStore] = useState<AdminStore | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
 
@@ -283,7 +284,7 @@ const Admin = () => {
 
   const handleApprove = async (id: string) => await updateStoreStatus(id, 'approved');
   const handleReject = async (id: string) => await updateStoreStatus(id, 'rejected');
-
+  
   const handleViewDetails = (store: AdminStore) => {
     setSelectedStore(store);
     setShowDetailModal(true);
@@ -322,9 +323,11 @@ const Admin = () => {
             <TabsTrigger value="jobs" className="text-sm font-medium data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700">
               <Briefcase className="w-4 h-4 mr-2" /> Tuyển dụng
             </TabsTrigger>
+
             <TabsTrigger value="users" className="text-sm font-medium data-[state=active]:bg-purple-50 data-[state=active]:text-purple-700">
               <Users className="w-4 h-4 mr-2" /> Người dùng
             </TabsTrigger>
+
             <TabsTrigger value="claims" className="text-sm font-medium data-[state=active]:bg-orange-50 data-[state=active]:text-orange-700">
               <ShieldAlert className="w-4 h-4 mr-2" /> Xác minh
             </TabsTrigger>
@@ -369,6 +372,7 @@ const Admin = () => {
                         </div>
                         
                         <div className="flex flex-col gap-2 justify-center border-t md:border-t-0 md:border-l pt-4 md:pt-0 md:pl-4 min-w-[140px]">
+                          {/* FIX: Nút Chi tiết gọi hàm handleViewDetails */}
                           <Button variant="outline" size="sm" onClick={() => handleViewDetails(store)}>
                             <Eye className="w-4 h-4 mr-2"/> Chi tiết
                           </Button>
@@ -444,14 +448,13 @@ const Admin = () => {
               </CardContent>
             </Card>
           </TabsContent>
-
         </Tabs>
 
-        {/* MODAL CHI TIẾT */}
+        {/* MODAL CHI TIẾT (ĐÃ FIX PROP) */}
         <StoreDetailModal 
           isOpen={showDetailModal} 
           onClose={() => setShowDetailModal(false)} 
-          store={selectedStore} 
+          location={selectedStore as any} // [FIX] Đổi tên prop từ store -> location để khớp với Modal
         />
       </div>
     </div>
