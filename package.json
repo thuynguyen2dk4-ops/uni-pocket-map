@@ -58,6 +58,7 @@
     "framer-motion": "^12.29.2",
     "input-otp": "^1.4.2",
     "leaflet": "^1.9.4",
+    "lottie-react": "^2.4.1",
     "lucide-react": "^0.462.0",
     "mapbox-gl": "^2.15.0",
     "multer": "^2.0.2",

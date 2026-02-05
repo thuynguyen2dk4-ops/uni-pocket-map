@@ -7,7 +7,7 @@ import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { LanguageProvider } from "@/i18n/LanguageContext";
 import { AuthProvider } from "@/hooks/useAuth";
 import { AboutPage } from "./pages/AboutPage"; // Import trang vừa tạo
-// Import các trang (Pages)
+import TetLaserLayer from './components/TetLaserLayer';
 import Index from "./pages/Index";
 import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
@@ -36,6 +36,7 @@ const App = () => (
     <LanguageProvider>
       <TooltipProvider>
         <AuthProvider>
+          <TetLaserLayer />
           {/* Các thông báo Toast */}
           <Toaster />
           <Sonner />
