@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Heart } from 'lucide-react';
 import { toast } from 'sonner';
 import { useNavigate, useParams } from 'react-router-dom';
-
+import { GoogleAd } from '@/components/ads/GoogleAd';
 // --- COMPONENTS ---
 import { MiniShowcase } from '@/components/MiniShowcase';
 import { MapView } from '@/components/MapView'; 
@@ -468,7 +468,7 @@ const Index = () => {
           setShowAuthModal(true);
         }}
       />
-
+<GoogleAd slotId="8326440208" />
       <StoreManagementPanel
         isOpen={showStorePanel}
         onClose={() => setShowStorePanel(false)}
