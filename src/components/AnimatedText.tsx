@@ -10,24 +10,26 @@ interface AnimatedTextProps {
 
 const easeValues: Easing = [0.4, 0, 0.2, 1];
 
-const MotionWrapper = ({ 
-  as = 'span', 
-  children, 
-  className, 
-  animationKey 
-}: { 
-  as: AnimatedTextProps['as']; 
-  children: ReactNode; 
+const MotionWrapper = ({
+  as = 'span',
+  children,
+  className,
+  animationKey
+}: {
+  as: AnimatedTextProps['as'];
+  children: ReactNode;
   className: string;
   animationKey: string;
 }) => {
   const animationProps = {
     key: animationKey,
-    initial: { opacity: 0, y: 8, filter: 'blur(4px)' },
-    animate: { opacity: 1, y: 0, filter: 'blur(0px)' },
-    exit: { opacity: 0, y: -8, filter: 'blur(4px)' },
-    transition: { duration: 0.25, ease: easeValues },
+    initial: { opacity: 0, y: 5 }, // Bỏ blur
+    animate: { opacity: 1, y: 0 },
+    exit: { opacity: 0, y: -5 },
+    transition: { duration: 0.2, ease: "easeOut" }, // Dùng ease có sẵn cho nhẹ
     className,
+    // Thêm dòng này để tối ưu phần cứng
+    style: { willChange: "opacity, transform" }
   };
 
   switch (as) {
@@ -54,14 +56,15 @@ export const AnimatedText = ({ children, className = '', as = 'span' }: Animated
       <MotionWrapper 
         as={as} 
         className={className} 
-        animationKey={language + String(children)}
+        // CHỈ dùng language làm key. Khi đổi ngôn ngữ mới chạy hiệu ứng.
+        // Bỏ String(children) ra khỏi key để tránh re-animate khi chữ thay đổi.
+        animationKey={language} 
       >
         {children}
       </MotionWrapper>
     </AnimatePresence>
   );
 };
-
 // For longer content blocks
 export const AnimatedBlock = ({ children, className = '' }: { children: ReactNode; className?: string }) => {
   const { language } = useLanguage();
@@ -73,8 +76,8 @@ export const AnimatedBlock = ({ children, className = '' }: { children: ReactNod
         initial={{ opacity: 0, scale: 0.98 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.98 }}
-        transition={{ 
-          duration: 0.2, 
+        transition={{
+          duration: 0.2,
           ease: 'easeOut'
         }}
         className={className}
