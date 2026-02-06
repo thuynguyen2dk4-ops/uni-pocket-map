@@ -183,7 +183,7 @@ export const AboutPage = () => {
 
             {/* TikTok */}
             <a 
-              href="https://tiktok.com/@thodiauni" 
+              href="https://www.tiktok.com/@thodiauni?_r=1&_t=ZS-93hGnz5puvF" 
               target="_blank" 
               rel="noopener noreferrer" 
               className="hover:text-pink-500 transition-colors flex items-center gap-1 group"
