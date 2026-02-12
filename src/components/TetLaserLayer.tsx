@@ -78,7 +78,7 @@ const TetLaserLayer = () => {
         {/* TEXT - Chữ đẹp hơn */}
         <div className="space-y-2 animate-fade-in-up">
           <h1 className="text-5xl md:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-200 via-yellow-400 to-red-500 drop-shadow-lg leading-tight py-2 uppercase tracking-tighter filter brightness-125">
-            Xuân Bính Ngọ
+           Mừng Xuân Bính Ngọ
           </h1>
           
           <div className="flex items-center justify-center gap-3">

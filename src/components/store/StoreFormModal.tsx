@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
-  MapPin, Loader2, ImagePlus, UploadCloud, Lock, Crown, X, Trash2
+  MapPin, Loader2, ImagePlus, UploadCloud, Lock, Crown, X, Building
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
@@ -34,6 +34,8 @@ interface StoreFormModalProps {
   isSubmitting?: boolean;
   customStoreId?: string;
   onUpgradeClick?: () => void; 
+  // 👇 [MỚI] Thêm prop này để nhận diện ID tòa nhà
+  parentBuildingId?: string;
 }
 
 export const StoreFormModal = ({ 
@@ -43,7 +45,8 @@ export const StoreFormModal = ({
   initialData, 
   isSubmitting,
   customStoreId,
-  onUpgradeClick
+  onUpgradeClick,
+  parentBuildingId // 👇 Nhận prop
 }: StoreFormModalProps) => {
   const { user } = useAuth(); 
   
@@ -67,6 +70,7 @@ export const StoreFormModal = ({
   const [showMapPicker, setShowMapPicker] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
+  // 👇 Sửa useEffect: Chỉ chạy khi isOpen thay đổi để tránh reset form khi đang gõ
   useEffect(() => {
     if (isOpen) {
       if (initialData) {
@@ -101,7 +105,7 @@ export const StoreFormModal = ({
         setExistingGallery([]);
       }
     }
-  }, [isOpen, initialData, customStoreId, canAccessVipFeatures]);
+  }, [isOpen]); // 👈 QUAN TRỌNG: Chỉ để [isOpen]
 
   const fetchGallery = (storeId: string) => {
     const cleanId = String(storeId).replace('user-store-', '');
@@ -141,10 +145,8 @@ export const StoreFormModal = ({
     }
   };
 
-  // [FIX] Hàm xóa ảnh đã lưu trên server
   const handleDeleteExistingImage = async (imageId: string) => {
     if(!confirm("Bạn có chắc muốn xóa ảnh này không?")) return;
-
     try {
         const res = await fetch(`${API_URL}/api/gallery/${imageId}`, {
             method: 'DELETE'
@@ -152,7 +154,6 @@ export const StoreFormModal = ({
         
         if (!res.ok) throw new Error("Lỗi xóa ảnh");
         
-        // Cập nhật UI ngay lập tức
         setExistingGallery(prev => prev.filter(img => img.id !== imageId));
         toast.success("Đã xóa ảnh!");
     } catch (error) {
@@ -161,11 +162,9 @@ export const StoreFormModal = ({
     }
   };
 
-  // Hàm xóa ảnh mới chọn (chưa upload)
   const handleRemoveNewImage = (index: number) => {
     setGalleryFiles(prev => prev.filter((_, i) => i !== index));
     setGalleryPreviews(prev => {
-        // Revoke URL để tránh rò rỉ bộ nhớ
         URL.revokeObjectURL(prev[index]);
         return prev.filter((_, i) => i !== index);
     });
@@ -180,6 +179,14 @@ export const StoreFormModal = ({
         
         submitData.append('userId', user?.uid || '');
         if (targetId) submitData.append('id', String(targetId).replace('user-store-', ''));
+        
+        // 👇 [QUAN TRỌNG] Gửi parent_id lên server
+        if (parentBuildingId) {
+            submitData.append('parent_id', parentBuildingId);
+        } else if (initialData?.parent_id) {
+             submitData.append('parent_id', initialData.parent_id);
+        }
+
         submitData.append('name_vi', formData.name_vi);
         submitData.append('address_vi', formData.address_vi);
         submitData.append('phone', formData.phone);
@@ -211,14 +218,21 @@ export const StoreFormModal = ({
             method: 'POST',
             body: submitData
         });
-        if (!res.ok) throw new Error("Lỗi lưu dữ liệu");
+
+        // 👇 Kiểm tra response trước khi parse JSON để tránh lỗi cú pháp
+        if (!res.ok) {
+            const text = await res.text();
+            throw new Error(text || "Lỗi lưu dữ liệu");
+        }
+        
+        await res.json();
         
         toast.success(customStoreId ? "Đã cập nhật địa điểm!" : "Đã lưu cửa hàng!");
         if (onSubmit) await onSubmit(formData); 
         onClose();
     } catch (error: any) {
         console.error(error);
-        toast.error("Có lỗi xảy ra: " + error.message);
+        toast.error("Có lỗi xảy ra: " + error.message.substring(0, 100));
     } finally {
         setIsUploading(false);
     }
@@ -231,7 +245,11 @@ export const StoreFormModal = ({
           
           <DialogHeader className="p-6 border-b sticky top-0 bg-white z-20 flex flex-row items-center justify-between">
             <DialogTitle className="text-xl font-bold">
-              {customStoreId ? 'Chỉnh sửa Địa điểm (Admin)' : (initialData ? 'Chỉnh sửa cửa hàng' : 'Thêm cửa hàng mới')}
+              {/* 👇 Đổi tiêu đề nếu đang ở chế độ thêm vào tòa nhà */}
+              {parentBuildingId 
+                  ? 'Thêm địa điểm vào Tòa nhà' 
+                  : (customStoreId ? 'Chỉnh sửa Địa điểm (Admin)' : (initialData ? 'Chỉnh sửa cửa hàng' : 'Thêm cửa hàng mới'))
+              }
             </DialogTitle>
             
             {canAccessVipFeatures ? (
@@ -273,6 +291,17 @@ export const StoreFormModal = ({
 
               {/* CỘT PHẢI: THÔNG TIN */}
               <div className="md:col-span-8 space-y-4">
+                
+                {/* 👇 Hiển thị thông báo nếu đang thêm vào tòa nhà */}
+                {parentBuildingId && (
+                    <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-lg text-sm flex items-center gap-2">
+                        <Building className="w-4 h-4"/>
+                        <div>
+                            <strong>Chế độ Tòa nhà:</strong> Bạn đang thêm địa điểm bên trong tòa nhà. Vị trí sẽ được lấy theo tòa nhà này.
+                        </div>
+                    </div>
+                )}
+
                 <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                         <Label>Tên địa điểm <span className="text-red-500">*</span></Label>
@@ -304,9 +333,12 @@ export const StoreFormModal = ({
                         <div className="flex-1">
                             <Input value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} placeholder="Số điện thoại..." />
                         </div>
-                        <Button type="button" className="bg-blue-600 text-white min-w-[140px] gap-2" onClick={() => setShowMapPicker(true)}>
-                            <MapPin className="w-4 h-4"/> {formData.lat ? 'Sửa vị trí' : 'Chọn vị trí'}
-                        </Button>
+                        {/* 👇 Nếu có parentBuildingId thì ẨN nút chọn vị trí đi (khóa cứng) */}
+                        {!parentBuildingId && (
+                            <Button type="button" className="bg-blue-600 text-white min-w-[140px] gap-2" onClick={() => setShowMapPicker(true)}>
+                                <MapPin className="w-4 h-4"/> {formData.lat ? 'Sửa vị trí' : 'Chọn vị trí'}
+                            </Button>
+                        )}
                     </div>
                     <div className="bg-gray-50 border rounded-md p-2 text-sm flex items-start gap-2">
                         <MapPin className={formData.lat ? "w-4 h-4 text-green-600 mt-0.5" : "w-4 h-4 text-gray-400 mt-0.5"} />
@@ -370,12 +402,10 @@ export const StoreFormModal = ({
                          <div key={i} className="w-24 h-24 flex-shrink-0 rounded-lg bg-gray-200 animate-pulse"></div>
                     ))}
                     
-                    {/* [FIX] HIỂN THỊ ẢNH CŨ VỚI NÚT XÓA */}
+                    {/* ẢNH CŨ */}
                     {canAccessVipFeatures && existingGallery.map((img) => (
                         <div key={img.id} className="relative w-24 h-24 flex-shrink-0 rounded-lg overflow-hidden border group">
                             <img src={img.image_url} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
-                            
-                            {/* Nút xóa ảnh đã lưu */}
                             <button
                                 type="button"
                                 onClick={() => handleDeleteExistingImage(img.id)}
@@ -387,12 +417,10 @@ export const StoreFormModal = ({
                         </div>
                     ))}
 
-                    {/* HIỂN THỊ ẢNH MỚI (PREVIEW) */}
+                    {/* ẢNH MỚI (PREVIEW) */}
                     {canAccessVipFeatures && galleryPreviews.map((src, idx) => (
                          <div key={idx} className="relative w-24 h-24 flex-shrink-0 rounded-lg overflow-hidden border group">
                             <img src={src} className="w-full h-full object-cover" />
-                            
-                            {/* Nút xóa ảnh preview */}
                             <button
                                 type="button"
                                 onClick={() => handleRemoveNewImage(idx)}
@@ -434,13 +462,16 @@ export const StoreFormModal = ({
         </DialogContent>
       </Dialog>
       
-      <LocationPickerModal 
-        isOpen={showMapPicker}
-        onClose={() => setShowMapPicker(false)}
-        onConfirm={handleLocationConfirm}
-        initialLat={formData.lat}
-        initialLng={formData.lng}
-      />
+      {/* Chỉ render MapPicker khi KHÔNG ở chế độ thêm vào tòa nhà */}
+      {!parentBuildingId && (
+          <LocationPickerModal 
+            isOpen={showMapPicker}
+            onClose={() => setShowMapPicker(false)}
+            onConfirm={handleLocationConfirm}
+            initialLat={formData.lat}
+            initialLng={formData.lng}
+          />
+      )}
     </>
   );
 };

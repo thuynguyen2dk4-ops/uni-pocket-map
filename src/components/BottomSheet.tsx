@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { X, Navigation, Clock, Phone, MapPin, Star, Ticket, ArrowRight, Loader2, Heart, Crown } from 'lucide-react';
+import { X, Navigation, Clock, Phone, MapPin, Star, Ticket, ArrowRight, Loader2, Heart, Crown, Building, ArrowRightCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Location, Department } from '@/data/locations';
 import { useLanguage } from '@/i18n/LanguageContext';
@@ -8,6 +8,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useFavorites } from '@/hooks/useFavorites';
 import { toast } from 'sonner';
 import { StoreDetailModal } from '@/components/store/StoreDetailModal';
+import { StoreFormModal } from '@/components/store/StoreFormModal';
 
 // 👇 Lấy đường dẫn Backend từ biến môi trường
 const API_URL = import.meta.env.VITE_API_URL;
@@ -43,26 +44,36 @@ export const BottomSheet = ({
   onClaim
 }: BottomSheetProps) => {
   const { language } = useLanguage();
-  const { user } = useAuth(); // ✅ Đổi session -> user (Firebase)
+  const { user } = useAuth(); 
   const { isFavorite, toggleFavorite } = useFavorites();
   const isFav = isFavorite(location.id);
 
   const isVip = (location as any).is_premium;
   
-  // Xác định địa điểm Mapbox hay Store của mình
+  // Xác định loại ID
   const idStr = String(location.id);
   const isUserStore = idStr.startsWith('user-store-') || /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idStr);
   const isMapboxLocation = !isUserStore;
 
-  // Làm sạch ID
   const rawId = idStr.replace('user-store-', '');
 
   const [ratingData, setRatingData] = useState({ rating: 0, count: 0 });
   const [isFetchingRating, setIsFetchingRating] = useState(false);
+  
+  // State cho sub-stores
+  const [subStores, setSubStores] = useState<any[]>([]);
+  const [isAddingToBuilding, setIsAddingToBuilding] = useState(false);
+  
+  // 🔥 Biến này quan trọng: Kiểm tra xem có phải tòa nhà không
+  const isBuilding = location.category === 'building' || (location as any).type === 'building';
 
+  // 👇 [QUAN TRỌNG] State xử lý việc "Hợp thức hóa" tòa nhà (Auto-import)
+  const [isPreparingBuilding, setIsPreparingBuilding] = useState(false);
+  const [targetBuildingId, setTargetBuildingId] = useState<string>("");
+
+  // --- Fetch Rating ---
   useEffect(() => {
     const fetchRealRating = async (forceUpdate = false) => {
-      // 1. Dùng review local nếu có sẵn
       if (!forceUpdate && location.reviews && location.reviews.length > 0) {
         const total = location.reviews.reduce((acc: number, rev: any) => acc + rev.rating, 0);
         setRatingData({
@@ -71,15 +82,12 @@ export const BottomSheet = ({
         });
         return;
       }
-
       if (isMapboxLocation && !forceUpdate) return;
 
       setIsFetchingRating(true);
       try {
-        // 👇 Gọi API lấy đánh giá
         const res = await fetch(`${API_URL}/api/reviews/${rawId}`);
         const data = await res.json();
-
         if (Array.isArray(data) && data.length > 0) {
            const total = data.reduce((a: any, b: any) => a + b.rating, 0);
            setRatingData({
@@ -93,26 +101,41 @@ export const BottomSheet = ({
                setRatingData({ rating: 0, count: 0 });
            }
         }
-      } catch (err) {
-        console.error("Lỗi tải rating:", err);
-      } finally {
-        setIsFetchingRating(false);
-      }
+      } catch (err) { console.error("Lỗi tải rating:", err); } 
+      finally { setIsFetchingRating(false); }
     };
-
     fetchRealRating(); 
 
     const handleReviewUpdate = (event: any) => {
-      if (String(event.detail) === String(rawId)) {
-        fetchRealRating(true);
-      }
+      if (String(event.detail) === String(rawId)) fetchRealRating(true);
     };
-
     window.addEventListener('review_updated', handleReviewUpdate);
     return () => window.removeEventListener('review_updated', handleReviewUpdate);
-
   }, [location.id, rawId, isMapboxLocation]);
 
+  // --- Fetch Sub-stores (Các cửa hàng trong tòa nhà) ---
+  useEffect(() => {
+    // Chỉ fetch nếu là Tòa nhà VÀ đã nằm trong DB (ID là số hoặc UUID)
+    // Để tránh lỗi 404 với ID kiểu "E5"
+    const isDbId = /^\d+$/.test(rawId) || /^[0-9a-f-]{36}$/.test(rawId);
+
+    if (isBuilding && !isMapboxLocation && isDbId) {
+        fetch(`${API_URL}/api/stores/${rawId}/sub-stores`)
+            .then(async (res) => {
+                if(!res.ok) return []; // Tránh lỗi cú pháp JSON
+                return res.json();
+            })
+            .then(data => {
+                if(Array.isArray(data)) setSubStores(data);
+                else setSubStores([]);
+            })
+            .catch(console.error);
+    } else {
+        setSubStores([]);
+    }
+  }, [location.id, isBuilding, rawId, isMapboxLocation]);
+
+  // --- Fetch Vouchers ---
   const [storeVouchers, setStoreVouchers] = useState<any[]>([]);
   const [savedVoucherIds, setSavedVoucherIds] = useState<Set<string>>(new Set());
   const [loadingVouchers, setLoadingVouchers] = useState(false);
@@ -122,35 +145,24 @@ export const BottomSheet = ({
   useEffect(() => {
     const fetchVouchers = async () => {
       if (isMapboxLocation) { setStoreVouchers([]); return; }
-      
       setLoadingVouchers(true);
       try {
-        // 👇 API 1: Lấy Voucher của cửa hàng này
         const resVouchers = await fetch(`${API_URL}/api/store-vouchers/${rawId}`);
         const vouchers = await resVouchers.json();
 
         if (Array.isArray(vouchers) && vouchers.length > 0) {
           setStoreVouchers(vouchers);
-          
-          // 👇 API 2: Kiểm tra User đã lưu voucher nào chưa
           if (user) {
             const resSaved = await fetch(`${API_URL}/api/user-vouchers?userId=${user.uid}`);
             const savedData = await resSaved.json();
-            
             if (Array.isArray(savedData)) {
-              // Lọc ra các ID voucher đã lưu
               const savedSet = new Set(savedData.map((s: any) => s.voucher_id || s.id));
               setSavedVoucherIds(savedSet);
             }
           }
-        } else { 
-          setStoreVouchers([]); 
-        }
-      } catch (err) {
-        console.error("Lỗi tải voucher:", err);
-      } finally {
-        setLoadingVouchers(false);
-      }
+        } else { setStoreVouchers([]); }
+      } catch (err) { console.error("Lỗi tải voucher:", err); } 
+      finally { setLoadingVouchers(false); }
     };
     fetchVouchers();
   }, [location.id, rawId, user, isMapboxLocation]);
@@ -158,46 +170,94 @@ export const BottomSheet = ({
   const handleSaveVoucher = async (voucher: any) => {
     if (!user) { toast.error("Vui lòng đăng nhập để lưu ưu đãi!"); return; }
     if (savedVoucherIds.has(voucher.id)) return;
-
-    // Optimistic Update
     setSavedVoucherIds(prev => new Set(prev).add(voucher.id));
     toast.success("Đã lưu ưu đãi vào ví!");
-
     try {
-      // 👇 API 3: Lưu voucher
-      const res = await fetch(`${API_URL}/api/vouchers/save`, {
+      await fetch(`${API_URL}/api/vouchers/save`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: user.uid,
-          voucherId: voucher.id
-        })
+        body: JSON.stringify({ userId: user.uid, voucherId: voucher.id })
       });
-      
-      if (!res.ok) throw new Error('Failed');
-
     } catch (error) {
-       // Rollback nếu lỗi
-       setSavedVoucherIds(prev => {
-         const newSet = new Set(prev);
-         newSet.delete(voucher.id);
-         return newSet;
-       });
+       setSavedVoucherIds(prev => { const newSet = new Set(prev); newSet.delete(voucher.id); return newSet; });
        toast.error("Lỗi khi lưu, vui lòng thử lại.");
     }
   };
 
   const handleDirectionClick = () => {
     setIsNavigatingBtn(true);
-    setTimeout(() => {
-        onNavigate(location);
-        setIsNavigatingBtn(false);
-    }, 500); 
+    setTimeout(() => { onNavigate(location); setIsNavigatingBtn(false); }, 500); 
   };
   
   const handleShowDetail = () => {
     if (onOpenDetail) onOpenDetail(location);
     else setShowDetailLocal(true);
+  };
+
+  const handleSubStoreClick = (subStore: any) => {
+    if (onOpenDetail) onOpenDetail(subStore);
+  };
+
+  const handleAddedSubStore = async () => {
+      // Dùng targetBuildingId nếu vừa tạo mới, hoặc rawId nếu đã có sẵn
+      const fetchId = targetBuildingId || rawId;
+      if (!fetchId) return;
+
+      const res = await fetch(`${API_URL}/api/stores/${fetchId}/sub-stores`);
+      const data = await res.json();
+      if(Array.isArray(data)) setSubStores(data);
+  };
+
+  // 🔥 [CỰC KỲ QUAN TRỌNG] Hàm xử lý khi bấm nút "Thêm địa điểm"
+  const handleClickAddSubStore = async () => {
+      if (!user) {
+         toast.error("Vui lòng đăng nhập để thực hiện");
+         return;
+      }
+
+      // 1. Kiểm tra xem ID hiện tại có phải là ID chuẩn trong DB không (số hoặc UUID)
+      const isDbId = /^\d+$/.test(rawId) || /^[0-9a-f-]{36}$/.test(rawId) || String(location.id).startsWith('user-store-');
+      
+      if (isDbId) {
+          // Đã là store trong DB, dùng luôn ID đó
+          setTargetBuildingId(rawId);
+          setIsAddingToBuilding(true);
+          return;
+      }
+
+      // 2. Nếu là Mapbox/Hardcode ID (ví dụ "E5", "G3"), cần lưu vào DB trước để lấy ID thật
+      setIsPreparingBuilding(true);
+      try {
+          const formData = new FormData();
+          formData.append('userId', user.uid);
+          formData.append('name_vi', locationName || '');
+          formData.append('address_vi', location.address || '');
+          formData.append('lat', String(location.lat));
+          formData.append('lng', String(location.lng));
+          formData.append('category', 'building'); // Force category là building
+          formData.append('is_premium', 'false');
+          formData.append('image_url', location.image || '');
+          
+          const res = await fetch(`${API_URL}/api/stores/save`, {
+              method: 'POST',
+              body: formData
+          });
+
+          if (!res.ok) throw new Error("Lỗi server khi tạo toà nhà");
+
+          const data = await res.json();
+          if (data.success && data.id) {
+              console.log("Đã tạo toà nhà mới với ID:", data.id);
+              setTargetBuildingId(String(data.id));
+              setIsAddingToBuilding(true); // Mở form sau khi đã có ID thật
+              toast.success("Đã kích hoạt tính năng toà nhà thành công!");
+          }
+      } catch (error) {
+          console.error(error);
+          toast.error("Không thể khởi tạo dữ liệu cho tòa nhà này.");
+      } finally {
+          setIsPreparingBuilding(false);
+      }
   };
   
   const locationName = language === 'en' && location.name ? location.name : location.nameVi;
@@ -214,6 +274,14 @@ export const BottomSheet = ({
         className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-2xl z-[60] max-h-[85vh] overflow-y-auto md:max-w-md md:left-auto md:right-4 md:bottom-4 md:rounded-3xl border border-gray-100 scrollbar-hide"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* DRAG HANDLE */}
+        <div 
+            className="absolute top-0 left-0 right-0 h-6 flex justify-center items-center z-20 cursor-pointer md:hidden"
+            onClick={onClose} 
+        >
+            <div className="w-12 h-1.5 bg-white/80 rounded-full shadow-sm backdrop-blur-md border border-gray-200/50"></div>
+        </div>
+
         {/* HEADER ẢNH */}
         <div className="relative h-48 w-full bg-gray-200 cursor-pointer group" onClick={handleShowDetail}>
           <img 
@@ -293,6 +361,65 @@ export const BottomSheet = ({
             </Button>
           </div>
 
+          {/* 👇 DANH SÁCH ĐỊA ĐIỂM TRONG TÒA NHÀ (NẾU CÓ) */}
+          {isBuilding && (
+            <div className="mb-6 space-y-3 pt-4 border-t border-dashed">
+                <div className="flex justify-between items-center">
+                    <h3 className="font-bold text-gray-800 flex items-center gap-2 text-sm uppercase">
+                        <Building className="w-4 h-4 text-blue-600"/> 
+                        Bên trong tòa nhà ({subStores.length})
+                    </h3>
+                    
+                    {/* 👇 Nút thêm địa điểm đã được cập nhật logic */}
+                    <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="text-blue-600 text-xs font-bold hover:bg-blue-50 h-8 gap-2"
+                        onClick={handleClickAddSubStore}
+                        disabled={isPreparingBuilding}
+                    >
+                         {isPreparingBuilding ? (
+                            <><Loader2 className="w-3 h-3 animate-spin"/> Đang khởi tạo...</>
+                         ) : (
+                            "+ Thêm địa điểm"
+                         )}
+                    </Button>
+                </div>
+
+                {subStores.length === 0 ? (
+                    <div className="text-center py-4 bg-gray-50 rounded-xl border border-dashed text-gray-400 text-xs">
+                        Chưa có địa điểm nào bên trong. <br/>
+                        Hãy là người đầu tiên đóng góp!
+                    </div>
+                ) : (
+                    <div className="grid gap-2">
+                        {subStores.map((store) => (
+                            <div 
+                                key={store.id}
+                                onClick={() => handleSubStoreClick(store)}
+                                className="flex items-center gap-3 p-2 bg-white border rounded-xl shadow-sm hover:shadow-md hover:border-blue-300 transition-all cursor-pointer group"
+                            >
+                                <div className="w-10 h-10 rounded-lg bg-gray-100 overflow-hidden flex-shrink-0">
+                                    <img 
+                                        src={store.image_url || 'https://placehold.co/100x100'} 
+                                        className="w-full h-full object-cover"
+                                        onError={(e) => { e.currentTarget.src = "https://placehold.co/100x100?text=IMG"; }}
+                                    />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <h4 className="font-bold text-sm text-gray-900 truncate group-hover:text-blue-600">
+                                        {store.name_vi}
+                                    </h4>
+                                    <p className="text-xs text-gray-500 capitalize">{CATEGORY_LABELS[store.category] || store.category}</p>
+                                </div>
+                                <ArrowRightCircle className="w-4 h-4 text-gray-300 group-hover:text-blue-500"/>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+          )}
+
           {isMapboxLocation && (
             <div className="mb-6 p-4 bg-blue-50 border border-blue-100 rounded-2xl flex flex-col gap-3">
               <div className="flex items-start gap-3">
@@ -312,6 +439,7 @@ export const BottomSheet = ({
             </div>
           )}
 
+          {/* ... (Phần Vouchers và Info giữ nguyên) ... */}
           {loadingVouchers ? (
              <div className="h-20 bg-gray-50 rounded-xl mb-6 flex items-center justify-center border border-dashed border-gray-200">
                <Loader2 className="w-4 h-4 animate-spin text-gray-300"/>
@@ -390,6 +518,20 @@ export const BottomSheet = ({
         isOpen={showDetailLocal} 
         onClose={() => setShowDetailLocal(false)} 
         location={location} 
+      />
+
+      {/* 👇 FORM THÊM CỬA HÀNG CON - ĐÃ NHẬN ĐÚNG ID TÒA NHÀ THẬT */}
+      <StoreFormModal
+        isOpen={isAddingToBuilding}
+        onClose={() => setIsAddingToBuilding(false)}
+        onSubmit={handleAddedSubStore}
+        // 🔥 Ưu tiên dùng targetBuildingId (vừa tạo) hơn rawId (có thể là E5 lỗi)
+        parentBuildingId={targetBuildingId || ( /^\d+$/.test(rawId) ? rawId : undefined )}
+        initialData={{
+            lat: location.lat, 
+            lng: location.lng,
+            address_vi: location.address || location.address_vi 
+        }}
       />
     </>
   );
