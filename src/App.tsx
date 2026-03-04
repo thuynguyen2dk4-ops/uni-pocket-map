@@ -37,7 +37,7 @@ const App = () => (
       <TooltipProvider>
         <AuthProvider>
           {/* <ValentineLayer /> */}
-          <TetLaserLayer />
+          {/*<TetLaserLayer /> */}
           {/* Các thông báo Toast */}
           <Toaster />
           <Sonner />
