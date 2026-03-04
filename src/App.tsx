@@ -14,6 +14,7 @@ import NotFound from "./pages/NotFound";
 const queryClient = new QueryClient();
 import { JobsPage } from "./pages/JobsPage";
 import ValentineLayer from './components/ValentineLayer';
+import WomensDayLayer from './components/WomensDayLayer';
 // Cái này giúp Google Analytics đếm được khi bạn chuyển trang trong React
 const RouteTracker = () => {
   const location = useLocation();
@@ -38,6 +39,7 @@ const App = () => (
         <AuthProvider>
           {/* <ValentineLayer /> */}
           {/*<TetLaserLayer /> */}
+          <WomensDayLayer />
           {/* Các thông báo Toast */}
           <Toaster />
           <Sonner />
